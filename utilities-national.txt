@@ -1,0 +1,18 @@
+# Major electric and gas utilities.
+# Name | website | country | sample IP
+# The checker uses the website. The IP is a sample and can change.
+Duke Energy | duke-energy.com | United States | 159.110.128.81
+PG&E | pge.com | United States | 23.192.220.24
+Con Edison | coned.com | United States | 158.57.195.119
+Florida Power & Light | fpl.com | United States | 155.109.171.100
+Southern Company | southerncompany.com | United States | 45.60.240.214
+Dominion Energy | dominionenergy.com | United States | 45.60.233.28
+Exelon | exeloncorp.com | United States | 216.99.176.67
+Xcel Energy | xcelenergy.com | United States | 192.234.135.26
+National Grid | nationalgrid.com | United Kingdom | 104.17.1.192
+CenterPoint Energy | centerpointenergy.com | United States | 64.239.109.1
+Ameren | ameren.com | United States | 45.223.18.219
+FirstEnergy | firstenergycorp.com | United States | 159.60.128.253
+American Electric Power | aep.com | United States | 167.239.226.37
+DTE Energy | dteenergy.com | United States | 151.101.195.10
+Atmos Energy | atmosenergy.com | United States | 12.45.50.57

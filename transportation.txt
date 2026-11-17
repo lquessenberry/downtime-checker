@@ -1,0 +1,520 @@
+# Top Transportation Websites for Downtime Testing
+# Ordered by Country Name
+# Format: Type | Name | Location | Website
+# Focus on official airports, airlines, railways, and major transit systems.
+# Total unique entries: 316
+
+
+=== Afghanistan ===
+Airline    | Ariana Afghan Airlines                                  | Kabul                     | https://www.flyariana.com
+Airport    | Hamid Karzai International Airport                      | Kabul                     | https://www.hamidkarzai-airport.com
+
+=== Albania ===
+Airline    | Air Albania                                             | Tirana                    | https://www.airalbania.com.al
+Airport    | Tirana International Airport                            | Tirana                    | https://www.tirana-airport.com
+
+=== Algeria ===
+Airline    | Air Algérie                                             | Algiers                   | https://airalgerie.dz
+Airport    | Houari Boumediene Airport                               | Algiers                   | https://www.algiersairport.com
+Railway    | SNTF                                                    | Algiers                   | https://www.sntf.dz
+
+=== Angola ===
+Airline    | TAAG Angola Airlines                                    | Luanda                    | https://www.taag.com
+Airport    | Quatro de Fevereiro Airport                             | Luanda                    | https://www.aeroportoluanda.com
+
+=== Argentina ===
+Airline    | Aerolíneas Argentinas                                   | Buenos Aires              | https://www.aerolineas.com.ar
+Airport    | Ezeiza International Airport                            | Buenos Aires              | https://www.aa2000.com.ar
+Railway    | Trenes Argentinos                                       | Buenos Aires              | https://www.trenesargentinos.gob.ar
+
+=== Australia ===
+Airline    | Qantas                                                  | Sydney                    | https://www.qantas.com
+Airline    | Virgin Australia                                        | Brisbane                  | https://www.virginaustralia.com
+Airport    | Sydney Airport                                          | Sydney                    | https://www.sydneyairport.com.au
+Airport    | Melbourne Airport                                       | Melbourne                 | https://www.melbourneairport.com.au
+Airport    | Brisbane Airport                                        | Brisbane                  | https://www.bne.com.au
+Airport    | Perth Airport                                           | Perth                     | https://www.perthairport.com.au
+Airport    | Adelaide Airport                                        | Adelaide                  | https://www.adelaideairport.com.au
+Railway    | Sydney Trains                                           | Sydney                    | https://transportnsw.info
+
+=== Austria ===
+Airline    | Austrian Airlines                                       | Vienna                    | https://www.austrian.com
+Airport    | Vienna International Airport                            | Vienna                    | https://www.viennaairport.com
+Airport    | Salzburg Airport                                        | Salzburg                  | https://www.salzburg-airport.com
+Railway    | ÖBB                                                     | Vienna                    | https://www.oebb.at
+
+=== Azerbaijan ===
+Airline    | Azerbaijan Airlines                                     | Baku                      | https://www.azal.az
+Airport    | Heydar Aliyev International Airport                     | Baku                      | https://www.airport.az
+
+=== Bahamas ===
+Airline    | Bahamasair                                              | Nassau                    | https://www.bahamasair.com
+Airport    | Lynden Pindling International Airport                   | Nassau                    | https://www.nassaulpia.com
+
+=== Bahrain ===
+Airline    | Gulf Air                                                | Manama                    | https://www.gulfair.com
+Airport    | Bahrain International Airport                           | Manama                    | https://www.bahrainairport.com
+
+=== Bangladesh ===
+Airline    | Biman Bangladesh Airlines                               | Dhaka                     | https://www.biman-airlines.com
+Airport    | Hazrat Shahjalal International Airport                  | Dhaka                     | https://www.hsia.gov.bd
+Railway    | Bangladesh Railway                                      | Dhaka                     | https://www.railway.gov.bd
+
+=== Belarus ===
+Airline    | Belavia                                                 | Minsk                     | https://en.belavia.by
+Airport    | Minsk National Airport                                  | Minsk                     | https://airport.by
+
+=== Belgium ===
+Airline    | Brussels Airlines                                       | Brussels                  | https://www.brusselsairlines.com
+Airport    | Brussels Airport                                        | Brussels                  | https://www.brusselsairport.be
+Railway    | SNCB/NMBS                                               | Brussels                  | https://www.belgiantrain.be
+
+=== Bhutan ===
+Airline    | Druk Air                                                | Paro                      | https://www.drukair.com.bt
+Airport    | Paro International Airport                              | Paro                      | https://www.paroairport.com
+
+=== Bolivia ===
+Airline    | Boliviana de Aviación                                   | La Paz                    | https://www.boa.bo
+Airport    | El Alto International Airport                           | La Paz                    | https://www.sabsa.aero
+
+=== Botswana ===
+Airline    | Air Botswana                                            | Gaborone                  | https://www.airbotswana.co.bw
+Airport    | Sir Seretse Khama International Airport                 | Gaborone                  | https://www.gabairports.co.bw
+
+=== Brazil ===
+Airline    | LATAM Brasil                                            | São Paulo                 | https://www.latam.com
+Airline    | GOL Linhas Aéreas                                       | São Paulo                 | https://www.voegol.com.br
+Airport    | São Paulo–Guarulhos International Airport               | São Paulo                 | https://www.gru.com.br
+Airport    | Rio de Janeiro–Galeão International Airport             | Rio de Janeiro            | https://www.riogaleao.com
+Airport    | Brasília International Airport                          | Brasília                  | https://www.bsb.aero
+Railway    | Rumo Logística                                          | São Paulo                 | https://www.rumolog.com
+
+=== Brunei ===
+Airline    | Royal Brunei Airlines                                   | Bandar Seri Begawan       | https://www.flyroyalbrunei.com
+Airport    | Brunei International Airport                            | Bandar Seri Begawan       | https://www.civilaviation.gov.bn
+
+=== Bulgaria ===
+Airline    | Bulgaria Air                                            | Sofia                     | https://www.air.bg
+Airport    | Sofia Airport                                           | Sofia                     | https://www.sofia-airport.bg
+Airport    | Burgas Airport                                          | Burgas                    | https://www.burgas-airport.bg
+Railway    | BDZ                                                     | Sofia                     | https://www.bdz.bg
+
+=== Cambodia ===
+Airline    | Air Cambodia                                            | Phnom Penh                | https://www.aircambodia.com
+Airport    | Phnom Penh International Airport                        | Phnom Penh                | https://www.cambodia-airports.aero
+
+=== Cameroon ===
+Airline    | Camair-Co                                               | Douala                    | https://www.camair-co.cm
+Airport    | Douala International Airport                            | Douala                    | https://www.adc.cm
+
+=== Canada ===
+Airline    | Air Canada                                              | Montreal                  | https://www.aircanada.com
+Airline    | WestJet                                                 | Calgary                   | https://www.westjet.com
+Airport    | Toronto Pearson International Airport                   | Toronto                   | https://www.torontopearson.com
+Airport    | Vancouver International Airport                         | Vancouver                 | https://www.yvr.ca
+Airport    | Montreal–Trudeau International Airport                  | Montreal                  | https://www.admtl.com
+Airport    | Calgary International Airport                           | Calgary                   | https://www.yyc.com
+Railway    | VIA Rail                                                | Montreal                  | https://www.viarail.ca
+
+=== Chile ===
+Airport    | Santiago International Airport                          | Santiago                  | https://www.nuevopudahuel.cl
+
+=== China ===
+Airline    | Air China                                               | Beijing                   | https://www.airchina.com
+Airline    | China Southern Airlines                                 | Guangzhou                 | https://www.csair.com
+Airline    | China Eastern Airlines                                  | Shanghai                  | https://www.ceair.com
+Airport    | Beijing Capital International Airport                   | Beijing                   | https://en.bcia.com.cn
+Airport    | Shanghai Pudong International Airport                   | Shanghai                  | https://www.shanghaiairport.com
+Airport    | Guangzhou Baiyun International Airport                  | Guangzhou                 | https://www.gbiac.net
+Airport    | Shenzhen Bao'an International Airport                   | Shenzhen                  | https://www.szairport.com
+Railway    | China Railway (12306)                                   | Beijing                   | https://www.12306.cn
+
+=== Colombia ===
+Airline    | Avianca                                                 | Bogotá                    | https://www.avianca.com
+Airport    | El Dorado International Airport                         | Bogotá                    | https://www.aerocivil.gov.co
+
+=== Costa Rica ===
+Airport    | Juan Santamaría International Airport                   | San José                  | https://www.sjoairport.com
+
+=== Croatia ===
+Airline    | Croatia Airlines                                        | Zagreb                    | https://www.croatiaairlines.com
+Airport    | Franjo Tuđman Airport                                   | Zagreb                    | https://www.zagreb-airport.hr
+Airport    | Split Airport                                           | Split                     | https://www.split-airport.hr
+Railway    | HŽ Putnički prijevoz                                    | Zagreb                    | https://www.hzpp.hr
+
+=== Cuba ===
+Airline    | Cubana de Aviación                                      | Havana                    | https://www.cubana.cu
+Airport    | José Martí International Airport                        | Havana                    | https://www.havana-airport.org
+
+=== Cyprus ===
+Airline    | Cyprus Airways                                          | Larnaca                   | https://www.cyprusairways.com
+Airport    | Larnaca International Airport                           | Larnaca                   | https://www.hermesairports.com
+
+=== Czech Republic ===
+Airline    | Czech Airlines                                          | Prague                    | https://www.csa.cz
+Airport    | Václav Havel Airport Prague                             | Prague                    | https://www.prg.aero
+Railway    | České dráhy                                             | Prague                    | https://www.cd.cz
+
+=== Denmark ===
+Airline    | SAS                                                     | Copenhagen                | https://www.flysas.com
+Airport    | Copenhagen Airport                                      | Copenhagen                | https://www.cph.dk
+Railway    | DSB                                                     | Copenhagen                | https://www.dsb.dk
+
+=== Egypt ===
+Airline    | EgyptAir                                                | Cairo                     | https://www.egyptair.com
+Airport    | Cairo International Airport                             | Cairo                     | https://www.cairo-airport.com
+Railway    | Egyptian National Railways                              | Cairo                     | https://www.enr.gov.eg
+
+=== Ethiopia ===
+Airline    | Ethiopian Airlines                                      | Addis Ababa               | https://www.ethiopianairlines.com
+Airport    | Addis Ababa Bole International Airport                  | Addis Ababa               | https://www.ethiopianairports.gov.et
+
+=== Finland ===
+Airline    | Finnair                                                 | Helsinki                  | https://www.finnair.com
+Airport    | Helsinki Airport                                        | Helsinki                  | https://www.finavia.fi
+Railway    | VR Group                                                | Helsinki                  | https://www.vr.fi
+
+=== France ===
+Airline    | Air France                                              | Paris                     | https://www.airfrance.com
+Airport    | Charles de Gaulle Airport                               | Paris                     | https://www.parisaeroport.fr
+Airport    | Nice Côte d'Azur Airport                                | Nice                      | https://www.nice.aeroport.fr
+Railway    | SNCF                                                    | Paris                     | https://www.sncf.com
+Transit    | RATP Paris                                              | Paris                     | https://www.ratp.fr
+
+=== Germany ===
+Airline    | Lufthansa                                               | Frankfurt                 | https://www.lufthansa.com
+Airport    | Frankfurt Airport                                       | Frankfurt                 | https://www.frankfurt-airport.com
+Airport    | Munich Airport                                          | Munich                    | https://www.munich-airport.com
+Airport    | Berlin Brandenburg Airport                              | Berlin                    | https://ber.berlin-airport.de
+Railway    | Deutsche Bahn                                           | Berlin                    | https://www.bahn.de
+Transit    | BVG Berlin                                              | Berlin                    | https://www.bvg.de
+
+=== Greece ===
+Airline    | Aegean Airlines                                         | Athens                    | https://en.aegeanair.com
+Airport    | Athens International Airport                            | Athens                    | https://www.aia.gr
+Railway    | Hellenic Train                                          | Athens                    | https://www.hellenictrain.gr
+
+=== Hong Kong ===
+Airline    | Cathay Pacific                                          | Hong Kong                 | https://www.cathaypacific.com
+Airport    | Hong Kong International Airport                         | Hong Kong                 | https://www.hongkongairport.com
+Railway    | MTR                                                     | Hong Kong                 | https://www.mtr.com.hk
+
+=== Hungary ===
+Airline    | Wizz Air                                                | Budapest                  | https://wizzair.com
+Airport    | Budapest Airport                                        | Budapest                  | https://www.bud.hu
+Railway    | MÁV                                                     | Budapest                  | https://www.mavcsoport.hu
+
+=== Iceland ===
+Airline    | Icelandair                                              | Reykjavík                 | https://www.icelandair.com
+Airport    | Keflavík International Airport                          | Reykjavík                 | https://www.kefairport.is
+
+=== India ===
+Airline    | Air India                                               | Delhi                     | https://www.airindia.com
+Airline    | IndiGo                                                  | Delhi                     | https://www.goindigo.in
+Airport    | Indira Gandhi International Airport                     | Delhi                     | https://www.newdelhiairport.in
+Airport    | Chhatrapati Shivaji Maharaj International Airport       | Mumbai                    | https://www.csmia.aero
+Airport    | Kempegowda International Airport                        | Bengaluru                 | https://www.bengaluruairport.com
+Railway    | Indian Railways                                         | Delhi                     | https://indianrailways.gov.in
+Railway    | IRCTC                                                   | Delhi                     | https://www.irctc.co.in
+Transit    | Delhi Metro                                             | Delhi                     | https://www.delhimetrorail.com
+
+=== Indonesia ===
+Airline    | Garuda Indonesia                                        | Jakarta                   | https://www.garuda-indonesia.com
+Airport    | Soekarno–Hatta International Airport                    | Jakarta                   | https://soekarnohatta-airport.co.id
+Airport    | Ngurah Rai International Airport                        | Bali                      | https://www.bali-airport.com
+Railway    | Kereta Api Indonesia                                    | Jakarta                   | https://www.kai.id
+
+=== Iran ===
+Airline    | Iran Air                                                | Tehran                    | https://www.iranair.com
+Airport    | Imam Khomeini International Airport                     | Tehran                    | https://ikia.airport.ir
+Railway    | Raja Passenger Trains                                   | Tehran                    | https://www.raja.ir
+
+=== Iraq ===
+Airline    | Iraqi Airways                                           | Baghdad                   | https://www.iraqiairways.com.iq
+Airport    | Baghdad International Airport                           | Baghdad                   | https://www.baghdad-airport.com
+
+=== Ireland ===
+Airline    | Aer Lingus                                              | Dublin                    | https://www.aerlingus.com
+Airport    | Dublin Airport                                          | Dublin                    | https://www.dublinairport.com
+Railway    | Iarnród Éireann                                         | Dublin                    | https://www.irishrail.ie
+
+=== Israel ===
+Airline    | El Al                                                   | Tel Aviv                  | https://www.elal.com
+Airport    | Ben Gurion Airport                                      | Tel Aviv                  | https://www.iaa.gov.il
+Railway    | Israel Railways                                         | Tel Aviv                  | https://www.rail.co.il
+
+=== Italy ===
+Airline    | ITA Airways                                             | Rome                      | https://www.ita-airways.com
+Airport    | Leonardo da Vinci–Fiumicino Airport                     | Rome                      | https://www.adr.it
+Airport    | Milan Malpensa Airport                                  | Milan                     | https://www.milanomalpensa-airport.com
+Railway    | Trenitalia                                              | Rome                      | https://www.trenitalia.com
+
+=== Japan ===
+Airline    | Japan Airlines                                          | Tokyo                     | https://www.jal.co.jp
+Airline    | All Nippon Airways                                      | Tokyo                     | https://www.ana.co.jp
+Airport    | Tokyo Haneda Airport                                    | Tokyo                     | https://tokyo-haneda.com
+Airport    | Narita International Airport                            | Tokyo                     | https://www.narita-airport.jp
+Airport    | Kansai International Airport                            | Osaka                     | https://www.kansai-airport.or.jp
+Railway    | JR East                                                 | Tokyo                     | https://www.jreast.co.jp
+Transit    | Tokyo Metro                                             | Tokyo                     | https://www.tokyometro.jp
+
+=== Jordan ===
+Airline    | Royal Jordanian                                         | Amman                     | https://www.rj.com
+Airport    | Queen Alia International Airport                        | Amman                     | https://www.qaiairport.com
+
+=== Kazakhstan ===
+Airline    | Air Astana                                              | Almaty                    | https://airastana.com
+Airport    | Almaty International Airport                            | Almaty                    | https://www.alaport.com
+Railway    | Kazakhstan Temir Zholy                                  | Astana                    | https://www.railways.kz
+
+=== Kenya ===
+Airline    | Kenya Airways                                           | Nairobi                   | https://www.kenya-airways.com
+Airport    | Jomo Kenyatta International Airport                     | Nairobi                   | https://www.kaa.go.ke
+Railway    | Kenya Railways                                          | Nairobi                   | https://krc.co.ke
+
+=== Kuwait ===
+Airline    | Kuwait Airways                                          | Kuwait City               | https://www.kuwaitairways.com
+Airport    | Kuwait International Airport                            | Kuwait City               | https://www.kuwait-airport.com.kw
+
+=== Laos ===
+Airline    | Lao Airlines                                            | Vientiane                 | https://www.laoairlines.com
+Airport    | Wattay International Airport                            | Vientiane                 | https://www.vientianeairport.com
+
+=== Latvia ===
+Airline    | airBaltic                                               | Riga                      | https://www.airbaltic.com
+Airport    | Riga International Airport                              | Riga                      | https://www.riga-airport.com
+
+=== Lebanon ===
+Airline    | Middle East Airlines                                    | Beirut                    | https://www.mea.com.lb
+Airport    | Beirut–Rafic Hariri International Airport               | Beirut                    | https://www.beirutairport.gov.lb
+
+=== Lithuania ===
+Airport    | Vilnius Airport                                         | Vilnius                   | https://www.vilnius-airport.lt
+Railway    | LTG Link                                                | Vilnius                   | https://www.ltglink.lt
+
+=== Luxembourg ===
+Airline    | Luxair                                                  | Luxembourg                | https://www.luxair.lu
+Airport    | Luxembourg Airport                                      | Luxembourg                | https://www.lux-airport.lu
+Railway    | CFL                                                     | Luxembourg                | https://www.cfl.lu
+
+=== Malaysia ===
+Airline    | Malaysia Airlines                                       | Kuala Lumpur              | https://www.malaysiaairlines.com
+Airport    | Kuala Lumpur International Airport                      | Kuala Lumpur              | https://www.klia.com.my
+Railway    | Keretapi Tanah Melayu                                   | Kuala Lumpur              | https://www.ktmb.com.my
+
+=== Maldives ===
+Airline    | Maldivian                                               | Malé                      | https://www.maldivian.aero
+Airport    | Velana International Airport                            | Malé                      | https://www.macl.aero
+
+=== Malta ===
+Airline    | KM Malta Airlines                                       | Valletta                  | https://www.kmmaltairlines.com
+Airport    | Malta International Airport                             | Valletta                  | https://www.maltairport.com
+
+=== Mexico ===
+Airline    | Aeroméxico                                              | Mexico City               | https://www.aeromexico.com
+Airport    | Mexico City International Airport                       | Mexico City               | https://www.aicm.com.mx
+Airport    | Cancún International Airport                            | Cancún                    | https://www.cancunairport.com
+Railway    | Ferromex                                                | Mexico City               | https://www.ferromex.com.mx
+
+=== Mongolia ===
+Airline    | MIAT Mongolian Airlines                                 | Ulaanbaatar               | https://www.miat.com
+Airport    | Chinggis Khaan International Airport                    | Ulaanbaatar               | https://www.ulaanbaatar-airport.mn
+Railway    | Ulaanbaatar Railway                                     | Ulaanbaatar               | https://www.ubtz.mn
+
+=== Morocco ===
+Airline    | Royal Air Maroc                                         | Casablanca                | https://www.royalairmaroc.com
+Airport    | Mohammed V International Airport                        | Casablanca                | https://www.onda.ma
+Railway    | ONCF                                                    | Rabat                     | https://www.oncf.ma
+
+=== Myanmar ===
+Airline    | Myanmar National Airlines                               | Yangon                    | https://www.flymna.com
+Airport    | Yangon International Airport                            | Yangon                    | https://www.yangonairport.com
+Railway    | Myanma Railways                                         | Yangon                    | https://www.myanmarrailways.gov.mm
+
+=== Nepal ===
+Airline    | Nepal Airlines                                          | Kathmandu                 | https://www.nepalairlines.com.np
+Airport    | Tribhuvan International Airport                         | Kathmandu                 | https://www.tiairport.com.np
+
+=== Netherlands ===
+Airline    | KLM                                                     | Amsterdam                 | https://www.klm.com
+Airport    | Amsterdam Airport Schiphol                              | Amsterdam                 | https://www.schiphol.nl
+Railway    | NS                                                      | Utrecht                   | https://www.ns.nl
+
+=== New Zealand ===
+Airline    | Air New Zealand                                         | Auckland                  | https://www.airnewzealand.com
+Airport    | Auckland Airport                                        | Auckland                  | https://www.aucklandairport.co.nz
+Airport    | Wellington Airport                                      | Wellington                | https://www.wellingtonairport.co.nz
+Railway    | KiwiRail                                                | Wellington                | https://www.kiwirail.co.nz
+
+=== Nigeria ===
+Airline    | Air Peace                                               | Lagos                     | https://flyairpeace.com
+Airport    | Murtala Muhammed International Airport                  | Lagos                     | https://www.lagosairport.com
+Railway    | Nigerian Railway Corporation                            | Lagos                     | https://nrc.gov.ng
+
+=== Norway ===
+Airline    | Norwegian Air Shuttle                                   | Oslo                      | https://www.norwegian.com
+Airport    | Oslo Airport                                            | Oslo                      | https://www.osl.no
+Railway    | Vy                                                      | Oslo                      | https://www.vy.no
+
+=== Oman ===
+Airline    | Oman Air                                                | Muscat                    | https://www.omanair.com
+Airport    | Muscat International Airport                            | Muscat                    | https://www.muscatairport.co.om
+
+=== Pakistan ===
+Airline    | Pakistan International Airlines                         | Karachi                   | https://www.piac.com.pk
+Airport    | Jinnah International Airport                            | Karachi                   | https://www.caapakistan.com.pk
+Railway    | Pakistan Railways                                       | Lahore                    | https://www.pakrail.gov.pk
+
+=== Panama ===
+Airline    | Copa Airlines                                           | Panama City               | https://www.copaair.com
+Airport    | Tocumen International Airport                           | Panama City               | https://www.tocumenpanama.aero
+
+=== Peru ===
+Airport    | Jorge Chávez International Airport                      | Lima                      | https://www.lima-airport.com
+
+=== Philippines ===
+Airline    | Philippine Airlines                                     | Manila                    | https://www.philippineairlines.com
+Airport    | Ninoy Aquino International Airport                      | Manila                    | https://www.miaa.gov.ph
+
+=== Poland ===
+Airline    | LOT Polish Airlines                                     | Warsaw                    | https://www.lot.com
+Airport    | Warsaw Chopin Airport                                   | Warsaw                    | https://www.lotnisko-chopina.pl
+Railway    | PKP Intercity                                           | Warsaw                    | https://www.intercity.pl
+
+=== Portugal ===
+Airline    | TAP Air Portugal                                        | Lisbon                    | https://www.flytap.com
+Airport    | Lisbon Airport                                          | Lisbon                    | https://www.ana.pt
+Railway    | CP                                                      | Lisbon                    | https://www.cp.pt
+
+=== Qatar ===
+Airline    | Qatar Airways                                           | Doha                      | https://www.qatarairways.com
+Airport    | Hamad International Airport                             | Doha                      | https://dohahamadairport.com
+
+=== Romania ===
+Airline    | TAROM                                                   | Bucharest                 | https://www.tarom.ro
+Airport    | Henri Coandă International Airport                      | Bucharest                 | https://www.bucharestairports.ro
+Railway    | CFR Călători                                            | Bucharest                 | https://www.cfrcalatori.ro
+
+=== Russia ===
+Airline    | Aeroflot                                                | Moscow                    | https://www.aeroflot.ru
+Airport    | Sheremetyevo International Airport                      | Moscow                    | https://www.svo.aero
+Airport    | Domodedovo International Airport                        | Moscow                    | https://www.dme.ru
+Railway    | Russian Railways                                        | Moscow                    | https://www.rzd.ru
+
+=== Saudi Arabia ===
+Airline    | Saudia                                                  | Jeddah                    | https://www.saudia.com
+Airport    | King Abdulaziz International Airport                    | Jeddah                    | https://www.kaia.sa
+Railway    | Saudi Railways                                          | Riyadh                    | https://www.sar.com.sa
+
+=== Serbia ===
+Airline    | Air Serbia                                              | Belgrade                  | https://www.airserbia.com
+Airport    | Belgrade Nikola Tesla Airport                           | Belgrade                  | https://www.beg.aero
+Railway    | Srbija Voz                                              | Belgrade                  | https://www.srbvoz.rs
+
+=== Singapore ===
+Airline    | Singapore Airlines                                      | Singapore                 | https://www.singaporeair.com
+Airport    | Singapore Changi Airport                                | Singapore                 | https://www.changiairport.com
+Transit    | SMRT / LTA                                              | Singapore                 | https://www.lta.gov.sg
+
+=== Slovakia ===
+Airline    | Smartwings                                              | Bratislava                | https://www.smartwings.com
+Airport    | Bratislava Airport                                      | Bratislava                | https://www.bts.aero
+Railway    | ZSSK                                                    | Bratislava                | https://www.zssk.sk
+
+=== Slovenia ===
+Airport    | Ljubljana Airport                                       | Ljubljana                 | https://www.lju-airport.si
+Railway    | SŽ                                                      | Ljubljana                 | https://www.slo-zeleznice.si
+
+=== South Africa ===
+Airline    | South African Airways                                   | Johannesburg              | https://www.flysaa.com
+Airport    | O.R. Tambo International Airport                        | Johannesburg              | https://www.airports.co.za
+Railway    | Transnet / PRASA                                        | Johannesburg              | https://www.transnet.net
+
+=== South Korea ===
+Airline    | Korean Air                                              | Seoul                     | https://www.koreanair.com
+Airline    | Asiana Airlines                                         | Seoul                     | https://flyasiana.com
+Airport    | Incheon International Airport                           | Seoul                     | https://www.airport.kr
+Railway    | Korail                                                  | Seoul                     | https://www.letskorail.com
+Transit    | Seoul Metro                                             | Seoul                     | https://www.seoulmetro.co.kr
+
+=== Spain ===
+Airline    | Iberia                                                  | Madrid                    | https://www.iberia.com
+Airport    | Adolfo Suárez Madrid–Barajas Airport                    | Madrid                    | https://www.aena.es
+Railway    | Renfe                                                   | Madrid                    | https://www.renfe.com
+
+=== Sri Lanka ===
+Airline    | SriLankan Airlines                                      | Colombo                   | https://www.srilankan.com
+Airport    | Bandaranaike International Airport                      | Colombo                   | https://www.airport.lk
+Railway    | Sri Lanka Railways                                      | Colombo                   | https://www.railway.gov.lk
+
+=== Sweden ===
+Airport    | Stockholm Arlanda Airport                               | Stockholm                 | https://www.swedavia.se
+Railway    | SJ                                                      | Stockholm                 | https://www.sj.se
+
+=== Switzerland ===
+Airline    | Swiss International Air Lines                           | Zurich                    | https://www.swiss.com
+Airport    | Zurich Airport                                          | Zurich                    | https://www.zurich-airport.com
+Airport    | Geneva Airport                                          | Geneva                    | https://www.gva.ch
+Railway    | SBB                                                     | Bern                      | https://www.sbb.ch
+
+=== Taiwan ===
+Airline    | China Airlines                                          | Taipei                    | https://www.china-airlines.com
+Airport    | Taiwan Taoyuan International Airport                    | Taipei                    | https://www.taoyuan-airport.com
+Railway    | Taiwan Railways                                         | Taipei                    | https://www.railway.gov.tw
+
+=== Thailand ===
+Airline    | Thai Airways                                            | Bangkok                   | https://www.thaiairways.com
+Airport    | Suvarnabhumi Airport                                    | Bangkok                   | https://www.airportthai.co.th
+Railway    | State Railway of Thailand                               | Bangkok                   | https://www.railway.co.th
+
+=== Turkey ===
+Airline    | Turkish Airlines                                        | Istanbul                  | https://www.turkishairlines.com
+Airport    | Istanbul Airport                                        | Istanbul                  | https://www.istairport.com
+Railway    | TCDD                                                    | Ankara                    | https://www.tcdd.gov.tr
+
+=== Ukraine ===
+Airline    | Ukraine International Airlines                          | Kyiv                      | https://www.flyuia.com
+Airport    | Boryspil International Airport                          | Kyiv                      | https://kbp.aero
+Railway    | Ukrzaliznytsia                                          | Kyiv                      | https://www.uz.gov.ua
+
+=== United Arab Emirates ===
+Airline    | Emirates                                                | Dubai                     | https://www.emirates.com
+Airline    | Etihad Airways                                          | Abu Dhabi                 | https://www.etihad.com
+Airport    | Dubai International Airport                             | Dubai                     | https://www.dubaiairports.ae
+Airport    | Abu Dhabi International Airport                         | Abu Dhabi                 | https://www.abudhabiairport.ae
+
+=== United Kingdom ===
+Airline    | British Airways                                         | London                    | https://www.britishairways.com
+Airline    | easyJet                                                 | London                    | https://www.easyjet.com
+Airport    | London Heathrow Airport                                 | London                    | https://www.heathrow.com
+Airport    | London Gatwick Airport                                  | London                    | https://www.gatwickairport.com
+Airport    | Manchester Airport                                      | Manchester                | https://www.manchesterairport.co.uk
+Railway    | Network Rail                                            | London                    | https://www.networkrail.co.uk
+Railway    | National Rail                                           | London                    | https://www.nationalrail.co.uk
+Transit    | London Underground                                      | London                    | https://tfl.gov.uk
+
+=== United States ===
+Airline    | American Airlines                                       | Dallas                    | https://www.aa.com
+Airline    | Delta Air Lines                                         | Atlanta                   | https://www.delta.com
+Airline    | United Airlines                                         | Chicago                   | https://www.united.com
+Airline    | Southwest Airlines                                      | Dallas                    | https://www.southwest.com
+Airport    | Hartsfield-Jackson Atlanta International Airport        | Atlanta                   | https://www.atl.com
+Airport    | Dallas/Fort Worth International Airport                 | Dallas                    | https://www.dfwairport.com
+Airport    | Los Angeles International Airport                       | Los Angeles               | https://www.flylax.com
+Airport    | John F. Kennedy International Airport                   | New York                  | https://www.jfkairport.com
+Airport    | Chicago O'Hare International Airport                    | Chicago                   | https://www.flychicago.com
+Airport    | Denver International Airport                            | Denver                    | https://www.flydenver.com
+Airport    | San Francisco International Airport                     | San Francisco             | https://www.flysfo.com
+Airport    | Miami International Airport                             | Miami                     | https://www.miami-airport.com
+Railway    | Amtrak                                                  | Washington DC             | https://www.amtrak.com
+Transit    | New York MTA                                            | New York                  | https://new.mta.info
+Transit    | Chicago CTA                                             | Chicago                   | https://www.transitchicago.com
+
+=== Uzbekistan ===
+Airline    | Uzbekistan Airways                                      | Tashkent                  | https://www.uzairways.com
+Railway    | Uzbekistan Railways                                     | Tashkent                  | https://www.railway.uz
+
+=== Vietnam ===
+Airline    | Vietnam Airlines                                        | Hanoi                     | https://www.vietnamairlines.com
+Airport    | Noi Bai International Airport                           | Hanoi                     | https://www.noibaiairport.vn
+Railway    | Vietnam Railways                                        | Hanoi                     | https://www.vr.com.vn

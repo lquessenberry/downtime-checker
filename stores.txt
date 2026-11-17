@@ -1,0 +1,62 @@
+# Major stores.
+# Name | website | country | sample IP
+# The checker uses the website. The IP is a sample and can change.
+Walmart | walmart.com | United States | 2.16.232.188
+Sam's Club | samsclub.com | United States | 2.16.233.94
+Target | target.com | United States | 151.101.2.187
+Costco | costco.com | United States | 151.101.67.52
+BJ's Wholesale | bjs.com | United States | 23.220.161.70
+Kroger | kroger.com | United States | 158.48.16.240
+Albertsons | albertsons.com | United States | 45.60.18.113
+Safeway | safeway.com | United States | 45.60.102.113
+Publix | publix.com | United States | 104.68.232.151
+H-E-B | heb.com | United States | 45.223.27.43
+Meijer | meijer.com | United States | 204.74.167.99
+Aldi | aldi.us | United States | 23.215.11.230
+Lidl | lidl.com | Germany | 23.223.242.6
+Trader Joe's | traderjoes.com | United States | 151.101.67.10
+Whole Foods | wholefoodsmarket.com | United States | 151.101.0.69
+Walgreens | walgreens.com | United States | 184.31.3.98
+CVS | cvs.com | United States | 184.29.30.250
+Rite Aid | riteaid.com | United States | 172.66.43.199
+Home Depot | homedepot.com | United States | 35.201.95.83
+Lowe's | lowes.com | United States | 23.220.161.80
+Menards | menards.com | United States | 199.83.134.109
+Best Buy | bestbuy.com | United States | 23.14.140.251
+Macy's | macys.com | United States | 23.192.52.207
+Nordstrom | nordstrom.com | United States | 151.101.130.132
+Kohl's | kohls.com | United States | 23.220.103.74
+JCPenney | jcpenney.com | United States | 23.64.252.99
+TJ Maxx | tjmaxx.tjx.com | United States | 23.223.242.68
+Marshalls | marshalls.com | United States | 23.36.217.53
+Ross | rossstores.com | United States | 141.193.213.21
+Burlington | burlington.com | United States | 76.76.21.21
+Dollar General | dollargeneral.com | United States | 23.1.33.9
+Dollar Tree | dollartree.com | United States | 104.69.85.8
+Family Dollar | familydollar.com | United States | 23.220.161.76
+Five Below | fivebelow.com | United States | 104.18.1.55
+IKEA | ikea.com | Sweden | 104.18.13.173
+7-Eleven | 7-eleven.com | United States | 45.60.32.104
+AutoZone | autozone.com | United States | 23.61.2.177
+O'Reilly Auto Parts | oreillyauto.com | United States | 23.61.181.173
+Advance Auto Parts | advanceautoparts.com | United States | 23.220.161.69
+Staples | staples.com | United States | 184.29.31.5
+Office Depot | officedepot.com | United States | 23.64.160.211
+PetSmart | petsmart.com | United States | 204.74.99.100
+Petco | petco.com | United States | 104.18.32.199
+Dick's Sporting Goods | dickssportinggoods.com | United States | 67.88.8.34
+Sephora | sephora.com | France | 23.54.40.144
+Ulta | ulta.com | United States | 23.61.2.136
+Nike | nike.com | United States | 3.165.181.92
+Gap | gap.com | United States | 23.14.142.36
+Old Navy | oldnavy.gap.com | United States | 184.29.36.37
+H&M | hm.com | Sweden | 23.220.161.86
+Zara | zara.com | Spain | 23.33.29.209
+Uniqlo | uniqlo.com | Japan | 13.115.112.172
+Carrefour | carrefour.com | France | 104.18.35.216
+Tesco | tesco.com | United Kingdom | 2.16.232.68
+Woolworths | woolworths.com.au | Australia | 23.61.3.203
+Coles | coles.com.au | Australia | 203.5.135.164
+Wayfair | wayfair.com | United States | 151.101.129.252
+Etsy | etsy.com | United States | 151.101.1.224
+Instacart | instacart.com | United States | 18.244.202.14

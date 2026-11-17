@@ -1,0 +1,21 @@
+# More banks and brokerages.
+# Name | website | country | sample IP
+# The checker uses the website. The IP is a sample and can change.
+Capital One | capitalone.com | United States | 184.31.10.229
+PNC | pnc.com | United States | 23.61.174.15
+Truist | truist.com | United States | 23.220.161.91
+TD Bank | td.com | Canada | 23.223.242.82
+Ally | ally.com | United States | 198.74.81.46
+American Express | americanexpress.com | United States | 23.43.12.116
+Discover | discover.com | United States | 23.61.174.33
+Navy Federal | navyfederal.org | United States | 23.220.161.72
+USAA | usaa.com | United States | 104.69.121.182
+Charles Schwab | schwab.com | United States | 162.93.229.103
+Fidelity | fidelity.com | United States | 99.83.221.176
+Vanguard | vanguard.com | United States | 23.220.161.74
+Citizens Bank | citizensbank.com | United States | 104.69.91.113
+Fifth Third Bank | 53.com | United States | 23.60.56.109
+KeyBank | key.com | United States | 23.220.161.89
+Huntington Bank | huntington.com | United States | 23.220.161.70
+BMO | bmo.com | Canada | 23.61.165.83
+Citi | citi.com | United States | 104.94.222.171

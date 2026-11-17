@@ -1,0 +1,8 @@
+# Package and mail carriers.
+# Name | website | country | sample IP
+# The checker uses the website. The IP is a sample and can change.
+UPS | ups.com | United States | 153.2.228.130
+FedEx | fedex.com | United States | 170.170.225.93
+DHL | dhl.com | Germany | 159.60.157.223
+USPS | usps.com | United States | 56.0.134.100
+OnTrac | ontrac.com | United States | 15.197.154.53

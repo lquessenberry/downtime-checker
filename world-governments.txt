@@ -1,0 +1,381 @@
+WORLD GOVERNMENT AND MILITARY WEB ADDRESSES
+===========================================
+Generated for IP down checker use. 
+Note: Domains are listed (preferred for monitoring as IPs change frequently due to CDNs, load balancing, and updates). 
+Resolve domains to current IPs in your checker tool (e.g., via DNS lookup). 
+Many sites use HTTPS and may redirect. Data primarily from UN EGOVKB national portals and official sources. 
+Military sections include official defense ministries and known public base/installation pages where available. 
+Not exhaustive for every agency or base worldwide.
+
+===========================================
+UNITED STATES OF AMERICA
+===========================================
+Official Portal: https://www.usa.gov
+White House: https://www.whitehouse.gov
+Supreme Court (SCOTUS): https://www.supremecourt.gov
+Congress: https://www.congress.gov
+Senate: https://www.senate.gov
+House of Representatives: https://www.house.gov
+FBI: https://www.fbi.gov
+CIA: https://www.cia.gov
+NSA: https://www.nsa.gov
+NASA: https://www.nasa.gov
+Department of Defense (DoD): https://www.defense.gov
+Department of Homeland Security (DHS): https://www.dhs.gov
+Department of Justice (DOJ): https://www.justice.gov
+Department of State: https://www.state.gov
+IRS: https://www.irs.gov
+CDC: https://www.cdc.gov
+NIH: https://www.nih.gov
+EPA: https://www.epa.gov
+Federal Reserve: https://www.federalreserve.gov
+
+Military / Bases (US):
+- Official base locator: https://www.usa.gov/locate-military-base
+- Military OneSource Installations: https://installations.militaryonesource.mil
+- Army Garrisons: https://home.army.mil/imcom/garrisons
+- Air Force sites (examples): https://www.af.mil (main); individual bases like https://www.ramstein.af.mil, https://www.aviano.af.mil
+- Navy: https://www.navy.mil
+- Marines: https://www.marines.mil
+- Space Force: https://www.spaceforce.mil
+- Coast Guard: https://www.uscg.mil
+Major examples: Fort Bragg/Liberty (NC), Fort Hood/Cavazos (TX), Naval Station Norfolk, Joint Base Pearl Harbor-Hickam, Guantanamo Bay, etc. (check official directories for full list and current sites).
+
+===========================================
+UNITED KINGDOM
+===========================================
+Official Portal: https://www.gov.uk
+Prime Minister / No. 10: https://www.gov.uk/government/organisations/prime-ministers-office-10-downing-street
+Parliament: https://www.parliament.uk
+House of Commons / Lords: via parliament.uk
+Ministry of Defence (MOD): https://www.gov.uk/government/organisations/ministry-of-defence
+Foreign, Commonwealth & Development Office: https://www.gov.uk/government/organisations/foreign-commonwealth-development-office
+NHS: https://www.nhs.uk
+Bank of England: https://www.bankofengland.co.uk
+
+Military:
+- MOD main: https://www.gov.uk/government/organisations/ministry-of-defence
+- British Army: https://www.army.mod.uk
+- Royal Navy: https://www.royalnavy.mod.uk
+- RAF: https://www.raf.mod.uk
+Sovereign Base Areas (Cyprus): Akrotiri & Dhekelia (UK overseas).
+
+===========================================
+CANADA
+===========================================
+Official Portal: https://www.canada.ca
+Parliament: https://www.parl.ca
+Department of National Defence / Canadian Armed Forces: https://www.canada.ca/en/department-national-defence.html
+RCMP: https://www.rcmp-grc.gc.ca
+CSIS: https://www.canada.ca/en/security-intelligence-service.html
+
+Military:
+- CAF: https://www.canada.ca/en/department-national-defence.html
+- Forces.gc.ca related sites.
+
+===========================================
+AUSTRALIA
+===========================================
+Official Portal: https://www.australia.gov.au
+Prime Minister: https://www.pm.gov.au
+Department of Defence: https://www.defence.gov.au
+Australian Federal Police: https://www.afp.gov.au
+
+Military:
+- Defence: https://www.defence.gov.au
+- Army, Navy, Air Force under defence.gov.au.
+
+===========================================
+GERMANY
+===========================================
+Official Portal: https://www.bundesregierung.de
+Federal Chancellery: https://www.bundeskanzler.de
+Bundestag: https://www.bundestag.de
+Bundeswehr (Armed Forces): https://www.bundeswehr.de
+Ministry of Defence: https://www.bmvg.de
+
+Military / NATO-related:
+- Bundeswehr: https://www.bundeswehr.de
+- Ramstein Air Base (US/NATO): https://www.ramstein.af.mil (US-operated)
+
+===========================================
+FRANCE
+===========================================
+Official Portal: https://www.gouvernement.fr
+Élysée (President): https://www.elysee.fr
+National Assembly: https://www.assemblee-nationale.fr
+Senate: https://www.senat.fr
+Ministry of Armed Forces: https://www.defense.gouv.fr
+DGSE (intelligence): related under defense.
+
+Military:
+- Armed Forces: https://www.defense.gouv.fr
+
+===========================================
+JAPAN
+===========================================
+Official Portal: https://www.japan.go.jp or https://www.e-gov.go.jp
+Prime Minister's Office: https://www.kantei.go.jp
+Diet (Parliament): https://www.sangiin.go.jp / shugiin.go.jp
+Ministry of Defense / Self-Defense Forces: https://www.mod.go.jp
+Ministry of Foreign Affairs: https://www.mofa.go.jp
+
+Military:
+- MOD/SDF: https://www.mod.go.jp
+
+===========================================
+CHINA (People's Republic)
+===========================================
+Official Portal: https://www.gov.cn
+State Council: via gov.cn
+Ministry of National Defense: http://www.mod.gov.cn
+Ministry of Foreign Affairs: https://www.fmprc.gov.cn
+
+Military:
+- PLA / Defense Ministry: http://www.mod.gov.cn
+
+===========================================
+RUSSIAN FEDERATION
+===========================================
+Official Portal: http://www.gov.ru
+Kremlin: http://en.kremlin.ru
+Ministry of Defence: https://eng.mil.ru
+FSB: related official channels.
+
+Military:
+- Ministry of Defence: https://eng.mil.ru
+
+===========================================
+INDIA
+===========================================
+Official Portal: https://india.gov.in
+President: https://presidentofindia.nic.in
+Prime Minister: https://www.pmindia.gov.in
+Parliament: https://sansad.in
+Ministry of Defence: https://www.mod.gov.in
+Ministry of External Affairs: https://www.mea.gov.in
+
+Military:
+- MoD: https://www.mod.gov.in
+- Army, Navy, Air Force under mod.gov.in.
+
+===========================================
+BRAZIL
+===========================================
+Official Portal: http://www.brazil.gov.br or https://www.gov.br
+Presidency: https://www.gov.br/planalto
+Ministry of Defense: https://www.gov.br/defesa
+
+===========================================
+MEXICO
+===========================================
+Official Portal: https://www.gob.mx
+Presidency: https://www.gob.mx/presidencia
+Ministry of National Defense (SEDENA): https://www.gob.mx/sedena
+Navy (SEMAR): https://www.gob.mx/semar
+
+===========================================
+SOUTH AFRICA
+===========================================
+Official Portal: https://www.gov.za
+Department of Defence: https://www.dod.mil.za or via gov.za
+
+===========================================
+NATO (Multinational)
+===========================================
+Main: https://www.nato.int
+SHAPE / Allied Command Operations: https://shape.nato.int
+Allied Command Transformation: https://www.act.nato.int
+Major sites: Ramstein (Germany), Aviano (Italy), Naval Station Rota (Spain), etc. (many under US or host nation domains).
+
+===========================================
+ADDITIONAL COUNTRIES (National Portals from UN EGOVKB and similar)
+===========================================
+Afghanistan: http://president.gov.af/en
+Albania: http://www.e-albania.al
+Algeria: http://www.el-mouradia.dz
+Andorra: http://www.govern.ad/
+Angola: http://www.governo.gov.ao/
+Antigua and Barbuda: http://www.ab.gov.ag
+Argentina: https://www.argentina.gob.ar
+Armenia: http://www.gov.am
+Austria: https://www.digitales.oesterreich.gv.at
+Azerbaijan: https://www.e-gov.az
+Bahamas: http://www.bahamas.gov.bs
+Bahrain: https://www.bahrain.bh
+Bangladesh: http://www.bangladesh.gov.bd
+Barbados: https://www.gov.bb
+Belarus: https://portal.gov.by
+Belgium: http://www.belgium.be
+Belize: http://www.belize.gov.bz
+Benin: http://gouv.bj
+Bhutan: http://www.bhutan.gov.bt
+Bolivia: https://bolivia.gob.bo
+Bosnia and Herzegovina: http://www.fbihvlada.gov.ba
+Botswana: http://www.gov.bw
+Brunei Darussalam: http://www.brunei.gov.bn
+Bulgaria: https://egov.bg
+Burkina Faso: http://www.gouvernement.gov.bf
+Burundi: http://www.burundi.gov.bi
+Cambodia: http://www.cdc-crdb.gov.kh
+Cameroon: http://www.spm.gov.cm
+Cabo Verde: https://www.governo.cv
+Central African Republic: http://primature.govcf.org
+Chad: http://www.gouvernement.td
+Chile: http://www.gob.cl
+Colombia: (search current gobierno en linea)
+Comoros: https://gouvernement.km
+Congo: http://www.presidence.cg
+Costa Rica: https://presidencia.go.cr
+Côte d'Ivoire: http://www.gouv.ci
+Croatia: http://www.vlada.hr/
+Cuba: http://www.cubagob.cu
+Cyprus: http://www.cyprus.gov.cy
+Czech Republic: http://www.vlada.cz
+DPRK (North Korea): http://korea-dpr.com
+DR Congo: http://www.presidentrdc.cd
+Denmark: https://www.regeringen.dk
+Djibouti: http://www.presidence.dj
+Dominica: http://www.dominica.gov.dm
+Dominican Republic: http://dominicana.gob.do
+Ecuador: http://www.presidencia.gob.ec
+Egypt: (check current egypt.gov)
+El Salvador: https://www.asamblea.gob.sv
+Equatorial Guinea: http://www.guineaecuatorialpress.com
+Eritrea: http://www.shabait.com
+Estonia: https://www.valitsus.ee
+Eswatini: http://www.gov.sz/
+Ethiopia: http://www.ethiopia.gov.et
+Fiji: http://www.fiji.gov.fj
+Finland: https://www.suomi.fi
+Gabon: http://www.gouvernement.ga
+Gambia: http://www.statehouse.gm
+Georgia: http://gov.ge
+Ghana: http://www.ghana.gov.gh
+Greece: http://www.ermis.gov.gr
+Grenada: http://www.gov.gd
+Guatemala: http://www.presidencia.gob.gt
+Guinea: http://www.gouvernement.gov.gn
+Guinea-Bissau: http://www.gov.gw
+Guyana: http://gina.gov.gy
+Haiti: http://primature.gouv.ht
+Honduras: http://www.presidencia.gob.hn/
+Hungary: http://www.magyarorszag.hu
+Iceland: https://www.government.is
+Indonesia: http://indonesia.go.id
+Iran: https://iran.gov.ir/
+Iraq: http://www.cabinet.iq
+Ireland: http://www.gov.ie
+Israel: http://www.gov.il
+Italy: http://www.governo.it
+Jamaica: http://jis.gov.jm
+Jordan: https://jordan.gov.jo
+Kazakhstan: http://www.government.kz/
+Kenya: http://www.mygov.go.ke
+Kiribati: http://www.president.gov.ki
+Kuwait: http://www.e.gov.kw/
+Kyrgyzstan: http://www.gov.kg
+Laos: http://www.laogov.gov.la
+Latvia: http://www.latvija.lv
+Lebanon: http://www.dawlati.gov.lb
+Lesotho: http://www.gov.ls
+Liberia: http://www.eliberia.gov.lr
+Libya: http://www.pm.gov.ly
+Liechtenstein: http://regierung.li
+Lithuania: https://lrv.lt
+Luxembourg: http://www.gouvernement.lu
+Madagascar: http://www.presidence.gov.mg
+Malawi: http://www.malawi.gov.mw/
+Malaysia: http://www.malaysia.gov.my
+Maldives: https://citizen.egov.mv
+Mali: http://www.gouv.ml
+Malta: http://www.gov.mt
+Marshall Islands: http://www.rmiembassyus.org
+Mauritania: http://primature.gov.mr
+Mauritius: http://www.govmu.org/
+Micronesia: http://www.fsmgov.org
+Monaco: http://www.gouv.mc/
+Mongolia: http://zasag.mn
+Montenegro: http://www.gov.me
+Morocco: http://www.egov.ma
+Mozambique: http://www.portaldogoverno.gov.mz
+Myanmar: http://www.president-office.gov.mm
+Namibia: http://www.gov.na
+Nauru: http://www.naurugov.nr
+Nepal: http://www.nepal.gov.np/
+Netherlands: http://www.overheid.nl
+New Zealand: https://www.govt.nz
+Nicaragua: https://www.asamblea.gob.ni
+Niger: http://www.gouv.ne
+Nigeria: http://www.nigeria.gov.ng
+Norway: http://www.regjeringen.no
+Oman: http://www.oman.om
+Pakistan: http://www.pakistan.gov.pk
+Palau: http://palaugov.pw
+Panama: http://www.presidencia.gob.pa
+Papua New Guinea: http://www.pm.gov.pg
+Paraguay: https://www.paraguay.gov.py
+Peru: http://www.peru.gob.pe
+Philippines: http://www.gov.ph
+Poland: https://www.gov.pl/
+Portugal: http://www.portugal.gov.pt
+Qatar: (check current gov.qa)
+Republic of Korea (South Korea): https://www.gov.kr
+Moldova: http://www.gov.md
+Romania: http://www.gov.ro
+Rwanda: http://gov.rw
+Saint Kitts and Nevis: https://www.gov.kn
+Saint Lucia: http://www.govt.lc
+Saint Vincent and the Grenadines: http://www.gov.vc
+Samoa: http://www.samoagovt.ws
+San Marino: http://www.sanmarino.sm
+Sao Tome and Principe: http://www.parlamento.st
+Saudi Arabia: http://www.saudi.gov.sa
+Senegal: https://www.sec.gouv.sn
+Serbia: http://www.srbija.gov.rs
+Seychelles: http://www.egov.sc
+Sierra Leone: http://gov.sl
+Singapore: http://www.gov.sg
+Slovakia: http://www.slovensko.sk
+Slovenia: http://www.vlada.si
+Solomon Islands: http://www.parliament.gov.sb
+Somalia: https://opm.gov.so
+South Sudan: http://www.goss-online.org
+Spain: https://administracion.gob.es
+Sri Lanka: http://www.gov.lk
+Sudan: http://esudan.gov.sd
+Suriname: http://www.gov.sr
+Sweden: http://www.regeringen.se
+Switzerland: https://www.admin.ch
+Taiwan (ROC): https://www.gov.tw
+Tajikistan: (search current)
+Tanzania: http://www.tanzania.go.tz/
+Thailand: https://www.thaigov.go.th
+Timor-Leste: (search current)
+Togo: (search current)
+Tonga: (search current)
+Trinidad and Tobago: (search current)
+Tunisia: (search current)
+Turkey: https://www.turkiye.gov.tr or gov.tr
+Turkmenistan: http://www.turkmenistan.gov.tm
+Tuvalu: (limited official)
+Uganda: http://www.gou.go.ug
+Ukraine: https://www.gov.ua or kmu.gov.ua
+United Arab Emirates: https://u.ae/
+Uruguay: (search current gub.uy)
+Uzbekistan: http://www.gov.uz/
+Vanuatu: https://www.gov.vu
+Venezuela: (search current)
+Vietnam: https://www.gov.vn or chinhphu.vn
+Yemen: (limited/current conflict)
+Zambia: (search current)
+Zimbabwe: (search current)
+
+===========================================
+NOTES
+===========================================
+- Domains ending in .gov, .gov.uk, .gc.ca, .gouv.fr, .go.jp, etc., are typically official.
+- For military bases: Most individual base pages are under national defense domains (e.g., .mil for US). Full global list of every base website is not centrally published; use defense ministry sites and official directories.
+- Verify current URLs as governments update them. Some listed portals may have changed or be offline.
+- For IP resolution in your checker: Use tools like dig, nslookup, or libraries to get A/AAAA records. Note many resolve to CDN IPs (Cloudflare, Akamai, etc.).
+- This is a public information compilation for legitimate monitoring purposes. Respect robots.txt and terms of service when accessing.

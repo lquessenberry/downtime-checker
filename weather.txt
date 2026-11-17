@@ -1,0 +1,7 @@
+# Weather services.
+# Name | website | country | sample IP
+# The checker uses the website. The IP is a sample and can change.
+National Weather Service | weather.gov | United States | 23.192.220.19
+Weather Channel | weather.com | United States | 23.65.19.176
+AccuWeather | accuweather.com | United States | 23.50.34.60
+Weather Underground | wunderground.com | United States | 23.65.19.176

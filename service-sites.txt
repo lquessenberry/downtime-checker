@@ -1,0 +1,64 @@
+# Extra tech services, such as Microsoft 365, Azure, and Google Drive.
+# Name | website | country | sample IP
+# The checker uses the website. The IP is a sample and can change.
+Microsoft 365 | office.com | United States | 13.107.6.156
+Office 365 | office365.com | United States | 20.119.0.28
+Microsoft Live | live.com | United States | 204.79.197.212
+Hotmail | hotmail.com | United States | 204.79.197.212
+Outlook on the web | outlook.office.com | United States | 52.96.122.18
+OneDrive | onedrive.live.com | United States | 13.107.139.11
+Microsoft Teams | teams.microsoft.com | United States | 52.123.128.14
+Azure | azure.microsoft.com | United States | 23.220.200.180
+Azure portal | portal.azure.com | United States | 20.37.156.115
+Azure DevOps | dev.azure.com | United States | 150.171.73.16
+Xbox | xbox.com | United States | 20.70.246.20
+Bing | bing.com | United States | 150.171.27.10
+MSN | msn.com | United States | 204.79.197.219
+Skype | skype.com | United States | 20.112.250.133
+Windows | windows.com | United States | 20.76.201.171
+Microsoft Store | apps.microsoft.com | United States | 150.171.109.67
+Microsoft Learn | learn.microsoft.com | United States | 23.220.200.97
+Visual Studio | visualstudio.microsoft.com | United States | 23.35.160.107
+Copilot | copilot.microsoft.com | United States | 104.18.23.222
+Google Maps | maps.google.com | United States | 172.253.135.138
+Google Drive | drive.google.com | United States | 142.250.114.102
+Google Docs | docs.google.com | United States | 172.217.72.102
+Google Photos | photos.google.com | United States | 172.217.72.138
+Google Play | play.google.com | United States | 142.251.152.7
+Google Cloud | cloud.google.com | United States | 192.179.22.138
+Google Meet | meet.google.com | United States | 142.251.157.5
+Google Calendar | calendar.google.com | United States | 172.253.135.100
+Google News | news.google.com | United States | 142.251.186.139
+Google Pay | pay.google.com | United States | 142.250.26.92
+Android | android.com | United States | 142.250.113.106
+Amazon Web Services | aws.amazon.com | United States | 54.230.79.54
+Prime Video | primevideo.com | United States | 54.230.253.46
+Audible | audible.com | United States | 44.215.128.228
+IMDb | imdb.com | United States | 98.82.158.179
+Amazon Music | music.amazon.com | United States | 18.164.83.92
+Kindle | read.amazon.com | United States | 3.161.138.222
+Ring | ring.com | United States | 44.215.133.67
+Zappos | zappos.com | United States | 3.139.132.67
+Amazon Seller Central | sellercentral.amazon.com | United States | 18.155.1.75
+Apple ID | appleid.apple.com | United States | 17.157.64.68
+Apple Music | music.apple.com | United States | 184.29.110.33
+Apple TV | tv.apple.com | United States | 184.29.110.33
+Apple Support | support.apple.com | United States | 23.55.236.131
+App Store | apps.apple.com | United States | 184.29.110.33
+Apple Developer | developer.apple.com | United States | 17.253.127.138
+Messenger | messenger.com | United States | 57.144.78.141
+Meta | meta.com | United States | 57.144.78.141
+Threads | threads.net | United States | 57.144.78.192
+Venmo | venmo.com | United States | 52.84.150.34
+Twitter | twitter.com | United States | 151.101.2.146
+1.1.1.1 | one.one.one.one | United States | 1.1.1.1
+Cloudflare dashboard | dash.cloudflare.com | United States | 104.17.110.184
+Wikimedia | wikimedia.org | United States | 208.80.153.224
+Wikidata | wikidata.org | United States | 208.80.153.224
+Wikimedia Commons | commons.wikimedia.org | United States | 208.80.153.224
+OpenAI platform | platform.openai.com | United States | 172.64.154.211
+GitHub Gist | gist.github.com | United States | 140.82.114.3
+Discord legacy | discordapp.com | United States | 162.159.133.233
+Zoom | zoom.com | United States | 170.114.0.15
+Spotify web player | open.spotify.com | Sweden | 146.75.83.42
+Old Reddit | old.reddit.com | United States | 140.248.145.140

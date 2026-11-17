@@ -1,0 +1,20 @@
+# Major restaurant and delivery sites.
+# Name | website | country | sample IP
+# The checker uses the website. The IP is a sample and can change.
+McDonald's | mcdonalds.com | United States | 35.225.251.104
+Starbucks | starbucks.com | United States | 23.0.162.49
+Wendy's | wendys.com | United States | 104.18.26.25
+Burger King | bk.com | United States | 3.170.19.126
+Taco Bell | tacobell.com | United States | 2.21.9.235
+Subway | subway.com | United States | 23.43.11.102
+Domino's | dominos.com | United States | 23.214.125.147
+Papa Johns | papajohns.com | United States | 23.63.158.102
+Pizza Hut | pizzahut.com | United States | 184.30.42.6
+Chipotle | chipotle.com | United States | 151.101.131.10
+KFC | kfc.com | United States | 23.53.13.173
+Popeyes | popeyes.com | United States | 3.162.103.105
+Dunkin' | dunkindonuts.com | United States | 104.18.14.52
+DoorDash | doordash.com | United States | 172.64.152.226
+Uber Eats | ubereats.com | United States | 69.48.218.2
+Grubhub | grubhub.com | United States | 151.101.1.160
+Chick-fil-A | www.chick-fil-a.com | United States | 104.18.41.208

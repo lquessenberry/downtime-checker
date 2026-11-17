@@ -1,0 +1,234 @@
+================================================================================
+COMPREHENSIVE LIST OF MAJOR GLOBAL INSTITUTIONS
+Generated on: November 17, 2026
+Sources: Wikipedia (largest banks by assets, S&P Global April 2026), World Federation of Exchanges, StockAnalysis.com (exchanges), Times Higher Education / QS World University Rankings, Newsweek/Statista World's Best Hospitals 2026, company filings for pharmaceutical revenue.
+Note: "Top 500" full rankings for banks, universities, and hospitals are maintained by proprietary sources (e.g., The Banker Top 1000, THE World University Rankings of 2000+, Newsweek Global Top 250 hospitals). This file compiles the largest/most prominent available public lists with names, primary locations/HQs, and official websites where known. Data is approximate and subject to change.
+================================================================================
+
+SECTION 1: MAJOR STOCK EXCHANGES WORLDWIDE
+(Approximately 100+ active exchanges. Ranked roughly by significance / market presence. There are no exactly "top 500" stock exchanges; ~60-120 major ones exist globally.)
+
+Major by market capitalization (WFE September 2026 data, approx.):
+1. Nasdaq (United States, New York) - nasdaq.com - ~$45T domestic market cap
+2. New York Stock Exchange (NYSE) (United States, New York) - nyse.com - ~$34T
+3. Shanghai Stock Exchange (China, Shanghai) - sse.com.cn - ~$10T
+4. Japan Exchange Group / Tokyo Stock Exchange (Japan, Tokyo) - jpx.co.jp - ~$9T
+5. Euronext (Europe: Amsterdam, Paris, etc.) - euronext.com - ~$8T
+6. Shenzhen Stock Exchange (China, Shenzhen) - szse.cn - ~$7T
+7. Hong Kong Exchanges (HKEX) (Hong Kong) - hkex.com.hk - ~$6T
+8. TMX Group / Toronto Stock Exchange (Canada, Toronto) - tmx.com - ~$5T
+9. Taiwan Stock Exchange (Taiwan, Taipei) - twse.com.tw - ~$5T
+10. BSE India / Bombay Stock Exchange (India, Mumbai) - bseindia.com - ~$5T
+11. National Stock Exchange of India (NSE) (India, Mumbai) - nseindia.com
+12. Korea Exchange (South Korea, Seoul/Busan) - krx.co.kr
+13. Deutsche Börse / Frankfurt (Germany, Frankfurt) - deutsche-boerse.com
+14. SIX Swiss Exchange (Switzerland, Zurich) - six-group.com
+15. Saudi Exchange (Tadawul) (Saudi Arabia, Riyadh) - saudiexchange.sa
+16. Australian Securities Exchange (ASX) (Australia, Sydney) - asx.com.au
+17. London Stock Exchange (United Kingdom, London) - londonstockexchange.com
+18. Johannesburg Stock Exchange (South Africa, Johannesburg) - jse.co.za
+19. B3 (Brazil, São Paulo) - b3.com.br
+20. Tel Aviv Stock Exchange (Israel, Tel Aviv) - tase.co.il
+
+Additional major and active stock exchanges (from global directories, with country and typical website):
+- Frankfurt Stock Exchange (Germany) - boerse-frankfurt.de
+- US OTC Markets (United States) - otcmarkets.com
+- Bombay Stock Exchange (India) - bseindia.com
+- Tokyo Stock Exchange (Japan) - jpx.co.jp
+- London Stock Exchange (UK) - londonstockexchange.com
+- Nasdaq (US) - nasdaq.com
+- National Stock Exchange of India (India) - nseindia.com
+- Shenzhen Stock Exchange (China) - szse.cn
+- Hong Kong Stock Exchange (Hong Kong) - hkex.com.hk
+- Shanghai Stock Exchange (China) - sse.com.cn
+- New York Stock Exchange (US) - nyse.com
+- KOSDAQ (South Korea) - kosdaq.or.kr
+- Australian Securities Exchange (Australia) - asx.com.au
+- TSX Venture Exchange (Canada) - tsx.com
+- Deutsche Börse Xetra (Germany) - xetra.com
+- Stock Exchange of Thailand (Thailand) - set.or.th
+- Borsa Italiana (Italy) - borsaitaliana.it
+- Taipei Exchange (Taiwan) - tpex.org.tw
+- Brazil Stock Exchange / B3 (Brazil) - b3.com.br
+- Vienna Stock Exchange (Austria) - wienerborse.at
+- Bursa Malaysia (Malaysia) - bursamalaysia.com
+- Taiwan Stock Exchange (Taiwan) - twse.com.tw
+- Mexican Stock Exchange (Mexico) - bmv.com.mx
+- Korea Stock Exchange (South Korea) - krx.co.kr
+- Indonesia Stock Exchange (Indonesia) - idx.co.id
+- Toronto Stock Exchange (Canada) - tsx.com
+- Warsaw Stock Exchange (Poland) - gpw.pl
+- Nasdaq Stockholm (Sweden) - nasdaqomxnordic.com
+- Buenos Aires Stock Exchange (Argentina) - bcba.sba.com.ar
+- SIX Swiss Exchange (Switzerland) - six-group.com
+- Tel Aviv Stock Exchange (Israel) - tase.co.il
+- Pakistan Stock Exchange (Pakistan) - psx.com.pk
+- Singapore Exchange (Singapore) - sgx.com
+- Ho Chi Minh Stock Exchange (Vietnam) - hsx.vn
+- Saudi Stock Exchange (Saudi Arabia) - saudiexchange.sa
+- Dhaka Stock Exchange (Bangladesh) - dsebd.org
+- Santiago Stock Exchange (Chile) - bolsadesantiago.com
+- Lima Stock Exchange (Peru) - bvl.com.pe
+- Colombo Stock Exchange (Sri Lanka) - cse.lk
+- Philippine Stock Exchange (Philippines) - pse.com.ph
+- Johannesburg Stock Exchange (South Africa) - jse.co.za
+- Istanbul Stock Exchange / Borsa Istanbul (Turkey) - borsaistanbul.com
+- Moscow Stock Exchange (Russia) - moex.com
+- And many others (Nigerian, Egyptian, Kazakh, etc. — full list of ~119 active exchanges available at stockanalysis.com/list/exchanges/)
+
+Websites follow standard patterns: [exchange].com or national domain. MIC codes (e.g., XNAS, XNYS, XSHG) used for identification.
+
+================================================================================
+
+SECTION 2: TOP BANKS BY TOTAL ASSETS (S&P Global / Wikipedia, April 2026 ranking of top 100)
+Primary headquarters/location and official website noted where available. Full "top 500" available via The Banker magazine's annual Top 1000 ranking (subscription).
+
+1. Industrial and Commercial Bank of China (ICBC) - Beijing, China - icbc.com.cn - Assets ~$7,646B
+2. Agricultural Bank of China - Beijing, China - abchina.com - ~$6,975B
+3. China Construction Bank - Beijing, China - ccb.com - ~$6,524B
+4. Bank of China - Beijing, China - boc.cn - ~$5,484B
+5. JPMorgan Chase - New York, USA - jpmorganchase.com / chase.com - ~$4,425B
+6. HSBC - London, UK - hsbc.com - ~$3,445B
+7. Bank of America - Charlotte, USA - bankofamerica.com - ~$3,412B
+8. BNP Paribas - Paris, France - bnpparibas.com - ~$3,279B
+9. Crédit Agricole - Montrouge, France - credit-agricole.com - ~$3,149B
+10. Postal Savings Bank of China - Beijing, China - psbc.com - ~$2,671B
+11. Mitsubishi UFJ Financial Group (MUFG) - Tokyo, Japan - mufg.jp - ~$2,667B
+12. Citigroup - New York, USA - citigroup.com / citi.com - ~$2,622B
+13. Banco Santander - Madrid, Spain - santander.com - ~$2,252B
+14. Bank of Communications - Shanghai, China - bankcomm.com - ~$2,223B
+15. Wells Fargo - San Francisco, USA - wellsfargo.com - ~$2,149B
+16. Barclays - London, UK - barclays.com - ~$2,078B
+17. Sumitomo Mitsui Financial Group (SMBC) - Tokyo, Japan - smfg.co.jp - ~$2,020B
+18. Société Générale - Paris, France - societegenerale.com - ~$1,987B
+19. Mizuho Financial Group - Tokyo, Japan - mizuho-fg.co.jp - ~$1,898B
+20. China Merchants Bank - Shenzhen, China - cmbchina.com - ~$1,869B
+21. BPCE Group - Paris, France - groupebpce.com - ~$1,813B
+22. Goldman Sachs - New York, USA - goldmansachs.com - ~$1,809B
+23. Royal Bank of Canada - Toronto, Canada - rbc.com - ~$1,727B
+24. Deutsche Bank - Frankfurt, Germany - db.com - ~$1,685B
+25. UBS - Zurich, Switzerland - ubs.com - ~$1,617B
+26. Industrial Bank - Fuzhou, China - cib.com.cn - ~$1,586B
+27. Toronto-Dominion Bank (TD) - Toronto, Canada - td.com - ~$1,548B
+28. Japan Post Bank - Tokyo, Japan - jp-bank.japanpost.jp - ~$1,451B
+29. China CITIC Bank - Beijing, China - citicbank.com - ~$1,448B
+30. Crédit Mutuel - Strasbourg, France - creditmutuel.fr - ~$1,442B
+31. Shanghai Pudong Development Bank - Shanghai, China - spdb.com.cn - ~$1,441B
+32. Morgan Stanley - New York, USA - morganstanley.com - ~$1,420B
+33. Lloyds Banking Group - London, UK - lloydsbankinggroup.com - ~$1,271B
+34. ING Group - Amsterdam, Netherlands - ing.com - ~$1,238B
+35. Intesa Sanpaolo - Turin/Milan, Italy - intesasanpaolo.com - ~$1,127B
+36. China Minsheng Bank - Beijing, China - cmbc.com.cn - ~$1,120B
+37. Scotiabank - Toronto, Canada - scotiabank.com - ~$1,088B
+38. Bank of Montreal (BMO) - Montreal, Canada - bmo.com - ~$1,070B
+39. China Everbright Bank - Beijing, China - cebbank.com - ~$1,024B
+40. UniCredit - Milan, Italy - unicreditgroup.eu - ~$1,022B
+41. Banco Bilbao Vizcaya Argentaria (BBVA) - Bilbao, Spain - bbva.com - ~$1,006B
+42. NatWest Group - Edinburgh/London, UK - natwestgroup.com - ~$962B
+43. Commonwealth Bank of Australia - Sydney, Australia - commbank.com.au - ~$955B
+44. Standard Chartered - London, UK - sc.com - ~$920B
+45. State Bank of India - Mumbai, India - sbi.co.in - ~$877B
+46. Sberbank - Moscow, Russia - sberbank.ru - ~$870B
+47. ANZ Group - Melbourne, Australia - anz.com - ~$858B
+48. La Banque Postale - Paris, France - labanquepostale.fr - ~$852B
+49. Ping An Bank - Shenzhen, China - bank.pingan.com - ~$847B
+50. CIBC - Toronto, Canada - cibc.com - ~$835B
+
+(Continuing top 100: CaixaBank Spain, DZ Bank Germany, Nordea Finland, Rabobank Netherlands, Westpac Australia, NAB Australia, DBS Singapore, Commerzbank Germany, U.S. Bancorp USA, various Chinese regional banks, Capital One USA, PNC USA, Danske Bank Denmark, Itaú Unibanco Brazil, KB Financial South Korea, Truist USA, Shinhan South Korea, OCBC Singapore, HDFC Bank India, ABN AMRO Netherlands, Charles Schwab USA, BNY USA, etc. Full list of top 100 available on Wikipedia "List of largest banks".)
+
+IP addresses: Banks do not publish single public IP addresses for primary services (they use CDNs, multiple data centers, anycast). Use official websites above for access. Primary web addresses listed.
+
+================================================================================
+
+SECTION 3: TOP EDUCATION / RESEARCH UNIVERSITIES AND INSTITUTIONS
+(Based on Times Higher Education World University Rankings 2025/2026/2027 and QS World University Rankings. Full top 500+ available via THE or QS paid/free limited lists. Top entries listed with location and website.)
+
+1. University of Oxford - Oxford, United Kingdom - ox.ac.uk
+2. Massachusetts Institute of Technology (MIT) - Cambridge, MA, USA - mit.edu
+3. Princeton University - Princeton, NJ, USA - princeton.edu
+4. Stanford University - Stanford, CA, USA - stanford.edu
+5. University of Cambridge - Cambridge, United Kingdom - cam.ac.uk
+6. Harvard University - Cambridge, MA, USA - harvard.edu
+7. California Institute of Technology (Caltech) - Pasadena, CA, USA - caltech.edu
+8. Imperial College London - London, United Kingdom - imperial.ac.uk
+9. University of California, Berkeley - Berkeley, CA, USA - berkeley.edu
+10. Yale University - New Haven, CT, USA - yale.edu
+11. Tsinghua University - Beijing, China - tsinghua.edu.cn
+12. ETH Zurich - Zurich, Switzerland - ethz.ch
+13. Peking University - Beijing, China - pku.edu.cn
+14. University of Chicago - Chicago, IL, USA - uchicago.edu
+15. University of Pennsylvania - Philadelphia, PA, USA - upenn.edu
+16. Johns Hopkins University - Baltimore, MD, USA - jhu.edu
+17. National University of Singapore (NUS) - Singapore - nus.edu.sg
+18. Columbia University - New York, NY, USA - columbia.edu
+19. University of California, Los Angeles (UCLA) - Los Angeles, CA, USA - ucla.edu
+20. Cornell University - Ithaca, NY, USA - cornell.edu
+21. University of Toronto - Toronto, Canada - utoronto.ca
+22. University College London (UCL) - London, United Kingdom - ucl.ac.uk
+23. University of Michigan-Ann Arbor - Ann Arbor, MI, USA - umich.edu
+24. Carnegie Mellon University - Pittsburgh, PA, USA - cmu.edu
+25. University of Washington - Seattle, WA, USA - washington.edu
+... (Continuing: Duke University USA, University of Edinburgh UK, Technical University of Munich Germany, New York University USA, Kyoto University Japan, University of Tokyo Japan, Seoul National University South Korea, University of Melbourne Australia, University of British Columbia Canada, McGill University Canada, Australian National University, University of Sydney, University of Hong Kong, Nanyang Technological University Singapore, École Polytechnique Fédérale de Lausanne Switzerland, etc. Hundreds more in full THE/QS top 500-2000 lists.)
+
+Research institutions: CERN (Switzerland/France - home.cern), Max Planck Institutes (Germany), NIH (USA - nih.gov), Chinese Academy of Sciences, etc.
+
+================================================================================
+
+SECTION 4: TOP MEDICAL - HOSPITALS AND PHARMACEUTICAL / DRUG PRODUCTION COMPANIES
+
+A. WORLD'S BEST HOSPITALS 2026 (Newsweek/Statista ranking, Global Top 250; top listed with location and website)
+
+1. Mayo Clinic - Rochester, Minnesota, USA - mayoclinic.org
+2. University Health Network - Toronto General Hospital - Toronto, Canada - uhn.ca
+3. Cleveland Clinic - Cleveland, Ohio, USA - clevelandclinic.org
+4. Karolinska Universitetssjukhuset - Stockholm, Sweden - karolinska.se
+5. Massachusetts General Hospital - Boston, Massachusetts, USA - massgeneral.org
+6. The Johns Hopkins Hospital - Baltimore, Maryland, USA - hopkinsmedicine.org
+7. Sheba Medical Center - Ramat Gan, Israel - shebaonline.org
+8. Charité - Universitätsmedizin Berlin - Berlin, Germany - charite.de
+9. Universitätsspital Zürich - Zurich, Switzerland - usz.ch
+10. Singapore General Hospital (SGH) - Singapore - sgh.com.sg
+11. AP-HP - Hôpital Universitaire Pitié Salpêtrière - Paris, France - pitiesalpetriere.aphp.fr
+12. Universitätsklinikum Heidelberg - Heidelberg, Germany - klinikum.uni-heidelberg.de
+13. The University of Tokyo Hospital - Tokyo, Japan - h.u-tokyo.ac.jp
+14. Ronald Reagan UCLA Medical Center - Los Angeles, California, USA - uclahealth.org
+15. Rigshospitalet - Copenhagen University Hospital - Copenhagen, Denmark - rigshospitalet.dk
+16. Einstein Hospital Israelita - São Paulo, Brazil - einstein.br
+17. LMU Klinikum - Munich, Germany - lmu-klinikum.de
+18. Brigham and Women's Hospital - Boston, Massachusetts, USA - brighamandwomens.org
+19. Les Hôpitaux Universitaires de Genève (HUG) - Geneva, Switzerland - hug.ch
+20. Universitätsklinikum AKH Wien - Vienna, Austria - akhwien.at
+... (Continuing to 250: Mount Sinai Hospital New York, Stanford Health Care USA, Samsung Medical Center Seoul, Asan Medical Center Seoul, Erasmus MC Rotterdam, etc. Full list at rankings.newsweek.com/worlds-best-hospitals-2026)
+
+B. TOP PHARMACEUTICAL / DRUG PRODUCTION COMPANIES BY 2025 DRUG REVENUE (approx., from company filings / analyses)
+1. Eli Lilly - Indianapolis, IN, USA - lilly.com - ~$65B drug revenue
+2. Pfizer - New York, NY, USA - pfizer.com - ~$61B
+3. AbbVie - North Chicago, IL, USA - abbvie.com - ~$61B
+4. Johnson & Johnson (Innovative Medicine) - New Brunswick, NJ, USA - jnj.com - ~$60B+
+5. Merck & Co. - Rahway, NJ, USA - merck.com - ~$58B
+6. Roche - Basel, Switzerland - roche.com - ~$57B
+7. AstraZeneca - Cambridge, UK - astrazeneca.com - ~$56B
+8. Novartis - Basel, Switzerland - novartis.com - ~$54B
+9. Sanofi - Paris, France - sanofi.com - ~$48B
+10. Bristol Myers Squibb - Princeton, NJ, USA - bms.com - ~$48B
+11. Novo Nordisk - Bagsværd, Denmark - novonordisk.com - ~$47B
+12. GSK - London, UK - gsk.com - ~$43B
+13. Amgen - Thousand Oaks, CA, USA - amgen.com - ~$37B
+14. Takeda - Tokyo, Japan - takeda.com - ~$30B
+15. Gilead Sciences - Foster City, CA, USA - gilead.com - ~$29B
+16. Boehringer Ingelheim - Ingelheim, Germany - boehringer-ingelheim.com
+17. Regeneron - Tarrytown, NY, USA - regeneron.com
+18. Vertex Pharmaceuticals - Boston, MA, USA - vrtx.com
+... (Additional major producers: Teva Israel, Bayer Germany, CSL Australia, Daiichi Sankyo Japan, Astellas Japan, etc. Full top 50+ by revenue available in industry reports.)
+
+Drug production also includes generics (e.g., Teva, Sandoz, Viatris), vaccines (GSK, Sanofi, Pfizer), and biotech.
+
+================================================================================
+END OF LIST
+Notes:
+- Websites are official primary domains; always verify current URLs.
+- Locations are primary headquarters or main campuses.
+- Rankings change yearly; consult original sources for updates.
+- For complete top 500 in each category, refer to: The Banker (banks), Times Higher Education or QS (universities), Newsweek/Statista (hospitals), and company/industry reports (pharma).
+- This compilation is for informational purposes based on publicly available 2025-2026 data.
+================================================================================

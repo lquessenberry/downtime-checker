@@ -1,0 +1,26 @@
+Downtime Checker offline install
+
+Copy "Downtime Checker.tar.gz" onto the other Linux computer.
+Put it on the Desktop, in Downloads, or in the folder where you open the terminal.
+Python 3 must already be installed. The installer does not use the network and does not need root.
+
+Open a terminal and paste this:
+
+set -e
+archive=""
+for folder in "$PWD" "$HOME/Desktop" "$HOME/Downloads"; do
+  if [[ -f "$folder/Downtime Checker.tar.gz" ]]; then
+    archive="$folder/Downtime Checker.tar.gz"
+    break
+  fi
+done
+if [[ -z "$archive" ]]; then
+  echo "Put Downtime Checker.tar.gz on the Desktop or in Downloads, then paste this again."
+  exit 1
+fi
+tar -xzf "$archive" -C "$(dirname "$archive")"
+bash "$(dirname "$archive")/Downtime Checker/install.sh"
+
+The installer copies the program to ~/bin/downtime, puts the Downtime icon on the Desktop, and adds it to the application menu. If a Pentesting folder is already on the Desktop, the launcher is placed there too.
+
+Country names are drawn larger when figlet is installed. The checker still runs without it.

@@ -1,0 +1,98 @@
+# TV, radio, news, phone, cell, and internet providers.
+# Name | website | country | sample IP
+# The checker uses the website. The IP is a sample and can change.
+ABC (TV) | abc.com | United States | 18.155.1.2
+CBS (TV) | cbs.com | United States | 98.83.184.133
+NBC (TV) | nbc.com | United States | 23.216.5.18
+Fox (TV) | fox.com | United States | 75.2.43.150
+PBS (TV) | pbs.org | United States | 54.225.198.196
+CNN (TV) | cnn.com | United States | 151.101.3.5
+Fox News (TV) | foxnews.com | United States | 146.75.78.132
+MSNBC (TV) | msnbc.com | United States | 76.223.34.124
+ESPN (TV) | espn.com | United States | 3.163.115.89
+BBC (TV and radio) | bbc.com | United Kingdom | 151.101.64.81
+Disney+ (TV) | disneyplus.com | United States | 34.110.155.89
+Hulu (TV) | hulu.com | United States | 23.194.116.170
+Max (TV) | max.com | United States | 3.161.188.94
+Peacock (TV) | peacocktv.com | United States | 23.59.235.49
+Paramount+ (TV) | paramountplus.com | United States | 100.28.104.175
+Netflix (TV) | netflix.com | United States | 207.45.73.1
+YouTube TV (TV) | tv.youtube.com | United States | 172.253.135.93
+Sling TV (TV) | sling.com | United States | 159.60.130.57
+DirecTV (TV) | directv.com | United States | 23.61.183.35
+Dish (TV) | dish.com | United States | 159.60.130.57
+Pluto TV (TV) | pluto.tv | United States | 151.101.129.91
+Tubi (TV) | tubitv.com | United States | 3.161.193.93
+Roku (TV) | roku.com | United States | 162.159.135.11
+CBC (TV) | cbc.ca | Canada | 23.79.23.23
+ABC Australia (TV) | abc.net.au | Australia | 23.50.39.80
+Sky (TV) | sky.com | United Kingdom | 90.216.128.5
+ZDF (TV) | zdf.de | Germany | 91.197.29.78
+ARD (TV) | ard.de | Germany | 34.120.237.106
+France TV (TV) | france.tv | France | 2.21.9.242
+RAI (TV) | rai.it | Italy | 212.162.68.90
+Al Jazeera (TV) | aljazeera.com | Qatar | 13.63.144.181
+NPR (radio) | npr.org | United States | 3.161.136.3
+iHeartRadio (radio) | iheart.com | United States | 151.101.128.65
+SiriusXM (radio) | siriusxm.com | United States | 209.196.203.234
+Pandora (radio) | pandora.com | United States | 199.116.164.229
+Audacy (radio) | audacy.com | United States | 151.101.130.132
+TuneIn (radio) | tunein.com | United States | 172.64.153.101
+Associated Press (news) | apnews.com | United States | 104.16.22.8
+Reuters (news) | reuters.com | United Kingdom | 155.46.172.255
+New York Times (news) | nytimes.com | United States | 151.101.65.164
+Washington Post (news) | washingtonpost.com | United States | 23.219.87.132
+Wall Street Journal (news) | wsj.com | United States | 18.64.155.123
+USA Today (news) | usatoday.com | United States | 146.75.106.62
+Bloomberg (news) | bloomberg.com | United States | 3.33.146.110
+The Guardian (news) | theguardian.com | United Kingdom | 151.101.193.111
+Verizon (cell and internet) | verizon.com | United States | 23.206.59.110
+AT&T (cell and internet) | att.com | United States | 144.160.36.42
+T-Mobile (cell) | t-mobile.com | United States | 23.205.249.201
+US Cellular (cell) | uscellular.com | United States | 184.87.42.198
+Cricket (cell) | cricketwireless.com | United States | 184.30.42.13
+Mint Mobile (cell) | mintmobile.com | United States | 172.64.148.222
+Visible (cell) | visible.com | United States | 35.190.57.191
+Google Fi (cell) | fi.google.com | United States | 142.251.116.100
+Consumer Cellular (cell) | consumercellular.com | United States | 172.64.151.134
+Boost Mobile (cell) | boostmobile.com | United States | 107.162.254.39
+Metro by T-Mobile (cell) | metrobyt-mobile.com | United States | 23.205.249.201
+Xfinity (internet and phone) | xfinity.com | United States | 96.99.240.155
+Comcast (internet) | comcast.com | United States | 96.99.240.171
+Spectrum (internet) | spectrum.com | United States | 142.136.168.7
+Cox (internet) | cox.com | United States | 45.60.45.167
+CenturyLink (internet and phone) | centurylink.com | United States | 155.70.44.25
+Lumen (internet) | lumen.com | United States | 151.101.135.10
+Google Fiber (internet) | fiber.google.com | United States | 142.251.116.139
+Starlink (internet) | starlink.com | United States | 151.101.65.143
+HughesNet (internet) | hughesnet.com | United States | 159.60.130.57
+Viasat (internet) | viasat.com | United States | 3.163.83.106
+Frontier (internet) | frontier.com | United States | 23.61.161.28
+Optimum (internet) | optimum.com | United States | 167.206.12.60
+Mediacom (internet) | mediacomcable.com | United States | 20.12.249.116
+Windstream (internet) | windstream.com | United States | 172.64.146.160
+WOW (internet) | wowway.com | United States | 104.16.128.122
+Vodafone (cell) | vodafone.com | United Kingdom | 52.17.142.199
+BT (phone and internet) | bt.com | United Kingdom | 45.60.65.23
+Virgin Media (internet) | virginmedia.com | United Kingdom | 34.96.124.227
+EE (cell) | ee.co.uk | United Kingdom | 45.60.72.23
+O2 (cell) | o2.co.uk | United Kingdom | 20.162.150.90
+Three (cell) | three.co.uk | United Kingdom | 23.74.7.112
+Orange (cell and internet) | orange.com | France | 34.54.184.7
+Deutsche Telekom (phone and internet) | telekom.com | Germany | 151.101.195.10
+NTT (phone) | ntt.com | Japan | 166.117.204.41
+NTT Docomo (cell) | docomo.ne.jp | Japan | 35.71.162.15
+SoftBank (cell) | softbank.jp | Japan | 20.89.86.42
+KDDI (cell) | kddi.com | Japan | 175.129.0.103
+Telstra (phone and internet) | telstra.com.au | Australia | 203.43.40.2
+Optus (cell) | optus.com.au | Australia | 23.33.238.115
+Rogers (cell and internet) | rogers.com | Canada | 20.175.172.222
+Bell (cell and internet) | bell.ca | Canada | 206.47.98.98
+Telus (cell) | telus.com | Canada | 172.66.0.98
+Jio (cell) | jio.com | India | 49.40.8.203
+Airtel (cell) | airtel.in | India | 125.16.74.90
+China Mobile (cell) | 10086.cn | China | 183.207.44.251
+SK Telecom (cell) | sktelecom.com | South Korea | 4.230.154.142
+KT (cell) | kt.com | South Korea | 14.63.149.115
+Telefonica (phone) | telefonica.com | Spain | 141.101.90.97
+NHK (TV) | www.nhk.or.jp | Japan | 23.220.108.203

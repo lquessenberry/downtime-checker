@@ -1,0 +1,185 @@
+# World stock exchanges for the Downtime checker.
+# Name | address | country
+# Built from the ISO 10383 list of active operating stock exchanges.
+24X National Exchange | 24exchange.com | United States
+A2X | a2x.co.za | South Africa
+Astana International Exchange | aix.kz | Kazakhstan
+AQUIS STOCK Exchange | aquis.eu | United Kingdom
+Athens Stock Exchange | athens.euronext.com | Greece
+Belarus Currency and STOCK Exchange | bcse.by | Belarus
+Beijing Stock Exchange | bse.cn | China
+Caracas STOCK Exchange | bolsadecaracas.com | Venezuela
+B3 | b3.com.br | Brazil
+CAPE TOWN STOCK Exchange | ctexchange.co.za | South Africa
+QATAR STOCK Exchange | qatarexchange.qa | Qatar
+Equity Express Securities Exchange (eese) | eese.co.za | South Africa
+THE Guyana Association of Securities Companies and Intermediaries | gasci.com | Guyana
+THE Gibraltar STOCK Exchange | gsx.gi | Gibraltar
+HANOI STOCK Exchange | hnx.vn | Vietnam
+Investors Exchange | iex.io | United States
+IRAN FARA Bourse | ifb.ir | Iran
+Long-Term Stock Exchange | longtermstockexchange.com | United States
+Maldives STOCK Exchange | mse.com.mv | Maldives
+National Equities Exchange and Quotations | neeq.com.cn | China
+CBOE Canada - Neo-l (market BY Order) | cboe.ca | Canada
+NILE STOCK Exchange | nilex.egyptse.com | Egypt
+OTC Markets | otcmarkets.com | United States
+PFTS STOCK Exchange | pfts.ua | Ukraine
+Taipei Exchange | tpex.org.tw | Taiwan
+Rwanda STOCK Exchange | rse.rw | Rwanda
+Scottish STOCK Exchange | projectheather.scot | United Kingdom
+SAINT Vincent and the Grenadines Securities Exchange | svgex.com | Saint Vincent and the Grenadines
+Tradegate Berlin STOCK Exchange | tradegatebsx.com | Germany
+Texas Stock Exchange | txse.com | United States
+Ukrainian Exchange | ux.ua | Ukraine
+Victoria FALLS STOCK Exchange | vfex.exchange | Zimbabwe
+ABU DHABI Securities Exchange | adx.ae | United Arab Emirates
+Algiers STOCK Exchange | sgbv.dz | Algeria
+Albania Securities Exchange | alse.al | Albania
+AMMAN STOCK Exchange | exchange.jo | Jordan
+Euronext | euronext.com | Netherlands
+Armenia STOCK Exchange | amx.am | Armenia
+Australian Securities Exchange | asx.com.au | Australia
+Bahamas International Securities Exchange | bisxbahamas.com | Bahamas
+Barbados STOCK Exchange | bse.com.bb | Barbados
+Bahrain Bourse | bahrainbourse.com.bh | Bahrain
+BOLSA Centroamericana de Valores | bcv.hn | Honduras
+Bermuda STOCK Exchange | bsx.com | Bermuda
+BOLSA de Divida e Valores de Angola (bodiva) - Angola Securities Exchange | bodiva.ao | Angola
+Bourse de Beyrouth - Beirut STOCK Exchange | bse.com.lb | Lebanon
+STOCK Exchange of Thailand | set.or.th | Thailand
+BANJA LUKA STOCK Exchange | blberza.com | Bosnia and Herzegovina
+BOLSA Nacional de Valores | bolsacr.com | Costa Rica
+BOLSA de Valores de Colombia | bvc.com.co | Colombia
+BOLSA Boliviana de Valores | bolsa-valores-bolivia.com | Bolivia
+BSE India | bseindia.com | India
+Botswana STOCK Exchange | bse.co.bw | Botswana
+Bratislava STOCK Exchange | bsse.sk | Slovakia
+Bourse Regionale des Valeurs Mobilieres | brvm.org | Ivory Coast
+Bucharest Stock Exchange | bvb.ro | Romania
+Budapest STOCK Exchange | bet.hu | Hungary
+Bulgarian STOCK Exchange | bse-sofia.bg | Bulgaria
+CAPE VERDE STOCK Exchange | bvc.cv | Cabo Verde
+Mozambique STOCK Exchange | bolsadevalores.co.mz | Mozambique
+Egyptian Exchange | egyptse.com | Egypt
+Casablanca STOCK Exchange | casablanca-bourse.com | Morocco
+Cayman Islands STOCK Exchange | csx.com.ky | Cayman Islands
+Cboe | markets.cboe.com | United States
+THE International STOCK Exchange | tisegroup.com | Guernsey
+Canadian Securities Exchange | thecse.com | Canada
+Colombo STOCK Exchange | cse.lk | Sri Lanka
+Nasdaq Nordic | nasdaqomxnordic.com | Denmark
+Cambodia Securities Exchange | csx.com.kh | Cambodia
+Cyprus STOCK Exchange | cse.com.cy | Cyprus
+DAR ES Salaam STOCK Exchange | darstockexchange.com | Tanzania
+DUBAI Financial Market | dfm.co.ae | United Arab Emirates
+DHAKA STOCK Exchange | dsebd.org | Bangladesh
+Damascus Securities Exchange | dse.sy | Syria
+Eastern Caribbean Securities Exchange | ecseonline.com | Saint Kitts and Nevis
+Deutsche Börse | deutsche-boerse.com | Germany
+GHANA STOCK Exchange | gse.com.gh | Ghana
+BOLSA de Valores Nacional | bvnsa.com.gt | Guatemala
+BOLSA de Valores de Guayaquil | mundobvg.com | Ecuador
+Hong Kong Exchanges | hkex.com.hk | Hong Kong
+Indonesia STOCK Exchange | idx.co.id | Indonesia
+IRAQ STOCK Exchange | isx-iq.net | Iraq
+Borsa Istanbul | borsaistanbul.com | Türkiye
+Jamaica STOCK Exchange | jamstockex.com | Jamaica
+Japan Exchange Group | jpx.co.jp | Japan
+Johannesburg Stock Exchange | jse.co.za | South Africa
+THE Pakistan STOCK Exchange Limited | psx.com.pk | Pakistan
+Kazakhstan STOCK Exchange | kase.kz | Kazakhstan
+Khartoum STOCK Exchange | kse.com.sd | Sudan
+BURSA Malaysia | bursamalaysia.com | Malaysia
+Korea Exchange | eng.krx.co.kr | South Korea
+Kyrgyz STOCK Exchange | kse.kg | Kyrgyzstan
+Boursa Kuwait | boursakuwait.com.kw | Kuwait
+LAO Securities Exchange | lsx.com.la | Laos
+BOLSA de Valores de LIMA | bvl.com.pe | Peru
+Nasdaq Baltic | nasdaqbaltic.com | Lithuania
+Ljubljana STOCK Exchange (official Market) | ljse.si | Slovenia
+London Stock Exchange | londonstockexchange.com | United Kingdom
+Libyan STOCK Market | lsm.gov.ly | Libya
+Lusaka STOCK Exchange | luse.co.zm | Zambia
+Luxembourg STOCK Exchange | luxse.com | Luxembourg
+MALTA STOCK Exchange | borzamalta.com.mt | Malta
+BOLSA de Valores de Nicaragua | bolsanic.com | Nicaragua
+STOCK Exchange of Mauritius | stockexchangeofmauritius.com | Mauritius
+MEMX | memx.com | United States
+Mexican Stock Exchange | bmv.com.mx | Mexico
+BORSA Italiana S.p.a. | borsaitaliana.it | Italy
+BOLSA de Valores de Montevideo | bvm.com.uy | Uruguay
+Montenegro STOCK Exchange | mnse.me | Montenegro
+Malawi STOCK Exchange | mse.co.mw | Malawi
+Muscat STOCK Exchange | msx.om | Oman
+Nairobi STOCK Exchange | nse.co.ke | Kenya
+Namibian STOCK Exchange | nsx.com.na | Namibia
+Nasdaq | nasdaq.com | United States
+NEPAL STOCK Exchange | nepalstock.com | Nepal
+Nordic Growth Market | ngm.se | Sweden
+Nigerian Exchange | ngxgroup.com | Nigeria
+National Stock Exchange of India | nseindia.com | India
+New York Stock Exchange | nyse.com | United States
+NZX | nzx.com | New Zealand
+OSLO BORS | oslobors.no | Norway
+Palestine Securities Exchange | pex.ps | Palestine
+Philippine STOCK Exchange | pse.com.ph | Philippines
+PNGX | pngx.com.pg | Papua New Guinea
+Prague STOCK Exchange | pse.cz | Czech Republic
+LATIN American STOCK Exchange | latinexbolsa.com | Panama
+BOLSA de Valores de QUITO | ccbvq.com | Ecuador
+Rm-system CZECH STOCK Exchange | rmsystem.cz | Czech Republic
+Saudi Exchange | tadawul.com.sa | Saudi Arabia
+Singapore Exchange | sgx.com | Singapore
+Santiago STOCK Exchange | bolsadesantiago.com | Chile
+Shenzhen Stock Exchange | szse.cn | China
+Shanghai Stock Exchange | sse.com.cn | China
+SOUTH Pacific STOCK Exchange | spse.com.fj | Fiji
+Sarajevo STOCK Exchange | sase.ba | Bosnia and Herzegovina
+Hochiminh STOCK Exchange | hsx.vn | Vietnam
+Republican STOCK Exchange | uzse.uz | Uzbekistan
+EL Salvador STOCK Exchange | bves.com.sv | El Salvador
+Eswatini STOCK Exchange | ese.org.sz | Eswatini
+SIX Swiss Exchange | six-group.com | Switzerland
+TEL AVIV STOCK Exchange | tase.co.il | Israel
+Taiwan Stock Exchange | twse.com.tw | Taiwan
+Tehran STOCK Exchange | tse.ir | Iran
+Toronto Stock Exchange | tsx.com | Canada
+TUNIS STOCK Exchange (bourse de Tunis) | bvmt.com.tn | Tunisia
+Uganda Securities Exchange | use.or.ug | Uganda
+Mongolian STOCK Exchange | mse.mn | Mongolia
+BOLSA de Valores y Productos de Asuncion | bvpasa.com.py | Paraguay
+Warsaw Stock Exchange | gpw.pl | Poland
+Vienna Stock Exchange | wienerboerse.at | Austria
+Zagreb STOCK Exchange | zse.hr | Croatia
+Zimbabwe STOCK Exchange | zse.co.zw | Zimbabwe
+Sydney STOCK Exchange Limited | ssx.sydney | Australia
+BOLSA de Corredores - BOLSA de Valores | bovalpo.com | Chile
+BOLSA de Valores Minas-espírito Santo-brasília | bovmesb.com.br | Brazil
+BAKU STOCK Exchange | bse.az | Azerbaijan
+DUTCH Caribbean Securities Exchange | dcsx.an | Curaçao
+EAST European STOCK Exchange | eese.com.ua | Ukraine
+THE GREEN STOCK Exchange - ACB Impact Markets | acbimpactmarkets.com | United Kingdom
+Metropolitan STOCK Exchange of INDIA Limited | msei.in | India
+Bendigo STOCK Exchange Limited | bsx.com.au | Australia
+OSL Digital Securities Exchange | osl.com | Hong Kong
+Portfolio STOCK Exchange | portfolio.exchange | Spain
+STOCK Exchange Perspectiva | fbp.com.ua | Ukraine
+SIM Venture Securities Exchange | simvse.com.au | Australia
+Social STOCK Exchange | socialstockexchange.com | United Kingdom
+African STOCK Exchange | bhumishq.com | Mauritius
+Belgrade STOCK Exchange | bgdx.rs | Serbia
+BOLSA de Valores de LA Republica Dominicana | bvrd.com.do | Dominican Republic
+Chittagong STOCK Exchange | csebd.com | Bangladesh
+IRISH STOCK Exchange - ALL Market | ise.ie | Ireland
+Fukuoka STOCK Exchange | fse.or.jp | Japan
+Georgia STOCK Exchange | gse.ge | Georgia
+KIEV International STOCK Exchange | kise-ua.com | Ukraine
+Macedonian STOCK Exchange | mse.org.mk | North Macedonia
+Moldova STOCK Exchange | moldse.md | Moldova
+National STOCK Exchange of Australia Limited | nsxa.com.au | Australia
+Nagoya STOCK Exchange | nse.or.jp | Japan
+STOCK Exchange SAINT Petersburg | spbex.ru | Russia
+Sapporo Securities Exchange | sse.or.jp | Japan
+Ukrainian STOCK Exchange | ukrse.kiev.ua | Ukraine
+Zurcher Kantonalbank Securities Exchange | zkb.ch | Switzerland

@@ -1,0 +1,124 @@
+# Defense ministries and armed forces.
+# Name | website | country | sample IP
+# The checker uses the website. The IP is a sample and can change.
+NATO | nato.int | NATO | 151.101.195.10
+US Department of Defense | defense.gov | United States | 23.43.12.118
+US Army | army.mil | United States | 140.13.10.67
+US Coast Guard | uscg.mil | United States | 152.121.184.21
+DARPA | darpa.mil | United States | 192.5.18.235
+Defense Information Systems Agency | disa.mil | United States | 156.112.108.76
+Defense Health Agency | health.mil | United States | 214.10.40.15
+US Central Command | centcom.mil | United States | 143.69.249.40
+US European Command | eucom.mil | United States | 13.89.172.14
+National Security Agency | nsa.gov | United States | 23.79.181.242
+UK Army | army.mod.uk | United Kingdom | 172.64.146.84
+Royal Navy | royalnavy.mod.uk | United Kingdom | 172.64.155.125
+Royal Air Force | raf.mod.uk | United Kingdom | 104.18.33.23
+UK Defence Science and Technology | dstl.gov.uk | United Kingdom | 151.101.16.144
+Canadian Armed Forces | forces.gc.ca | Canada | 131.137.250.13
+Australian Defence | defence.gov.au | Australia | 13.236.242.190
+New Zealand Defence Force | nzdf.mil.nz | New Zealand | 151.101.193.242
+German Armed Forces | bundeswehr.de | Germany | 91.221.59.40
+German Ministry of Defence | bmvg.de | Germany | 91.221.59.45
+French Ministry of the Armed Forces | defense.gouv.fr | France | 185.24.185.2
+Italian Ministry of Defence | difesa.it | Italy | 185.86.84.57
+Spanish Ministry of Defence | defensa.gob.es | Spain | 193.33.2.132
+Portuguese Ministry of Defence | defesa.gov.pt | Portugal | 216.146.31.40
+Netherlands Defence | defensie.nl | Netherlands | 150.171.109.71
+Belgian Defence | mil.be | Belgium | 185.119.156.47
+Danish Ministry of Defence | fmn.dk | Denmark | 51.158.216.235
+Danish Armed Forces | forsvaret.dk | Denmark | 51.158.216.235
+Norwegian Armed Forces | forsvaret.no | Norway | 151.101.67.52
+Swedish Armed Forces | forsvarsmakten.se | Sweden | 217.114.94.2
+Finnish Defence Forces | puolustusvoimat.fi | Finland | 185.192.15.61
+Finnish Ministry of Defence | defmin.fi | Finland | 185.192.15.243
+Polish Armed Forces | wojsko-polskie.pl | Poland | 45.60.74.103
+Czech Armed Forces | army.cz | Czech Republic | 194.50.64.66
+Hungarian Defence | honvedelem.hu | Hungary | 104.26.2.178
+Romanian Ministry of Defence | mapn.ro | Romania | 193.231.151.47
+Bulgarian Ministry of Defence | mod.bg | Bulgaria | 212.5.130.148
+Turkish Ministry of Defence | msb.gov.tr | Turkey | 212.174.80.201
+Ukrainian Ministry of Defence | mil.gov.ua | Ukraine | 162.159.141.26
+Russian Ministry of Defence | mil.ru | Russia | 212.192.156.38
+South Korea Ministry of National Defense | mnd.go.kr | South Korea | 125.61.30.175
+China Ministry of National Defense | mod.gov.cn | China | 114.230.198.187
+India Ministry of Defence | mod.gov.in | India | 164.100.220.98
+Indian Army | indianarmy.nic.in | India | 164.100.192.102
+Indian Navy | indiannavy.nic.in | India | 164.100.94.145
+Indian Air Force | indianairforce.nic.in | India | 164.100.61.210
+Pakistan Army | pakistanarmy.gov.pk | Pakistan | 172.66.171.185
+Saudi Ministry of Defense | mod.gov.sa | Saudi Arabia | 185.169.34.236
+UAE Ministry of Defence | mod.gov.ae | United Arab Emirates | 79.98.127.40
+Singapore Ministry of Defence | mindef.gov.sg | Singapore | 18.138.108.8
+Malaysia Ministry of Defence | mod.gov.my | Malaysia | 103.27.113.16
+Indonesia Ministry of Defense | kemhan.go.id | Indonesia | 103.203.207.38
+Indonesian Armed Forces | tni.mil.id | Indonesia | 103.214.55.4
+Philippines Department of National Defense | dnd.gov.ph | Philippines | 104.20.19.182
+Thailand Ministry of Defence | mod.go.th | Thailand | 104.26.4.242
+Vietnam Ministry of National Defence | mod.gov.vn | Vietnam | 125.212.138.24
+Brazil Army | eb.mil.br | Brazil | 177.8.91.15
+Brazilian Navy | marinha.mil.br | Brazil | 104.18.27.105
+Argentine Navy | ara.mil.ar | Argentina | 200.41.187.57
+Chilean Army | ejercito.cl | Chile | 104.20.43.189
+Colombian Army | ejercito.mil.co | Colombia | 104.18.20.103
+Colombian Navy | armada.mil.co | Colombia | 179.1.6.72
+Colombian Air Force | fac.mil.co | Colombia | 54.197.97.156
+Mexican National Defense | gob.mx | Mexico | 207.249.122.223
+South African Defence | dod.mil.za | South Africa | 164.151.132.40
+Kenya Ministry of Defence | mod.go.ke | Kenya | 196.202.202.42
+Nigerian Army | army.mil.ng | Nigeria | 102.91.125.136
+Ireland Department of Defence | defence.ie | Ireland | 63.35.63.4
+Austria Armed Forces | bundesheer.at | Austria | 193.171.152.62
+Switzerland Defence Department | vbs.admin.ch | Switzerland | 193.223.22.205
+Croatia Ministry of Defence | morh.hr | Croatia | 89.249.107.253
+Serbia Ministry of Defence | mod.gov.rs | Serbia | 212.200.34.15
+Estonia Defence Forces | mil.ee | Estonia | 141.101.90.17
+Latvia Ministry of Defence | mod.gov.lv | Latvia | 212.70.163.65
+Lithuania Ministry of Defence | kam.lt | Lithuania | 141.101.90.96
+Slovakia Ministry of Defence | mosr.sk | Slovakia | 87.197.16.80
+Nepal Army | nepalarmy.mil.np | Nepal | 124.41.239.194
+Jordan Armed Forces | jaf.mil.jo | Jordan | 82.212.82.103
+Lebanon Army | lebarmy.gov.lb | Lebanon | 185.153.84.21
+Iraq Ministry of Defence | mod.mil.iq | Iraq | 104.26.6.20
+Kuwait Ministry of Defence | mod.gov.kw | Kuwait | 83.96.5.18
+Qatar Ministry of Defence | mod.gov.qa | Qatar | 78.100.17.41
+Oman Ministry of Defence | mod.gov.om | Oman | 206.167.33.163
+Peru Navy | marina.mil.pe | Peru | 154.53.42.128
+Bolivia Army | ejercito.mil.bo | Bolivia | 172.67.178.61
+Tunisia Ministry of Defence | defense.tn | Tunisia | 196.203.86.23
+South Korea Army | army.mil.kr | South Korea | 211.236.124.164
+Republic of Korea Navy | navy.mil.kr | South Korea | 211.236.124.67
+Republic of Korea Air Force | airforce.mil.kr | South Korea | 211.236.124.96
+Australian Army | army.gov.au | Australia | 54.252.75.26
+Royal Australian Navy | navy.gov.au | Australia | 13.236.242.190
+Royal Australian Air Force | airforce.gov.au | Australia | 13.236.242.190
+Royal Canadian Navy | navy-marine.forces.gc.ca | Canada | 131.137.250.221
+Canadian Army | army-armee.forces.gc.ca | Canada | 131.137.250.221
+Royal Canadian Air Force | rcaf-arc.forces.gc.ca | Canada | 131.137.250.221
+US Navy | www.navy.mil | United States | 23.35.164.164
+US Air Force | www.af.mil | United States | 23.35.174.27
+US Marine Corps | www.marines.mil | United States | 23.35.172.30
+US Space Force | www.spaceforce.mil | United States | 23.35.171.159
+US National Guard | www.nationalguard.mil | United States | 23.220.161.83
+US Africa Command | www.africom.mil | United States | 150.171.109.67
+US Indo-Pacific Command | www.pacom.mil | United States | 23.223.242.87
+US Northern Command | www.northcom.mil | United States | 184.27.230.2
+US Southern Command | www.southcom.mil | United States | 23.223.242.81
+US Transportation Command | www.ustranscom.mil | United States | 140.16.41.29
+US Strategic Command | www.stratcom.mil | United States | 23.223.242.87
+US Cyber Command | www.cybercom.mil | United States | 23.223.242.81
+US Space Command | www.spacecom.mil | United States | 23.223.242.87
+Defense Intelligence Agency | www.dia.mil | United States | 23.223.242.81
+Greek Ministry of Defence | www.mod.mil.gr | Greece | 23.205.109.72
+Japan Ministry of Defense | www.mod.go.jp | Japan | 104.18.7.210
+Taiwan Ministry of National Defense | www.mnd.gov.tw | Taiwan | 150.171.109.71
+Israel Defense Forces | www.idf.il | Israel | 107.154.248.27
+Egypt Ministry of Defense | www.mod.gov.eg | Egypt | 62.117.41.90
+Brazilian Air Force | www.fab.mil.br | Brazil | 104.18.19.39
+Argentine Army | www.ejercito.mil.ar | Argentina | 179.51.212.242
+Chilean Navy | www.armada.cl | Chile | 104.18.9.145
+Colombia Ministry of Defense | www.mindefensa.gov.co | Colombia | 159.60.156.206
+Algeria Ministry of National Defence | www.mdn.dz | Algeria | 80.249.65.143
+Bangladesh Army | www.army.mil.bd | Bangladesh | 103.46.148.198
+Sri Lanka Army | www.army.lk | Sri Lanka | 172.67.132.249
+Ecuador Ministry of Defense | www.defensa.gob.ec | Ecuador | 190.152.52.214

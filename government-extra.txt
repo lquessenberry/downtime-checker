@@ -1,0 +1,28 @@
+# More United States government sites.
+# Name | website | country | sample IP
+# The checker uses the website. The IP is a sample and can change.
+FAA | faa.gov | United States | 155.178.201.85
+FBI | fbi.gov | United States | 104.16.149.244
+TSA | tsa.gov | United States | 23.64.172.139
+State Department | state.gov | United States | 100.28.244.61
+NASA | nasa.gov | United States | 192.0.66.108
+NOAA | noaa.gov | United States | 137.75.88.7
+FCC | fcc.gov | United States | 23.218.3.153
+FTC | ftc.gov | United States | 23.64.248.186
+SEC | sec.gov | United States | 23.61.2.76
+FDIC | fdic.gov | United States | 2.21.9.242
+Education Department | ed.gov | United States | 150.171.110.211
+Energy Department | energy.gov | United States | 205.254.131.65
+EPA | epa.gov | United States | 134.67.21.34
+HUD | hud.gov | United States | 170.97.67.13
+USDA | usda.gov | United States | 199.134.75.32
+Defense Department | defense.gov | United States | 23.43.12.118
+Justice Department | justice.gov | United States | 172.65.90.25
+Treasury | treasury.gov | United States | 164.95.95.220
+Commerce Department | commerce.gov | United States | 172.65.90.25
+Labor Department | dol.gov | United States | 104.69.85.32
+Interior Department | doi.gov | United States | 2.21.9.233
+Congress | congress.gov | United States | 104.18.43.50
+Senate | senate.gov | United States | 23.218.5.56
+House of Representatives | house.gov | United States | 3.33.159.71
+Supreme Court | supremecourt.gov | United States | 23.66.101.74
