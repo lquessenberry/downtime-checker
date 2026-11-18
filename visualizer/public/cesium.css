@@ -83,6 +83,32 @@ body {
 .cesium-viewer-toolbar,
 .cesium-viewer-animationContainer,
 .cesium-viewer-timelineContainer { display: none; }
+.cesium-viewer-bottom {
+  left: auto !important;
+  right: 8px;
+  bottom: 6px;
+  pointer-events: none;
+}
+.cesium-credit-text, .cesium-credit-text a, .cesium-widget-credits {
+  color: #7f97a1 !important;
+  font-size: 10px !important;
+  font-family: var(--font) !important;
+}
+
+.basemap-bar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 46%;
+  pointer-events: auto;
+}
+.basemap-bar .chip { background: rgba(7, 11, 16, 0.82); }
+.basemap-bar .chip.on { border-color: #3dff9a; color: var(--text); }
 
 .rail-head, .stage-meta, .selected, .country-pick, .feed, .searches {
   padding: 10px 12px;

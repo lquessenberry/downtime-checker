@@ -58,7 +58,15 @@
     <div id="cesium"></div>
     <div class="stage-meta">
       <div id="heading">AWAITING TASKING</div>
-      <div id="hint">DRAG ORBIT · SCROLL ZOOMS · TOGGLE A LAYER · CLICK A PIN TO OPEN IT</div>
+      <div id="hint">DRAG ORBIT · SCROLL ZOOMS · RIGHT-DRAG TILTS TERRAIN · TOGGLE A LAYER</div>
+    </div>
+    <div class="basemap-bar" id="basemap-bar">
+      <button type="button" class="chip on" data-basemap="sat">SAT</button>
+      <button type="button" class="chip" data-basemap="live">LIVE</button>
+      <button type="button" class="chip" data-basemap="night">NIGHT</button>
+      <button type="button" class="chip" data-basemap="streets">STREETS</button>
+      <button type="button" class="chip" data-labels>LABELS</button>
+      <button type="button" class="chip on" data-terrain>3D</button>
     </div>
     <div class="selected" id="selected" hidden></div>
     <div class="progress-wrap"><div class="progress" id="progress"></div></div>

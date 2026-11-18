@@ -47,6 +47,11 @@ const state = {
     conflicts: true,
     scan: true,
   },
+  basemap: "sat",
+  labels: false,
+  terrain: true,
+  terrainProvider: null,
+  ellipsoidTerrain: null,
   openKind: "",
   openId: "",
   feedMode: "sdr",
@@ -60,7 +65,30 @@ const COLORS = {
 
 // Same hub the canvas globe draws its search lines from.
 const ORIGIN = { lat: 35.84, lon: -90.7 };
-const IMAGERY_URL = "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer";
+const TERRAIN_MAX_Z = 12;
+const TERRAIN_GRID = 65;
+const BASEMAPS = {
+  sat: {
+    url: "/tiles/eox/{z}/{y}/{x}.jpg",
+    credit: "Sentinel-2 cloudless - s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025)",
+    maximumLevel: 14,
+  },
+  live: {
+    url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg",
+    credit: "NASA GIBS / VIIRS SNPP true color",
+    maximumLevel: 9,
+  },
+  night: {
+    url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png",
+    credit: "NASA Black Marble / VIIRS",
+    maximumLevel: 8,
+  },
+  streets: {
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    credit: "© OpenStreetMap contributors",
+    maximumLevel: 19,
+  },
+};
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -97,19 +125,111 @@ async function boot() {
   setInterval(pollLiveFeeds, 8000);
 }
 
-function loadImagery() {
-  // Esri's own metadata advertises level 23, but many of those tiles are empty
-  // and Cesium then stretches a blur. Level 19 is the detail that shows buildings.
+function imageryProvider(id) {
+  const spec = BASEMAPS[id] || BASEMAPS.sat;
   return new Cesium.UrlTemplateImageryProvider({
-    url: `${IMAGERY_URL}/tile/{z}/{y}/{x}`,
-    credit: "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-    maximumLevel: 19,
+    url: spec.url,
+    credit: spec.credit,
+    maximumLevel: spec.maximumLevel,
     tilingScheme: new Cesium.WebMercatorTilingScheme(),
   });
 }
 
+function labelProvider() {
+  return new Cesium.UrlTemplateImageryProvider({
+    url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Labels/default/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png",
+    credit: "NASA GIBS place names",
+    maximumLevel: 9,
+    tilingScheme: new Cesium.WebMercatorTilingScheme(),
+  });
+}
+
+function applyBasemap() {
+  const viewer = state.viewer;
+  if (!viewer) return;
+  const layers = viewer.imageryLayers;
+  layers.removeAll();
+  layers.addImageryProvider(imageryProvider(state.basemap));
+  if (state.labels && state.basemap !== "streets") {
+    layers.addImageryProvider(labelProvider());
+  }
+  for (const button of document.querySelectorAll("[data-basemap]")) {
+    button.classList.toggle("on", button.dataset.basemap === state.basemap);
+  }
+  const labels = document.querySelector("[data-labels]");
+  if (labels) labels.classList.toggle("on", state.labels);
+}
+
+function makeTerrariumTerrain() {
+  const cache = new Map();
+  const grid = TERRAIN_GRID;
+  async function heightsFor(x, y, level) {
+    const z = Math.min(level, TERRAIN_MAX_Z);
+    const shift = level - z;
+    const px = x >> shift;
+    const py = y >> shift;
+    const key = `${z}/${px}/${py}`;
+    let tile = cache.get(key);
+    if (!tile) {
+      try {
+        const response = await fetch(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${px}/${py}.png`);
+        if (!response.ok) throw new Error(String(response.status));
+        const bitmap = await createImageBitmap(await response.blob());
+        const canvas = document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(bitmap, 0, 0);
+        const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        const decoded = new Float32Array(width * height);
+        for (let i = 0, p = 0; i < decoded.length; i += 1, p += 4) {
+          decoded[i] = data[p] * 256 + data[p + 1] + data[p + 2] / 256 - 32768;
+        }
+        tile = { decoded, width, height };
+        if (cache.size > 96) cache.delete(cache.keys().next().value);
+        cache.set(key, tile);
+      } catch {
+        return new Float32Array(grid * grid);
+      }
+    }
+    const out = new Float32Array(grid * grid);
+    const fracX = shift ? (x - (px << shift)) / (1 << shift) : 0;
+    const fracY = shift ? (y - (py << shift)) / (1 << shift) : 0;
+    const span = shift ? 1 / (1 << shift) : 1;
+    const x0 = fracX * (tile.width - 1);
+    const y0 = fracY * (tile.height - 1);
+    const xSpan = Math.max(1, span * (tile.width - 1));
+    const ySpan = Math.max(1, span * (tile.height - 1));
+    for (let row = 0; row < grid; row += 1) {
+      const sy = Math.min(tile.height - 1, Math.round(y0 + (row / (grid - 1)) * ySpan));
+      for (let col = 0; col < grid; col += 1) {
+        const sx = Math.min(tile.width - 1, Math.round(x0 + (col / (grid - 1)) * xSpan));
+        out[row * grid + col] = tile.decoded[sy * tile.width + sx];
+      }
+    }
+    return out;
+  }
+  return new Cesium.CustomHeightmapTerrainProvider({
+    width: grid,
+    height: grid,
+    tilingScheme: new Cesium.WebMercatorTilingScheme(),
+    credit: "Terrain Mapzen / AWS Open Data (SRTM, GMTED, NED)",
+    callback: (x, y, level) => heightsFor(x, y, level),
+  });
+}
+
+function setTerrain(on) {
+  state.terrain = Boolean(on);
+  if (!state.viewer) return;
+  state.viewer.terrainProvider = state.terrain ? state.terrainProvider : state.ellipsoidTerrain;
+  const button = document.querySelector("[data-terrain]");
+  if (button) button.classList.toggle("on", state.terrain);
+}
+
 async function startGlobe() {
-  const imagery = loadImagery();
+  state.ellipsoidTerrain = new Cesium.EllipsoidTerrainProvider();
+  state.terrainProvider = makeTerrariumTerrain();
   const viewer = new Cesium.Viewer("cesium", {
     animation: false,
     timeline: false,
@@ -121,18 +241,22 @@ async function startGlobe() {
     fullscreenButton: false,
     infoBox: false,
     selectionIndicator: true,
-    baseLayer: new Cesium.ImageryLayer(imagery),
-    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+    baseLayer: new Cesium.ImageryLayer(imageryProvider("sat")),
+    terrainProvider: state.terrainProvider,
     skyBox: false,
   });
   const controller = viewer.scene.screenSpaceCameraController;
-  controller.minimumZoomDistance = 30;
+  controller.minimumZoomDistance = 40;
   controller.maximumZoomDistance = 40000000;
-  viewer.scene.globe.maximumScreenSpaceError = 1.5;
+  viewer.scene.globe.maximumScreenSpaceError = 1.4;
+  viewer.scene.globe.depthTestAgainstTerrain = false;
   viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#070b10");
   viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10202c");
   viewer.scene.globe.enableLighting = false;
+  if ("verticalExaggeration" in viewer.scene) viewer.scene.verticalExaggeration = 1.2;
   state.viewer = viewer;
+  applyBasemap();
+  setTerrain(true);
   state.sdrSource = new Cesium.CustomDataSource("websdr");
   state.radioSource = new Cesium.CustomDataSource("uniden-radio");
   state.streamSource = new Cesium.CustomDataSource("hpdb-streams");
@@ -234,6 +358,23 @@ function hookUi() {
   }
   for (const button of document.querySelectorAll("[data-feed]")) {
     button.addEventListener("click", () => setFeedMode(button.dataset.feed));
+  }
+  for (const button of document.querySelectorAll("[data-basemap]")) {
+    button.addEventListener("click", () => {
+      state.basemap = button.dataset.basemap;
+      applyBasemap();
+    });
+  }
+  const labels = document.querySelector("[data-labels]");
+  if (labels) {
+    labels.addEventListener("click", () => {
+      state.labels = !state.labels;
+      applyBasemap();
+    });
+  }
+  const terrain = document.querySelector("[data-terrain]");
+  if (terrain) {
+    terrain.addEventListener("click", () => setTerrain(!state.terrain));
   }
   for (const chip of document.querySelectorAll("[data-filter]")) {
     chip.addEventListener("click", () => {

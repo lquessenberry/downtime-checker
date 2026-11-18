@@ -74,7 +74,18 @@ Open http://127.0.0.1:4173 — pick a mission, watch nodes light up as they answ
 
 ## Cesium globe
 
-The same server also serves a CesiumJS globe at http://127.0.0.1:4173/cesium.html. It uses the same catalogs, ping and TCP checks, and location cache. Search lines arc from the same central point as the canvas globe. The imagery is Esri World Imagery, so scrolling in shows streets and buildings. It does not need a Cesium ion key. Esri's credit stays on the globe. The first open downloads Cesium from cesium.com.
+The same server also serves a CesiumJS globe at http://127.0.0.1:4173/cesium.html. It uses the same catalogs, ping and TCP checks, and location cache. Search lines arc from the same central point as the canvas globe. It does not need a Cesium ion key. The first open downloads Cesium from cesium.com.
+
+Basemaps are free public tiles, no API keys:
+
+- SAT: EOX Sentinel-2 cloudless 2025, 10 m global mosaic ([s2maps.eu](https://s2maps.eu)), proxied at `/tiles/eox/{z}/{y}/{x}.jpg` so Cesium can texture the globe (EOX CORS is credentialed). 2018–2025 mosaics are CC BY-NC-SA; a public ad-supported site needs an EOX commercial license or the 2016 CC BY mosaic.
+- LIVE: NASA GIBS VIIRS SNPP true color (today's Earth, clouds included)
+- NIGHT: NASA Black Marble
+- STREETS: OpenStreetMap raster tiles
+- LABELS: NASA GIBS place names over satellite
+- 3D: Mapzen / AWS Open Data Terrarium DEM (SRTM, GMTED, NED). Right-drag tilts so mountains stand up.
+
+Credits stay on the globe. Overlay pins do not hide behind terrain.
 
 Uniden BearTracker 885 radio sites load as a gold overlay from `MasterHpdb_*.gz`. Put that file in `~/Downloads/BT885_radio_database`, or set `BT885_HPDB` / `BT885_HPDB_DIR`. Click a site for agency name and sample frequencies. WebSDR pins still open the receiver.
 
