@@ -11,6 +11,8 @@ const state = {
   selected: null,
   viewer: null,
   points: new Map(),
+  arcs: new Map(),
+  origin: null,
 };
 
 const COLORS = {
@@ -18,6 +20,10 @@ const COLORS = {
   down: Cesium.Color.fromCssColorString("#ff4d4d"),
   pending: Cesium.Color.fromCssColorString("#ffb020"),
 };
+
+// Same hub the canvas globe draws its search lines from.
+const ORIGIN = { lat: 35.84, lon: -90.7 };
+const IMAGERY_URL = "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer";
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -41,10 +47,19 @@ async function boot() {
   tickClock();
 }
 
+function loadImagery() {
+  // Esri's own metadata advertises level 23, but many of those tiles are empty
+  // and Cesium then stretches a blur. Level 19 is the detail that shows buildings.
+  return new Cesium.UrlTemplateImageryProvider({
+    url: `${IMAGERY_URL}/tile/{z}/{y}/{x}`,
+    credit: "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+    maximumLevel: 19,
+    tilingScheme: new Cesium.WebMercatorTilingScheme(),
+  });
+}
+
 async function startGlobe() {
-  const imagery = await Cesium.TileMapServiceImageryProvider.fromUrl(
-    Cesium.buildModuleUrl("Assets/Textures/NaturalEarthII"),
-  );
+  const imagery = loadImagery();
   const viewer = new Cesium.Viewer("cesium", {
     animation: false,
     timeline: false,
@@ -60,10 +75,15 @@ async function startGlobe() {
     terrainProvider: new Cesium.EllipsoidTerrainProvider(),
     skyBox: false,
   });
+  const controller = viewer.scene.screenSpaceCameraController;
+  controller.minimumZoomDistance = 30;
+  controller.maximumZoomDistance = 40000000;
+  viewer.scene.globe.maximumScreenSpaceError = 1.5;
   viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#070b10");
   viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10202c");
   viewer.scene.globe.enableLighting = false;
   state.viewer = viewer;
+  ensureOrigin();
   viewer.selectedEntityChanged.addEventListener((entity) => {
     if (!entity || entity._resultIndex == null) return;
     const result = state.results[entity._resultIndex];
@@ -207,6 +227,66 @@ function clearPoints() {
   if (!state.viewer) return;
   state.viewer.entities.removeAll();
   state.points.clear();
+  state.arcs.clear();
+  state.origin = null;
+  ensureOrigin();
+}
+
+function ensureOrigin() {
+  if (!state.viewer || state.origin) return;
+  state.origin = state.viewer.entities.add({
+    position: Cesium.Cartesian3.fromDegrees(ORIGIN.lon, ORIGIN.lat, 0),
+    point: {
+      pixelSize: 8,
+      color: Cesium.Color.fromCssColorString("#7ef6ff"),
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 1,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  });
+}
+
+function arcPositions(lat, lon) {
+  const start = Cesium.Cartesian3.fromDegrees(ORIGIN.lon, ORIGIN.lat, 0);
+  const end = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+  const distance = Cesium.Cartesian3.distance(start, end);
+  if (distance < 1500) return null;
+  const height = Math.min(Math.max(distance * 0.18, 25000), 900000);
+  const radius = Cesium.Ellipsoid.WGS84.maximumRadius;
+  const steps = 40;
+  const positions = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    const cart = new Cesium.Cartesian3();
+    Cesium.Cartesian3.lerp(start, end, t, cart);
+    Cesium.Cartesian3.normalize(cart, cart);
+    Cesium.Cartesian3.multiplyByScalar(cart, radius + Math.sin(t * Math.PI) * height, cart);
+    positions.push(cart);
+  }
+  return positions;
+}
+
+function upsertArc(result) {
+  if (!state.viewer || result.lat == null || result.lon == null) return;
+  const positions = arcPositions(result.lat, result.lon);
+  if (!positions) return;
+  const color = COLORS[result.status] || COLORS.pending;
+  const material = new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color });
+  let entity = state.arcs.get(result.index);
+  if (!entity) {
+    entity = state.viewer.entities.add({
+      polyline: {
+        positions,
+        width: 3,
+        material,
+        arcType: Cesium.ArcType.NONE,
+      },
+    });
+    state.arcs.set(result.index, entity);
+    return;
+  }
+  entity.polyline.positions = positions;
+  entity.polyline.material = material;
 }
 
 function upsertPoint(result) {
@@ -227,11 +307,13 @@ function upsertPoint(result) {
     });
     entity._resultIndex = result.index;
     state.points.set(result.index, entity);
+    upsertArc(result);
     return;
   }
   entity.position = position;
   entity.point.pixelSize = result.status === "down" ? 11 : 8;
   entity.point.color = color;
+  upsertArc(result);
 }
 
 function visibleResults() {

@@ -74,6 +74,6 @@ Open http://127.0.0.1:4173 — pick a mission, watch nodes light up as they answ
 
 ## Cesium globe
 
-The same server also serves a CesiumJS globe at http://127.0.0.1:4173/cesium.html. It uses the same catalogs, ping and TCP checks, and location cache. The globe imagery is Cesium's Natural Earth texture, so it does not need a Cesium ion key. The first open downloads Cesium from cesium.com.
+The same server also serves a CesiumJS globe at http://127.0.0.1:4173/cesium.html. It uses the same catalogs, ping and TCP checks, and location cache. Search lines arc from the same central point as the canvas globe. The imagery is Esri World Imagery, so scrolling in shows streets and buildings. It does not need a Cesium ion key. Esri's credit stays on the globe. The first open downloads Cesium from cesium.com.
 
 `bash install.sh` adds Downtime UI and Downtime Cesium launchers in `Desktop/Pentesting` when that folder already exists, and in the application menu. Node.js is required for both globes.
