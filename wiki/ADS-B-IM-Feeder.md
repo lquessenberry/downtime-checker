@@ -8,13 +8,13 @@ Videos: [youtube.com/@adsb](https://youtube.com/@adsb) · setup walkthrough [you
 
 [ADSB.im](https://adsb.im) is a ready-made OS image for a small computer plus an SDR dongle. It turns that box into an ADS-B receiver, a local map, and a feeder to public aggregators. It is the path to a globe.adsbexchange-style picture that we own, without scraping ADS-B Exchange.
 
-Until that hardware exists, the Cesium **AIR** overlay uses the public [adsb.lol](https://adsb.lol) LADD dump (OpenSky as fallback). Same kind of aircraft dots. Different source.
+Until that hardware exists, the Cesium **AIR** overlay uses the public [adsb.lol](https://adsb.lol) v2 API (ODbL): military, LADD, PIA, squawk 7700, and 250 nm circles around the Jonesboro hub plus rotating terminals. That is the same readsb aircraft record the globe.adsb.lol map uses (callsign, hex, type, registration, squawk, emergency, altitude, track, flags). Unkeyed quota is 500 requests/day, so the visualizer polls every 3 minutes and keeps a 15-minute cache. Set `ADSB_LOL_API_KEY` to raise the cap. OpenSky is the fallback if adsb.lol errors and the cache is empty.
 
 ## Why this belongs on the app
 
 | Now | Later, with an ADSB.im box |
 | --- | --- |
-| AIR layer from adsb.lol / OpenSky | AIR layer from the local feeder (`tar1090` / `readsb`, usually `http://adsb-feeder.local`) |
+| AIR layer from adsb.lol public v2 / OpenSky | AIR layer from the local feeder (`tar1090` / `readsb`, usually `http://adsb-feeder.local`) merged on top |
 | Coverage is wherever aggregators already have receivers | Extra coverage around our antenna, plus we contribute back |
 | No extra hardware | Pi-class SBC, 1090 MHz SDR, antenna |
 
@@ -52,14 +52,15 @@ Wi-Fi-only boards: follow [adsb.im/hotspot](https://adsb.im/hotspot) before step
 When a feeder is on the LAN:
 
 1. Confirm the local map loads (tar1090 on the feeder).
-2. Point the visualizer AIR layer at that host instead of adsb.lol, or merge both (local aircraft + global LADD).
+2. Set `ADS_B_FEEDER_URL=http://adsb-feeder.local` so AIR merges the local `data/aircraft.json` with the adsb.lol cache.
 3. Keep GPS jam, CFR, AIS, Uniden radio, and Broadcastify streams as they are. The feeder only replaces or supplements **AIR**.
 
 Env sketch (not wired yet):
 
 ```bash
-# future
 ADS_B_FEEDER_URL=http://adsb-feeder.local
+# optional, raises the public API cap
+ADSB_LOL_API_KEY=
 ```
 
 ## Source

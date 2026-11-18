@@ -83,7 +83,7 @@ Live scanner streams are scraped from Broadcastify state/county listen pages (pl
 Cesium also pulls the same live overlays as the canvas globe:
 
 - GPS interference from GPSInterference / [gpsjam.org](https://gpsjam.org/)
-- Aircraft from [adsb.lol](https://adsb.lol) (LADD), not ADS-B Exchange. A local 1090 MHz feeder is documented in [wiki/ADS-B-IM-Feeder.md](wiki/ADS-B-IM-Feeder.md) ([adsb.im/howto](https://adsb.im/howto)); that box is not built yet.
+- Aircraft from [adsb.lol](https://adsb.lol) public v2 (military, LADD, PIA, 7700, 250 nm circles; same readsb fields as globe.adsb.lol), not ADS-B Exchange. Unkeyed cap is 500/day. A local 1090 MHz feeder is documented in [wiki/ADS-B-IM-Feeder.md](wiki/ADS-B-IM-Feeder.md) ([adsb.im/howto](https://adsb.im/howto)); that box is not built yet. Optional `ADSB_LOL_API_KEY` and `ADS_B_FEEDER_URL`.
 - Ships from Digitraffic AIS
 - Conflicts from the [CFR Global Conflict Tracker](https://www.cfr.org/global-conflict-tracker)
 

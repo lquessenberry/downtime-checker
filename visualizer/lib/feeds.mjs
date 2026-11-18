@@ -1,5 +1,50 @@
 const UA = { "User-Agent": "downtime-checker/1.0 (globe visualizer)" };
 
+// Jonesboro hub — same origin the globes draw search arcs from.
+const ORIGIN = { lat: 35.84, lon: -90.7 };
+const ADSB_BASE = "https://api.adsb.lol";
+const ADSB_TTL_MS = 15 * 60 * 1000;
+const ADSB_DISPLAY_CAP = 2500;
+const FT_TO_M = 0.3048;
+
+// 250 nm circles around busy terminals. Public /v2 has no world snapshot;
+// each circle is one metered request (500/day unkeyed).
+const ADSB_HUBS = [
+  [ORIGIN.lat, ORIGIN.lon],
+  [40.64, -73.78],
+  [33.94, -118.41],
+  [41.98, -87.9],
+  [32.9, -97.04],
+  [25.8, -80.29],
+  [47.45, -122.31],
+  [39.86, -104.67],
+  [51.47, -0.46],
+  [50.04, 8.56],
+  [49.01, 2.55],
+  [52.31, 4.76],
+  [41.8, 12.25],
+  [40.47, -3.56],
+  [55.97, 37.41],
+  [25.25, 55.36],
+  [28.56, 77.1],
+  [1.36, 103.99],
+  [35.55, 139.78],
+  [22.31, 113.91],
+  [31.14, 121.81],
+  [-33.95, 151.18],
+  [-23.43, -46.47],
+  [19.44, -99.07],
+  [-26.13, 28.23],
+];
+
+const ADSB_CYCLE = ["origin", "mil", "hub", "ladd", "hub", "pia", "hub", "squawk7700"];
+const aircraftLive = new Map();
+let adsbStep = 0;
+let adsbHub = 1;
+let adsbBackoffUntil = 0;
+let adsbQuotaLeft = null;
+let adsbPrimed = false;
+
 const CFR_COORDS = {
   "al-shabab-somalia": [2.05, 45.32],
   "civil-war-libya": [32.89, 13.19],
@@ -53,6 +98,146 @@ async function pull(url, headers = {}) {
   return res;
 }
 
+function adsbHeaders() {
+  const key = process.env.ADSB_LOL_API_KEY;
+  return key ? { "x-api-key": key } : {};
+}
+
+function adsbPollMs() {
+  return process.env.ADSB_LOL_API_KEY ? 45 * 1000 : 3 * 60 * 1000;
+}
+
+function noteAdsbQuota(res) {
+  const left = res.headers.get("x-ratelimit-remaining");
+  if (left != null) adsbQuotaLeft = Number(left);
+}
+
+function mapAdsbAircraft(ac, tag) {
+  const lat = Number(ac.lat);
+  const lon = Number(ac.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const flags = Number(ac.dbFlags) || 0;
+  const altRaw = ac.alt_baro ?? ac.alt_geom;
+  const ground = altRaw === "ground";
+  const altFt = ground ? 0 : Number(altRaw);
+  const squawk = ac.squawk ? String(ac.squawk) : null;
+  const emergency = ac.emergency && ac.emergency !== "none" ? String(ac.emergency) : null;
+  return {
+    lat,
+    lon,
+    hex: ac.hex ? String(ac.hex) : null,
+    name: String(ac.flight || ac.r || ac.hex || "aircraft").trim(),
+    r: ac.r ? String(ac.r).trim() : null,
+    t: ac.t ? String(ac.t).trim() : null,
+    alt: ground ? "ground" : Number.isFinite(altFt) ? altFt : null,
+    altM: ground ? 0 : Number.isFinite(altFt) ? altFt * FT_TO_M : 0,
+    track: Number(ac.track) || 0,
+    gs: ac.gs ?? null,
+    squawk,
+    emergency,
+    category: ac.category || null,
+    src: ac.type || null,
+    mil: Boolean(flags & 1) || tag === "mil",
+    interesting: Boolean(flags & 2),
+    pia: Boolean(flags & 4) || tag === "pia",
+    ladd: Boolean(flags & 8) || tag === "ladd",
+    baro_rate: ac.baro_rate ?? null,
+    seen_pos: ac.seen_pos ?? null,
+    ts: Date.now(),
+  };
+}
+
+function ingestAdsbList(acList, tag) {
+  for (const ac of acList || []) {
+    const point = mapAdsbAircraft(ac, tag);
+    if (!point) continue;
+    const key = point.hex || `${point.lat.toFixed(3)},${point.lon.toFixed(3)},${point.name}`;
+    const prev = aircraftLive.get(key);
+    if (prev) {
+      point.mil = point.mil || prev.mil;
+      point.ladd = point.ladd || prev.ladd;
+      point.pia = point.pia || prev.pia;
+      point.interesting = point.interesting || prev.interesting;
+    }
+    aircraftLive.set(key, point);
+  }
+}
+
+function pruneAircraft() {
+  const now = Date.now();
+  for (const [key, point] of aircraftLive) {
+    if (now - point.ts > ADSB_TTL_MS) aircraftLive.delete(key);
+  }
+}
+
+function rankAircraft(point) {
+  if (point.emergency) return 0;
+  if (point.squawk === "7700" || point.squawk === "7600" || point.squawk === "7500") return 1;
+  if (point.mil) return 2;
+  if (point.ladd || point.pia) return 3;
+  return 4;
+}
+
+function publishAircraft(source, extraError = null) {
+  pruneAircraft();
+  const all = [...aircraftLive.values()].sort((a, b) => rankAircraft(a) - rankAircraft(b) || (b.ts - a.ts));
+  const points = sample(all, ADSB_DISPLAY_CAP);
+  const quota = adsbQuotaLeft == null ? "" : ` · ${adsbQuotaLeft}/day left`;
+  layers.aircraft = {
+    points,
+    count: aircraftLive.size,
+    updated: new Date().toISOString(),
+    source: `${source}${quota}`,
+    error: extraError,
+    at: Date.now(),
+  };
+}
+
+function nextAdsbJob() {
+  const kind = ADSB_CYCLE[adsbStep % ADSB_CYCLE.length];
+  adsbStep += 1;
+  if (kind === "origin") {
+    return { tag: "origin", url: `${ADSB_BASE}/v2/point/${ORIGIN.lat}/${ORIGIN.lon}/250` };
+  }
+  if (kind === "mil") return { tag: "mil", url: `${ADSB_BASE}/v2/mil` };
+  if (kind === "ladd") return { tag: "ladd", url: `${ADSB_BASE}/v2/ladd` };
+  if (kind === "pia") return { tag: "pia", url: `${ADSB_BASE}/v2/pia` };
+  if (kind === "squawk7700") return { tag: "squawk7700", url: `${ADSB_BASE}/v2/squawk/7700` };
+  const hub = ADSB_HUBS[adsbHub % ADSB_HUBS.length];
+  adsbHub += 1;
+  if (hub[0] === ORIGIN.lat && hub[1] === ORIGIN.lon) {
+    const next = ADSB_HUBS[adsbHub % ADSB_HUBS.length];
+    adsbHub += 1;
+    return { tag: "hub", url: `${ADSB_BASE}/v2/point/${next[0]}/${next[1]}/250` };
+  }
+  return { tag: "hub", url: `${ADSB_BASE}/v2/point/${hub[0]}/${hub[1]}/250` };
+}
+
+async function pullAdsb(url, tag) {
+  const res = await pull(url, adsbHeaders());
+  noteAdsbQuota(res);
+  const data = await res.json();
+  ingestAdsbList(data.ac || data.aircraft || [], tag);
+}
+
+async function pullLocalFeeder() {
+  const base = (process.env.ADS_B_FEEDER_URL || "").replace(/\/$/, "");
+  if (!base) return;
+  const paths = [`${base}/data/aircraft.json`, `${base}/tar1090/data/aircraft.json`];
+  let lastErr = null;
+  for (const url of paths) {
+    try {
+      const res = await pull(url);
+      const data = await res.json();
+      ingestAdsbList(data.ac || data.aircraft || [], "feeder");
+      return;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  if (lastErr) throw lastErr;
+}
+
 function titleFromSlug(slug) {
   return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -103,33 +288,33 @@ async function refreshJamming() {
 }
 
 async function refreshAircraft() {
+  if (Date.now() < adsbBackoffUntil) {
+    publishAircraft("adsb.lol (backoff)");
+    return;
+  }
+  const jobs = [nextAdsbJob()];
+  if (!adsbPrimed) {
+    adsbPrimed = true;
+    jobs.push(nextAdsbJob());
+  }
   try {
-    const res = await pull("https://api.adsb.lol/v2/ladd");
-    const data = await res.json();
-    const points = [];
-    for (const ac of data.ac || []) {
-      const lat = Number(ac.lat);
-      const lon = Number(ac.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      points.push({
-        lat,
-        lon,
-        name: String(ac.flight || ac.r || ac.hex || "aircraft").trim(),
-        alt: ac.alt_baro ?? ac.alt_geom ?? null,
-        track: Number(ac.track) || 0,
-        gs: ac.gs ?? null,
-      });
+    for (const job of jobs) await pullAdsb(job.url, job.tag);
+    try {
+      await pullLocalFeeder();
+    } catch {
+      /* feeder is optional until an ADSB.im box exists */
     }
-    layers.aircraft = {
-      points: sample(points, 900),
-      count: points.length,
-      updated: new Date().toISOString(),
-      source: "adsb.lol",
-      error: null,
-      at: Date.now(),
-    };
+    publishAircraft(`adsb.lol ${jobs.map((j) => j.tag).join("+")}`);
     return;
   } catch (adsbErr) {
+    const retryAfter = Number(String(adsbErr.message).match(/^429/) ? 120 : 0);
+    if (String(adsbErr.message).startsWith("429")) {
+      adsbBackoffUntil = Date.now() + Math.max(retryAfter, 120) * 1000;
+    }
+    if (aircraftLive.size) {
+      publishAircraft("adsb.lol cached", adsbErr.message);
+      return;
+    }
     const res = await pull("https://opensky-network.org/api/states/all");
     const data = await res.json();
     const points = [];
@@ -137,17 +322,23 @@ async function refreshAircraft() {
       const lon = Number(row[5]);
       const lat = Number(row[6]);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const altM = row[7] == null ? 0 : Number(row[7]);
       points.push({
         lat,
         lon,
+        hex: row[0] ? String(row[0]) : null,
         name: String(row[1] || row[0] || "aircraft").trim(),
-        alt: row[7],
+        alt: Number.isFinite(altM) ? Math.round(altM / FT_TO_M) : null,
+        altM: Number.isFinite(altM) ? altM : 0,
         track: Number(row[10]) || 0,
-        gs: row[9],
+        gs: row[9] == null ? null : Number(row[9]) * 1.94384,
+        squawk: row[14] ? String(row[14]) : null,
+        src: "opensky",
+        ts: Date.now(),
       });
     }
     layers.aircraft = {
-      points: sample(points, 900),
+      points: sample(points, ADSB_DISPLAY_CAP),
       count: points.length,
       updated: new Date().toISOString(),
       source: "OpenSky Network",
@@ -306,7 +497,7 @@ export function startFeeds() {
   run("ships", refreshShipsRest);
   run("conflicts", refreshConflicts);
   setInterval(() => run("jamming", refreshJamming), 20 * 60 * 1000);
-  setInterval(() => run("aircraft", refreshAircraft), 30 * 1000);
+  setInterval(() => run("aircraft", refreshAircraft), adsbPollMs());
   setInterval(() => run("ships", refreshShipsRest), 20 * 1000);
   setInterval(() => run("conflicts", refreshConflicts), 6 * 60 * 60 * 1000);
   setInterval(() => {

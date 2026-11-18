@@ -4,7 +4,7 @@ App docs that sit next to the globes. Hardware we do not have yet still belongs 
 
 ## Pages
 
-- [ADS-B IM feeder](ADS-B-IM-Feeder.md) — local 1090 MHz receiver using [adsb.im/howto](https://adsb.im/howto). Not built yet. The Cesium **AIR** layer uses [adsb.lol](https://adsb.lol) until a feeder exists.
+- [ADS-B IM feeder](ADS-B-IM-Feeder.md) — local 1090 MHz receiver using [adsb.im/howto](https://adsb.im/howto). Not built yet. The Cesium **AIR** layer is fed by the public [adsb.lol](https://adsb.lol) v2 API until a feeder exists.
 
 ## Live globes
 

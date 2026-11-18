@@ -872,6 +872,19 @@ const LIVE_STYLE = {
   conflicts: { color: "#ff3b6b", outline: "#3a0814", size: () => 11, kind: "CFR WAR" },
 };
 
+function aircraftStyle(point) {
+  if (point.emergency || point.squawk === "7700") {
+    return { color: "#ff5c5c", outline: "#3a0810", size: 10, kind: "ADS-B EMERG" };
+  }
+  if (point.squawk === "7600" || point.squawk === "7500") {
+    return { color: "#ffb020", outline: "#3a2808", size: 9, kind: "ADS-B SQK" };
+  }
+  if (point.mil) {
+    return { color: "#d4e06a", outline: "#2a3008", size: 7, kind: "ADS-B MIL" };
+  }
+  return { color: "#7ec8ff", outline: "#082033", size: 5, kind: "ADS-B" };
+}
+
 async function pollLiveFeeds() {
   const data = await fetch("/api/feeds").then((response) => response.json());
   for (const key of ["jamming", "aircraft", "ships", "conflicts"]) {
@@ -890,20 +903,25 @@ function placeLiveLayer(key, points) {
   const shown = layer.source.show;
   layer.source.entities.removeAll();
   layer.source.show = shown;
-  const style = LIVE_STYLE[key];
-  const color = Cesium.Color.fromCssColorString(style.color);
-  const outline = Cesium.Color.fromCssColorString(style.outline);
+  const base = LIVE_STYLE[key];
   for (const point of points) {
     if (point.lat == null || point.lon == null) continue;
+    const style = key === "aircraft" ? aircraftStyle(point) : {
+      color: base.color,
+      outline: base.outline,
+      size: base.size(point),
+      kind: base.kind,
+    };
+    const height = key === "aircraft" ? Number(point.altM) || 0 : 0;
     const entity = layer.source.entities.add({
       name: point.name,
-      position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, 0),
+      position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, height),
       point: {
-        pixelSize: style.size(point),
-        color,
-        outlineColor: outline,
+        pixelSize: style.size,
+        color: Cesium.Color.fromCssColorString(style.color),
+        outlineColor: Cesium.Color.fromCssColorString(style.outline),
         outlineWidth: 1,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: key === "aircraft" ? 0 : Number.POSITIVE_INFINITY,
       },
     });
     entity._live = { ...point, kind: style.kind, layer: key };
@@ -916,8 +934,17 @@ function showLive(item) {
   let extra = "";
   if (item.url) extra = `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">CFR briefing</a>`;
   else if (item.pct != null) extra = `<br>${item.pct}% bad NACp · ${item.bad || 0} degraded`;
-  else if (item.alt != null) extra = `<br>alt ${esc(item.alt)} · track ${esc(item.track || 0)}`;
-  else if (item.sog != null) extra = `<br>sog ${esc(item.sog)} kn`;
+  else if (item.layer === "aircraft") {
+    const bits = [];
+    if (item.hex) bits.push(item.hex);
+    if (item.t) bits.push(item.t);
+    if (item.r) bits.push(item.r);
+    if (item.squawk) bits.push(`sqk ${item.squawk}`);
+    extra = bits.length ? `<br>${esc(bits.join(" · "))}` : "";
+    extra += `<br>alt ${esc(item.alt ?? "—")} ft · ${esc(item.gs ?? "—")} kt · hdg ${esc(item.track || 0)}`;
+    const flags = ["mil", "ladd", "pia", "emergency"].filter((k) => item[k]);
+    if (flags.length) extra += `<br>${esc(flags.join(" · "))}`;
+  } else if (item.sog != null) extra = `<br>sog ${esc(item.sog)} kn`;
   box.innerHTML = `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
 }
 
