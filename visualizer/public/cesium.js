@@ -14,22 +14,21 @@ const state = {
   arcs: new Map(),
   origin: null,
   sdrSource: null,
+  radioSource: null,
+  streamSource: null,
   gpsSource: null,
   conflictSource: null,
+  scanSource: null,
   sdrStations: [],
   sdrOpenId: "",
-  radioSource: null,
   radioPoints: [],
   radioOpenId: "",
   radioCount: 0,
-  streamSource: null,
   streamPoints: [],
   streamOpenId: "",
-  gpsSource: null,
   gpsZones: [],
   gpsDate: "",
   gpsReady: false,
-  conflictSource: null,
   conflicts: [],
   conflictsReady: false,
   live: {
@@ -37,7 +36,17 @@ const state = {
     aircraft: { source: null, points: [] },
     ships: { source: null, points: [] },
   },
-  layers: { sdr: true, gps: true, conflicts: true, radio: true, stream: true },
+  layers: {
+    sdr: true,
+    radio: true,
+    stream: true,
+    gps: true,
+    jamming: true,
+    aircraft: true,
+    ships: true,
+    conflicts: true,
+    scan: true,
+  },
   openKind: "",
   openId: "",
   feedMode: "sdr",
@@ -129,15 +138,18 @@ async function startGlobe() {
   state.streamSource = new Cesium.CustomDataSource("hpdb-streams");
   state.gpsSource = new Cesium.CustomDataSource("gpsjam");
   state.conflictSource = new Cesium.CustomDataSource("conflicts");
+  state.scanSource = new Cesium.CustomDataSource("scan");
   viewer.dataSources.add(state.sdrSource);
   viewer.dataSources.add(state.radioSource);
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.gpsSource);
   viewer.dataSources.add(state.conflictSource);
+  viewer.dataSources.add(state.scanSource);
   for (const key of ["jamming", "aircraft", "ships"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
+  for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
   });
@@ -211,15 +223,6 @@ function hookUi() {
   document.getElementById("stream-filter").addEventListener("input", renderStreamList);
   document.getElementById("gps-filter").addEventListener("input", renderGpsList);
   document.getElementById("conflict-filter").addEventListener("input", renderConflictList);
-  for (const button of document.querySelectorAll("[data-live]")) {
-    button.addEventListener("click", () => {
-      const key = button.dataset.live;
-      const layer = state.live[key];
-      if (!layer?.source) return;
-      layer.source.show = !layer.source.show;
-      button.classList.toggle("on", layer.source.show);
-    });
-  }
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closePin();
   });
@@ -333,10 +336,9 @@ function applySnapshot(snap) {
 
 function clearPoints() {
   if (!state.viewer) return;
-  state.viewer.entities.removeAll();
+  if (state.scanSource) state.scanSource.entities.removeAll();
   state.points.clear();
   state.arcs.clear();
-  state.origin = null;
   ensureOrigin();
 }
 
@@ -375,14 +377,14 @@ function arcPositions(lat, lon) {
 }
 
 function upsertArc(result) {
-  if (!state.viewer || result.lat == null || result.lon == null) return;
+  if (!state.viewer || !state.scanSource || result.lat == null || result.lon == null) return;
   const positions = arcPositions(result.lat, result.lon);
   if (!positions) return;
   const color = COLORS[result.status] || COLORS.pending;
   const material = new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color });
   let entity = state.arcs.get(result.index);
   if (!entity) {
-    entity = state.viewer.entities.add({
+    entity = state.scanSource.entities.add({
       polyline: {
         positions,
         width: 3,
@@ -398,12 +400,12 @@ function upsertArc(result) {
 }
 
 function upsertPoint(result) {
-  if (!state.viewer || result.lat == null || result.lon == null) return;
+  if (!state.viewer || !state.scanSource || result.lat == null || result.lon == null) return;
   const color = COLORS[result.status] || COLORS.pending;
   let entity = state.points.get(result.index);
   const position = Cesium.Cartesian3.fromDegrees(result.lon, result.lat, 0);
   if (!entity) {
-    entity = state.viewer.entities.add({
+    entity = state.scanSource.entities.add({
       position,
       point: {
         pixelSize: result.status === "down" ? 11 : 8,
@@ -478,6 +480,7 @@ function updateHud() {
   document.getElementById("stat-down").textContent = state.down;
   document.getElementById("stat-pct").textContent = state.done ? `${Math.round((state.up / state.done) * 100)}%` : "—";
   document.getElementById("progress").style.width = state.total ? `${(state.done / state.total) * 100}%` : "0%";
+  setCount("scan", state.results.filter(Boolean).length);
 }
 
 function setStatus(text) {
@@ -512,7 +515,7 @@ function addFlyButton(nav, { id, label, countId, layer, feed, rectangle }) {
   const fly = document.createElement("button");
   fly.type = "button";
   fly.id = id;
-  fly.innerHTML = `<span>${label}</span><span class="count" id="${countId}">…</span>`;
+  fly.innerHTML = `<span>${label}</span><span class="count" id="${countId}" data-count="${layer}">…</span>`;
   fly.addEventListener("click", () => {
     closePin();
     setLayer(layer, true);
@@ -534,11 +537,19 @@ function addFlyButton(nav, { id, label, countId, layer, feed, rectangle }) {
 }
 
 function sourceFor(layer) {
+  if (layer === "sdr") return state.sdrSource;
   if (layer === "gps") return state.gpsSource;
   if (layer === "conflicts") return state.conflictSource;
   if (layer === "radio") return state.radioSource;
   if (layer === "stream") return state.streamSource;
-  return state.sdrSource;
+  if (layer === "scan") return state.scanSource;
+  if (state.live[layer]?.source) return state.live[layer].source;
+  return null;
+}
+
+function setCount(key, value) {
+  const text = String(value);
+  for (const el of document.querySelectorAll(`[data-count="${key}"]`)) el.textContent = text;
 }
 
 function setLayer(layer, on) {
@@ -546,10 +557,13 @@ function setLayer(layer, on) {
   state.layers[layer] = Boolean(on);
   const source = sourceFor(layer);
   if (source) source.show = state.layers[layer];
-  const button = document.querySelector(`[data-layer-toggle="${layer}"]`);
-  if (button) {
+  for (const button of document.querySelectorAll(`[data-layer-toggle="${layer}"]`)) {
     button.classList.toggle("on", state.layers[layer]);
     button.setAttribute("aria-pressed", state.layers[layer] ? "true" : "false");
+  }
+  const host = document.getElementById("cesium");
+  if (host) {
+    host.dataset.visibleLayers = Object.keys(state.layers).filter((key) => state.layers[key]).join(" ");
   }
 }
 
@@ -593,8 +607,7 @@ async function loadWebsdr() {
   const body = await response.json();
   if (!response.ok) throw new Error(body.error || "WebSDR list failed");
   state.sdrStations = Array.isArray(body.stations) ? body.stations : [];
-  const count = document.getElementById("sdr-count");
-  if (count) count.textContent = String(state.sdrStations.length);
+  setCount("sdr", state.sdrStations.length);
   placeMarkers(state.sdrSource, "sdr", state.sdrStations.map(sdrPin), "/icons/ham-radio.png", true);
   const host = document.getElementById("cesium");
   if (host && state.sdrSource) host.dataset.pins = String(state.sdrSource.entities.values.length);
@@ -609,8 +622,7 @@ async function loadGps() {
   state.gpsZones = Array.isArray(body.zones) ? body.zones : [];
   state.gpsDate = body.date || "";
   state.gpsReady = true;
-  const count = document.getElementById("gps-count");
-  if (count) count.textContent = String(state.gpsZones.length);
+  setCount("gps", state.gpsZones.length);
   const credit = document.getElementById("gps-credit");
   if (credit) {
     credit.textContent = `${body.date || ""}${body.stale ? " · cached" : ""} · gpsjam.org`;
@@ -629,8 +641,7 @@ async function loadConflicts() {
   if (!response.ok) throw new Error(body.error || "Conflict tracker failed");
   state.conflicts = Array.isArray(body.conflicts) ? body.conflicts : [];
   state.conflictsReady = true;
-  const count = document.getElementById("conflict-count");
-  if (count) count.textContent = String(state.conflicts.length);
+  setCount("conflicts", state.conflicts.length);
   const credit = document.getElementById("conflict-credit");
   if (credit) {
     credit.textContent = `${body.stale ? "cached · " : ""}cfr.org/global-conflict-tracker`;
@@ -842,8 +853,7 @@ async function loadRadio() {
   if (!response.ok) throw new Error(body.error || "Uniden radio overlay failed");
   state.radioPoints = Array.isArray(body.points) ? body.points : [];
   state.radioCount = Number(body.count) || state.radioPoints.length;
-  const count = document.getElementById("radio-count");
-  if (count) count.textContent = String(state.radioCount);
+  setCount("radio", state.radioCount);
   placeRadioPins(state.radioPoints);
   renderRadioList();
   const stamp = body.updated ? ` · ${body.updated}` : "";
@@ -853,6 +863,7 @@ async function loadRadio() {
 function placeRadioPins(points) {
   if (!state.viewer || !state.radioSource) return;
   state.radioSource.entities.removeAll();
+  state.radioSource.show = Boolean(state.layers.radio);
   const gold = Cesium.Color.fromCssColorString("#f5c542");
   const outline = Cesium.Color.fromCssColorString("#2a1c04");
   for (const site of points) {
@@ -915,8 +926,7 @@ async function loadStreams() {
   const body = await response.json();
   if (!response.ok) throw new Error(body.error || "Stream overlay failed");
   state.streamPoints = Array.isArray(body.points) ? body.points : [];
-  const count = document.getElementById("stream-count");
-  if (count) count.textContent = String(state.streamPoints.length);
+  setCount("stream", state.streamPoints.length);
   placeStreamPins(state.streamPoints);
   renderStreamList();
 }
@@ -924,6 +934,7 @@ async function loadStreams() {
 function placeStreamPins(points) {
   if (!state.viewer || !state.streamSource) return;
   state.streamSource.entities.removeAll();
+  state.streamSource.show = Boolean(state.layers.stream);
   const color = Cesium.Color.fromCssColorString("#c084fc");
   const outline = Cesium.Color.fromCssColorString("#2a1038");
   for (const site of points) {
@@ -1060,8 +1071,7 @@ async function pollLiveFeeds() {
   for (const key of ["jamming", "aircraft", "ships"]) {
     const layer = data[key] || {};
     state.live[key].points = layer.points || [];
-    const n = document.getElementById(`n-${key}`);
-    if (n) n.textContent = String(layer.count ?? state.live[key].points.length);
+    setCount(key, layer.count ?? state.live[key].points.length);
     placeLiveLayer(key, state.live[key].points);
   }
   statusLive();
@@ -1070,9 +1080,8 @@ async function pollLiveFeeds() {
 function placeLiveLayer(key, points) {
   const layer = state.live[key];
   if (!layer?.source) return;
-  const shown = layer.source.show;
   layer.source.entities.removeAll();
-  layer.source.show = shown;
+  layer.source.show = Boolean(state.layers[key]);
   const base = LIVE_STYLE[key];
   for (const point of points) {
     if (point.lat == null || point.lon == null) continue;
@@ -1119,9 +1128,9 @@ function showLive(item) {
 }
 
 function statusLive(error) {
-  const jam = document.getElementById("n-jamming")?.textContent || "0";
-  const air = document.getElementById("n-aircraft")?.textContent || "0";
-  const ais = document.getElementById("n-ships")?.textContent || "0";
+  const jam = state.live.jamming.points.length;
+  const air = state.live.aircraft.points.length;
+  const ais = state.live.ships.points.length;
   const gps = state.gpsReady ? `${state.gpsZones.length} GPS` : "GPS …";
   const war = state.conflictsReady ? `${state.conflicts.length} WAR` : "WAR …";
   const parts = [
