@@ -122,10 +122,14 @@ fn https_get(host: &str, path: &str, budget: Duration) -> Result<String, LookupE
     if raw.len() > 1_000_000 {
         raw.truncate(1_000_000);
     }
-    let text = String::from_utf8_lossy(&raw);
-    let (head, body) = text.split_once("\r\n\r\n").ok_or_else(|| LookupError {
-        message: "http response had no header break".into(),
-    })?;
+    let split_at = raw
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .ok_or_else(|| LookupError {
+            message: "http response had no header break".into(),
+        })?;
+    let head = String::from_utf8_lossy(&raw[..split_at]);
+    let body_bytes = &raw[split_at + 4..];
     let status = head.lines().next().unwrap_or("");
     if !status.contains(" 200 ") {
         return Err(LookupError {
@@ -136,29 +140,49 @@ fn https_get(host: &str, path: &str, budget: Duration) -> Result<String, LookupE
         .to_ascii_lowercase()
         .contains("transfer-encoding: chunked")
     {
-        decode_chunked(body)
+        decode_chunked_bytes(body_bytes)
     } else {
-        body.to_string()
+        body_bytes.to_vec()
     };
-    Ok(body)
+    String::from_utf8(body).map_err(|_| LookupError {
+        message: "location response was not utf-8".into(),
+    })
 }
 
-fn decode_chunked(body: &str) -> String {
-    let mut out = String::new();
+/// Reassemble chunked transfer encoding before any UTF-8 conversion. A chunk
+/// boundary is allowed to split a multibyte character.
+fn decode_chunked_bytes(body: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
     let mut rest = body;
-    while let Some((size_line, next)) = rest.split_once("\r\n") {
-        let size_token = size_line.trim().split(';').next().unwrap_or("");
+    while let Some(split) = rest.windows(2).position(|window| window == b"\r\n") {
+        let size_line = &rest[..split];
+        let next = &rest[split + 2..];
+        let size_text = String::from_utf8_lossy(size_line);
+        let size_token = size_text.trim().split(';').next().unwrap_or("");
         let Ok(size) = usize::from_str_radix(size_token, 16) else {
             break;
         };
         if size == 0 || next.len() < size {
             break;
         }
-        out.push_str(&next[..size]);
+        out.extend_from_slice(&next[..size]);
         rest = &next[size..];
-        if let Some(stripped) = rest.strip_prefix("\r\n") {
-            rest = stripped;
+        if rest.starts_with(b"\r\n") {
+            rest = &rest[2..];
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chunk_boundary_can_split_a_utf8_character() {
+        let raw = b"1\r\n\xc3\r\n1\r\n\xa9\r\n0\r\n\r\n";
+        let body = decode_chunked_bytes(raw);
+        assert_eq!(body, "é".as_bytes());
+        assert_eq!(String::from_utf8(body).unwrap(), "é");
+    }
 }

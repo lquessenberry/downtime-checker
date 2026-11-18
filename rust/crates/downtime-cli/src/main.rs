@@ -34,6 +34,7 @@ struct Opts {
     command: CommandKind,
 }
 
+#[derive(Debug)]
 enum CommandKind {
     Help,
     List,
@@ -341,7 +342,7 @@ async fn run_check(opts: &Opts, id: &str, country: &str) -> Result<i32, String> 
         apply_cached_location(report, &cache);
     }
     if opts.lookup {
-        let dirty = lookup_missing(&mut reports, &mut cache).await;
+        let dirty = lookup_missing(&mut reports, &mut cache, opts.json).await;
         if dirty {
             write_cache(&root, &cache).map_err(|err| err.to_string())?;
         }
@@ -412,7 +413,11 @@ fn stamp_location(report: &mut Report, located: &downtime_core::Located) {
     report.approx = located.approx;
 }
 
-async fn lookup_missing(reports: &mut [Report], cache: &mut Map<String, Value>) -> bool {
+async fn lookup_missing(
+    reports: &mut [Report],
+    cache: &mut Map<String, Value>,
+    json: bool,
+) -> bool {
     let pending: Vec<(usize, String)> = reports
         .iter()
         .enumerate()
@@ -430,7 +435,12 @@ async fn lookup_missing(reports: &mut [Report], cache: &mut Map<String, Value>) 
     if pending.is_empty() {
         return false;
     }
-    println!("Finding locations for {} places...", pending.len());
+    let line = format!("Finding locations for {} places...", pending.len());
+    if json {
+        eprintln!("{line}");
+    } else {
+        println!("{line}");
+    }
     let semaphore = std::sync::Arc::new(Semaphore::new(LOOKUP_WORKERS));
     let mut joins = Vec::new();
     for (index, ip) in pending {
@@ -893,10 +903,21 @@ fn collapse_ws(text: &str) -> String {
 }
 
 fn parse_args() -> Result<Opts, String> {
-    let mut args = env::args().skip(1);
+    parse_args_from(
+        env::args().skip(1),
+        io::stdin().is_terminal(),
+        io::stdout().is_terminal() && env::var_os("NO_COLOR").is_none(),
+    )
+}
+
+fn parse_args_from(
+    args: impl IntoIterator<Item = String>,
+    stdin_is_tty: bool,
+    mut color: bool,
+) -> Result<Opts, String> {
+    let mut args = args.into_iter();
     let mut root = None;
     let mut workers = DEFAULT_WORKERS;
-    let mut color = std::io::stdout().is_terminal() && env::var_os("NO_COLOR").is_none();
     let mut json = false;
     let mut lookup = true;
     let mut fail_on_down = false;
@@ -936,12 +957,17 @@ fn parse_args() -> Result<Opts, String> {
                 positional.extend(args);
                 break;
             }
+            "--country" | "--name" | "--address" => {
+                let value = args.next().ok_or_else(|| format!("{arg} needs a value"))?;
+                positional.push(arg);
+                positional.push(value);
+            }
             other if other.starts_with('-') => return Err(format!("Unknown flag {other}")),
             other => positional.push(other.to_string()),
         }
     }
     let command = if positional.is_empty() {
-        if std::io::stdin().is_terminal() {
+        if stdin_is_tty {
             CommandKind::Menu
         } else {
             CommandKind::Help
@@ -1043,4 +1069,44 @@ Examples:
   downtime-server --root .
 "#
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn subcommand_flags_survive_the_first_pass() {
+        let check = parse_args_from(
+            ["check", "country", "--country", "Japan"]
+                .into_iter()
+                .map(str::to_string),
+            false,
+            false,
+        )
+        .unwrap();
+        match check.command {
+            CommandKind::Check { id, country } => {
+                assert_eq!(id, "country");
+                assert_eq!(country, "Japan");
+            }
+            other => panic!("expected check, got {other:?}"),
+        }
+
+        let add = parse_args_from(
+            ["add", "--name", "Town Hall", "--address", "example.com"]
+                .into_iter()
+                .map(str::to_string),
+            false,
+            false,
+        )
+        .unwrap();
+        match add.command {
+            CommandKind::Add { name, address } => {
+                assert_eq!(name, "Town Hall");
+                assert_eq!(address, "example.com");
+            }
+            other => panic!("expected add, got {other:?}"),
+        }
+    }
 }

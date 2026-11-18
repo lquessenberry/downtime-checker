@@ -6,9 +6,8 @@
 #![deny(unsafe_code)]
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use downtime_core::{
     first_public_ipv4, is_public_ipv4, locate, places_for, Loaded, LocateMode, Place, Report,
@@ -21,7 +20,7 @@ use downtime_native::{
 use serde_json::{json, Map, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{mpsc, watch, Semaphore};
 
 pub struct ServerConfig {
     pub root: PathBuf,
@@ -66,15 +65,17 @@ struct App {
     config: ServerConfig,
     state: Mutex<ScanState>,
     events: Mutex<Vec<mpsc::UnboundedSender<String>>>,
-    generation: AtomicU64,
+    /// Latest scan id. Writers send after they change `ScanState.scan_id`.
+    cancel: watch::Sender<u64>,
 }
 
 pub async fn serve(listener: TcpListener, config: ServerConfig) -> std::io::Result<()> {
+    let (cancel, _) = watch::channel(0u64);
     let app = Arc::new(App {
         config,
         state: Mutex::new(ScanState::idle()),
         events: Mutex::new(Vec::new()),
-        generation: AtomicU64::new(0),
+        cancel,
     });
     loop {
         let (socket, _) = listener.accept().await?;
@@ -139,10 +140,6 @@ async fn post_scan(socket: &mut TcpStream, app: Arc<App>, body: &[u8]) -> std::i
     if id.is_empty() {
         return write_json(socket, 400, r#"{"error":"Missing search id."}"#).await;
     }
-    let already_running = app.state.lock().expect("scan state").running;
-    if already_running {
-        return write_json(socket, 409, r#"{"error":"A scan is already running."}"#).await;
-    }
     let loaded = match load_catalog_dir(&app.config.root) {
         Ok(loaded) => loaded,
         Err(err) => {
@@ -175,24 +172,31 @@ async fn post_scan(socket: &mut TcpStream, app: Arc<App>, body: &[u8]) -> std::i
     };
     let scan_id = {
         let mut state = app.state.lock().expect("scan state");
-        state.scan_id += 1;
-        state.running = true;
-        state.heading = heading.clone();
-        state.search_id = id.clone();
-        state.total = places.len();
-        state.done = 0;
-        state.up = 0;
-        state.down = 0;
-        state.started_at_ms = now_ms();
-        state.finished_at_ms = 0;
-        state.results = places
-            .iter()
-            .enumerate()
-            .map(|(index, place)| pending_json(place, index))
-            .collect();
-        state.scan_id
+        if state.running {
+            None
+        } else {
+            state.scan_id += 1;
+            state.running = true;
+            state.heading = heading.clone();
+            state.search_id = id.clone();
+            state.total = places.len();
+            state.done = 0;
+            state.up = 0;
+            state.down = 0;
+            state.started_at_ms = now_ms();
+            state.finished_at_ms = 0;
+            state.results = places
+                .iter()
+                .enumerate()
+                .map(|(index, place)| pending_json(place, index))
+                .collect();
+            Some(state.scan_id)
+        }
     };
-    app.generation.store(scan_id, Ordering::Relaxed);
+    let Some(scan_id) = scan_id else {
+        return write_json(socket, 409, r#"{"error":"A scan is already running."}"#).await;
+    };
+    let _ = app.cancel.send(scan_id);
     emit(
         &app,
         json!({
@@ -209,11 +213,10 @@ async fn post_scan(socket: &mut TcpStream, app: Arc<App>, body: &[u8]) -> std::i
     let root = app.config.root.clone();
     tokio::spawn(async move {
         if let Err(err) = run_scan(app.clone(), scan_id, places, workers, lookup, root).await {
-            let current = app.state.lock().expect("scan state");
-            let still = current.scan_id == scan_id;
-            drop(current);
-            if still {
-                app.state.lock().expect("scan state").running = false;
+            let mut state = app.state.lock().expect("scan state");
+            if state.scan_id == scan_id {
+                state.running = false;
+                drop(state);
                 emit(&app, json!({"type": "error", "message": err}));
             }
         }
@@ -234,78 +237,89 @@ async fn run_scan(
     let mut finished = vec![None; places.len()];
     let mut received = 0usize;
     let cache = read_cache(&root);
-    while received < places.len() {
-        let Some((index, checked)) = incoming.recv().await else {
-            break;
-        };
-        received += 1;
-        if !still_current(&app, scan_id) {
-            return Ok(());
-        }
-        finished[index] = Some(checked.clone());
-        let mut report = report_from(&places[index], &checked);
-        apply_globe_location(&mut report, &cache);
-        {
-            let mut state = app.state.lock().expect("scan state");
-            if state.scan_id != scan_id {
-                return Ok(());
-            }
-            state.results[index] = result_json(&report, index);
-            state.done += 1;
-            if report.status == Status::Up {
-                state.up += 1;
-            } else {
-                state.down += 1;
-            }
-            let event = json!({
-                "type": "result",
-                "scanId": scan_id,
-                "done": state.done,
-                "total": state.total,
-                "up": state.up,
-                "down": state.down,
-                "result": state.results[index].clone(),
-            });
-            drop(state);
-            emit(&app, event);
-        }
-    }
-    if !still_current(&app, scan_id) {
+    let mut cancel = app.cancel.subscribe();
+    if *cancel.borrow() != scan_id {
         return Ok(());
+    }
+    while received < places.len() {
+        tokio::select! {
+            biased;
+            changed = cancel.changed() => {
+                if changed.is_err() || *cancel.borrow() != scan_id {
+                    drop(incoming);
+                    return Ok(());
+                }
+            }
+            message = incoming.recv() => {
+                let Some((index, checked)) = message else {
+                    break;
+                };
+                received += 1;
+                finished[index] = Some(checked.clone());
+                let mut report = report_from(&places[index], &checked);
+                apply_globe_location(&mut report, &cache);
+                let event = {
+                    let mut state = app.state.lock().expect("scan state");
+                    if state.scan_id != scan_id {
+                        drop(state);
+                        drop(incoming);
+                        return Ok(());
+                    }
+                    state.results[index] = result_json(&report, index);
+                    state.done += 1;
+                    if report.status == Status::Up {
+                        state.up += 1;
+                    } else {
+                        state.down += 1;
+                    }
+                    json!({
+                        "type": "result",
+                        "scanId": scan_id,
+                        "done": state.done,
+                        "total": state.total,
+                        "up": state.up,
+                        "down": state.down,
+                        "result": state.results[index].clone(),
+                    })
+                };
+                emit(&app, event);
+            }
+        }
     }
     if lookup {
         enrich(&app, scan_id, &places, &finished, &root).await;
     }
-    if !still_current(&app, scan_id) {
-        return Ok(());
-    }
-    let mut state = app.state.lock().expect("scan state");
-    state.running = false;
-    state.finished_at_ms = now_ms();
-    let elapsed = state.finished_at_ms.saturating_sub(state.started_at_ms);
-    let mut countries = Vec::new();
-    for result in &state.results {
-        if let Some(country) = result.get("country").and_then(Value::as_str) {
-            if !country.is_empty()
-                && !countries
-                    .iter()
-                    .any(|existing: &String| existing == country)
-            {
-                countries.push(country.to_string());
+    let event = {
+        let mut state = app.state.lock().expect("scan state");
+        if state.scan_id != scan_id {
+            return Ok(());
+        }
+        state.running = false;
+        state.finished_at_ms = now_ms();
+        let elapsed = state.finished_at_ms.saturating_sub(state.started_at_ms);
+        let mut countries = Vec::new();
+        for result in &state.results {
+            if let Some(country) = result.get("country").and_then(Value::as_str) {
+                if !country.is_empty()
+                    && !countries
+                        .iter()
+                        .any(|existing: &String| existing == country)
+                {
+                    countries.push(country.to_string());
+                }
             }
         }
-    }
-    countries.sort_by_key(|name| name.to_lowercase());
-    let event = json!({
-        "type": "scan-done",
-        "scanId": scan_id,
-        "up": state.up,
-        "down": state.down,
-        "total": state.total,
-        "ms": elapsed,
-        "countries": countries,
-    });
-    drop(state);
+        countries.sort_by_key(|name| name.to_lowercase());
+        json!({
+            "type": "scan-done",
+            "scanId": scan_id,
+            "up": state.up,
+            "down": state.down,
+            "total": state.total,
+            "ms": elapsed,
+            "countries": countries,
+        })
+    };
     emit(&app, event);
     Ok(())
 }
@@ -336,59 +350,83 @@ async fn enrich(
         app,
         json!({"type": "locating", "scanId": scan_id, "count": pending.len()}),
     );
-    let semaphore = Arc::new(Semaphore::new(LOOKUP_WORKERS));
-    let mut joins = Vec::new();
-    for (index, ip) in pending {
-        let permit = match semaphore.clone().acquire_owned().await {
-            Ok(permit) => permit,
-            Err(_) => break,
-        };
-        joins.push(tokio::spawn(async move {
-            let found = lookup_ipwho(&ip).await;
-            drop(permit);
-            (index, ip, found)
-        }));
-    }
+    let pending_len = pending.len();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let producer = tokio::spawn(async move {
+        let semaphore = Arc::new(Semaphore::new(LOOKUP_WORKERS));
+        for (index, ip) in pending {
+            if tx.is_closed() {
+                break;
+            }
+            let permit = tokio::select! {
+                biased;
+                _ = tx.closed() => break,
+                permit = semaphore.clone().acquire_owned() => {
+                    match permit {
+                        Ok(permit) => permit,
+                        Err(_) => break,
+                    }
+                }
+            };
+            if tx.is_closed() {
+                break;
+            }
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                let found = lookup_ipwho(&ip).await;
+                let _ = tx.send((index, ip, found));
+                drop(permit);
+            });
+        }
+        drop(tx);
+    });
     let mut dirty = false;
-    for join in joins {
-        let Ok((index, ip, found)) = join.await else {
-            continue;
+    let mut seen = 0usize;
+    let mut stop = false;
+    while seen < pending_len && !stop {
+        let Some((index, ip, found)) = rx.recv().await else {
+            break;
         };
+        seen += 1;
         let Some(found) = found else {
             continue;
         };
-        if !still_current(app, scan_id) {
-            return;
-        }
-        cache.insert(ip.clone(), record_value(&found));
-        dirty = true;
-        let mut state = app.state.lock().expect("scan state");
-        if state.scan_id != scan_id {
-            return;
-        }
-        if let Some(result) = state.results.get_mut(index) {
-            result["location"] = json!(found.location);
-            result["city"] = json!(found.city);
-            result["region"] = json!(found.region);
-            if !found.country.is_empty() {
-                result["country"] = json!(found.country);
+        let event = {
+            let mut state = app.state.lock().expect("scan state");
+            if state.scan_id != scan_id {
+                stop = true;
+                None
+            } else if let Some(result) = state.results.get_mut(index) {
+                cache.insert(ip.clone(), record_value(&found));
+                dirty = true;
+                result["location"] = json!(found.location);
+                result["city"] = json!(found.city);
+                result["region"] = json!(found.region);
+                if !found.country.is_empty() {
+                    result["country"] = json!(found.country);
+                }
+                let key = result
+                    .get("address")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let (lat, lon) = downtime_core::jitter(found.lat, found.lon, &key);
+                result["lat"] = json!(lat);
+                result["lon"] = json!(lon);
+                result["ip"] = json!(ip);
+                result["approx"] = json!(false);
+                Some(json!({"type": "location", "scanId": scan_id, "result": result.clone()}))
+            } else {
+                None
             }
-            let key = result
-                .get("address")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_string();
-            let (lat, lon) = downtime_core::jitter(found.lat, found.lon, &key);
-            result["lat"] = json!(lat);
-            result["lon"] = json!(lon);
-            result["ip"] = json!(ip);
-            result["approx"] = json!(false);
-            let event = json!({"type": "location", "scanId": scan_id, "result": result.clone()});
-            drop(state);
+        };
+        if let Some(event) = event {
             emit(app, event);
         }
     }
-    if dirty {
+    drop(rx);
+    let _ = producer.await;
+    if dirty && app.state.lock().expect("scan state").scan_id == scan_id {
         let _ = write_cache(root, &cache);
     }
 }
@@ -400,7 +438,7 @@ fn stop(app: &App) {
     state.finished_at_ms = now_ms();
     let scan_id = state.scan_id;
     drop(state);
-    app.generation.store(scan_id, Ordering::Relaxed);
+    let _ = app.cancel.send(scan_id);
     emit(app, json!({"type": "scan-stop", "scanId": scan_id}));
 }
 
@@ -508,6 +546,10 @@ fn catalog_json(loaded: &Loaded) -> String {
 fn snapshot(app: &App) -> Value {
     let state = app.state.lock().expect("scan state");
     let clients = app.events.lock().expect("clients").len();
+    snapshot_value(&state, clients)
+}
+
+fn snapshot_value(state: &ScanState, clients: usize) -> Value {
     json!({
         "running": state.running,
         "scanId": state.scan_id,
@@ -526,11 +568,31 @@ fn snapshot(app: &App) -> Value {
 
 fn emit(app: &App, event: Value) {
     let payload = format!("data: {event}\n\n");
+    // State lock first, then the client list, so a subscriber can snapshot and
+    // register without an event landing in neither place.
+    let _state = app.state.lock().expect("scan state");
     let mut clients = app.events.lock().expect("clients");
     clients.retain(|sender| sender.send(payload.clone()).is_ok());
 }
 
+fn reap_clients(app: &App) {
+    let _state = app.state.lock().expect("scan state");
+    let mut clients = app.events.lock().expect("clients");
+    clients.retain(|sender| !sender.is_closed());
+}
+
 async fn sse(mut socket: TcpStream, app: Arc<App>) -> std::io::Result<()> {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let hello = {
+        let state = app.state.lock().expect("scan state");
+        let mut clients = app.events.lock().expect("clients");
+        let body = format!(
+            "data: {}\n\n",
+            json!({"type": "hello", "state": snapshot_value(&state, clients.len() + 1)})
+        );
+        clients.push(tx);
+        body
+    };
     let header = "\
 HTTP/1.1 200 OK\r\n\
 Content-Type: text/event-stream\r\n\
@@ -538,19 +600,41 @@ Cache-Control: no-cache\r\n\
 Connection: keep-alive\r\n\
 Access-Control-Allow-Origin: *\r\n\
 \r\n";
-    socket.write_all(header.as_bytes()).await?;
-    let hello = format!(
-        "data: {}\n\n",
-        json!({"type": "hello", "state": snapshot(&app)})
-    );
-    socket.write_all(hello.as_bytes()).await?;
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    app.events.lock().expect("clients").push(tx);
-    while let Some(message) = rx.recv().await {
-        if socket.write_all(message.as_bytes()).await.is_err() {
-            break;
+    if socket.write_all(header.as_bytes()).await.is_err()
+        || socket.write_all(hello.as_bytes()).await.is_err()
+    {
+        drop(rx);
+        reap_clients(&app);
+        return Ok(());
+    }
+    let mut buf = [0u8; 32];
+    loop {
+        tokio::select! {
+            message = rx.recv() => {
+                match message {
+                    Some(message) => {
+                        if socket.write_all(message.as_bytes()).await.is_err() {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
+            read = socket.read(&mut buf) => {
+                match read {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {}
+                }
+            }
+            _ = tokio::time::sleep(Duration::from_secs(15)) => {
+                if socket.write_all(b": ping\n\n").await.is_err() {
+                    break;
+                }
+            }
         }
     }
+    drop(rx);
+    reap_clients(&app);
     Ok(())
 }
 

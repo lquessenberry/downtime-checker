@@ -120,7 +120,17 @@ pub fn display_country(report: &Report) -> String {
     if location == "Local network" {
         return "Local network".into();
     }
-    if location.is_empty() || location == "Location not found" {
+    if location == "Location not found" {
+        return "Location not found".into();
+    }
+    // An omitted location still honors an explicit country. The CLI fills in
+    // "Location not found" before it groups, so this only changes callers such
+    // as the WASM aggregate that leave location blank on purpose.
+    if location.is_empty() {
+        let country = report.place.country.trim();
+        if !country.is_empty() {
+            return country.to_string();
+        }
         return "Location not found".into();
     }
     let country = report.place.country.trim();
@@ -220,5 +230,14 @@ mod tests {
             "weather.gov (1.2.3.4)"
         );
         assert_eq!(checked_address("1.2.3.4", "1.2.3.4"), "1.2.3.4");
+    }
+
+    #[test]
+    fn explicit_country_groups_when_location_is_omitted() {
+        let grouped = summarize(&[report("Austin", "United States", "", "Texas", Status::Up)]);
+        assert_eq!(grouped.countries, vec!["United States".to_string()]);
+        assert_eq!(grouped.by_location.len(), 1);
+        assert_eq!(grouped.by_location[0].country, "United States");
+        assert_eq!(grouped.by_location[0].states[0].state, "Texas");
     }
 }
