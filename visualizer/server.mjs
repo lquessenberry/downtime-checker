@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { catalog, placesFor, SEARCHES } from "./lib/catalogs.mjs";
 import { websdrCatalog } from "./lib/websdr.mjs";
+import { gpsjamCatalog } from "./lib/gpsjam.mjs";
+import { conflictCatalog } from "./lib/conflicts.mjs";
 import {
   LOOKUP_WORKERS,
   checkHost,
@@ -214,6 +216,16 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/websdr") {
       const body = await websdrCatalog();
+      send(res, 200, body);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/gpsjam") {
+      const body = await gpsjamCatalog();
+      send(res, 200, body);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/conflicts") {
+      const body = await conflictCatalog();
       send(res, 200, body);
       return;
     }

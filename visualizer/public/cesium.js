@@ -14,9 +14,17 @@ const state = {
   arcs: new Map(),
   origin: null,
   sdrSource: null,
-  sdrPin: null,
+  gpsSource: null,
+  conflictSource: null,
   sdrStations: [],
-  sdrOpenId: "",
+  gpsZones: [],
+  conflicts: [],
+  gpsDate: "",
+  gpsReady: false,
+  conflictsReady: false,
+  layers: { sdr: true, gps: true, conflicts: true },
+  openKind: "",
+  openId: "",
   feedMode: "sdr",
 };
 
@@ -50,7 +58,9 @@ async function boot() {
   hookUi();
   connectEvents();
   tickClock();
-  loadWebsdr().catch((error) => setStatus(error.message || String(error)));
+  loadWebsdr().catch((error) => layerStatus(error.message || String(error)));
+  loadGps().catch((error) => layerStatus(error.message || String(error)));
+  loadConflicts().catch((error) => layerStatus(error.message || String(error)));
 }
 
 function loadImagery() {
@@ -90,16 +100,19 @@ async function startGlobe() {
   viewer.scene.globe.enableLighting = false;
   state.viewer = viewer;
   state.sdrSource = new Cesium.CustomDataSource("websdr");
+  state.gpsSource = new Cesium.CustomDataSource("gpsjam");
+  state.conflictSource = new Cesium.CustomDataSource("conflicts");
   viewer.dataSources.add(state.sdrSource);
-  state.sdrPin = new Cesium.PinBuilder().fromColor(Cesium.Color.fromCssColorString("#35d0ff"), 48);
+  viewer.dataSources.add(state.gpsSource);
+  viewer.dataSources.add(state.conflictSource);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
   });
   ensureOrigin();
   viewer.selectedEntityChanged.addEventListener((entity) => {
     if (!entity) return;
-    if (entity._sdr) {
-      openSdr(entity._sdr);
+    if (entity._pin) {
+      openPin(entity._pin);
       return;
     }
     if (entity._resultIndex == null) return;
@@ -110,16 +123,9 @@ async function startGlobe() {
 
 function renderSearches(catalog) {
   const nav = document.getElementById("searches");
-  const fly = document.createElement("button");
-  fly.type = "button";
-  fly.id = "btn-sdr-all";
-  fly.innerHTML = `<span>WEBSDR PINS</span><span class="count" id="sdr-count">…</span>`;
-  fly.addEventListener("click", () => {
-    closeSdr();
-    setFeedMode("sdr");
-    if (state.viewer && state.sdrSource) state.viewer.flyTo(state.sdrSource, { duration: 1.1 });
-  });
-  nav.append(fly);
+  addFlyButton(nav, { id: "btn-sdr-all", label: "WEBSDR PINS", countId: "sdr-count", layer: "sdr", feed: "sdr" });
+  addFlyButton(nav, { id: "btn-gps-all", label: "GPS JAM", countId: "gps-count", layer: "gps", feed: "gps" });
+  addFlyButton(nav, { id: "btn-conflict-all", label: "CONFLICTS", countId: "conflict-count", layer: "conflicts", feed: "conflicts" });
   const groups = [
     ["GLOBAL", catalog.searches.filter((item) => item.group === "global")],
     ["UNITED STATES", catalog.searches.filter((item) => item.group === "us")],
@@ -152,11 +158,19 @@ function hookUi() {
     const country = document.getElementById("country").value;
     startScan("country", country);
   });
-  document.getElementById("sdr-back").addEventListener("click", closeSdr);
+  document.getElementById("sdr-back").addEventListener("click", closePin);
   document.getElementById("sdr-filter").addEventListener("input", renderSdrList);
+  document.getElementById("gps-filter").addEventListener("input", renderGpsList);
+  document.getElementById("conflict-filter").addEventListener("input", renderConflictList);
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeSdr();
+    if (event.key === "Escape") closePin();
   });
+  for (const button of document.querySelectorAll("[data-layer-toggle]")) {
+    button.addEventListener("click", () => {
+      const layer = button.dataset.layerToggle;
+      setLayer(layer, !state.layers[layer]);
+    });
+  }
   for (const button of document.querySelectorAll("[data-feed]")) {
     button.addEventListener("click", () => setFeedMode(button.dataset.feed));
   }
@@ -418,15 +432,65 @@ function tickClock() {
 }
 
 function setFeedMode(mode) {
-  state.feedMode = mode === "returns" ? "returns" : "sdr";
-  document.getElementById("sdr-pane").hidden = state.feedMode !== "sdr";
-  document.getElementById("returns-pane").hidden = state.feedMode !== "returns";
+  const allowed = ["sdr", "gps", "conflicts", "returns"];
+  state.feedMode = allowed.includes(mode) ? mode : "sdr";
+  for (const name of allowed) {
+    const pane = document.getElementById(`${name}-pane`);
+    if (pane) pane.hidden = state.feedMode !== name;
+  }
   for (const button of document.querySelectorAll("[data-feed]")) {
     button.classList.toggle("on", button.dataset.feed === state.feedMode);
   }
-  document.getElementById("feed-title").textContent = state.feedMode === "sdr"
-    ? `WEBSDR ${state.sdrStations.length}`
-    : "LIVE RETURNS";
+  const title = document.getElementById("feed-title");
+  if (state.feedMode === "sdr") title.textContent = `WEBSDR ${state.sdrStations.length}`;
+  else if (state.feedMode === "gps") title.textContent = `GPS ${state.gpsZones.length}`;
+  else if (state.feedMode === "conflicts") title.textContent = `CONFLICTS ${state.conflicts.length}`;
+  else title.textContent = "LIVE RETURNS";
+}
+
+function addFlyButton(nav, { id, label, countId, layer, feed }) {
+  const fly = document.createElement("button");
+  fly.type = "button";
+  fly.id = id;
+  fly.innerHTML = `<span>${label}</span><span class="count" id="${countId}">…</span>`;
+  fly.addEventListener("click", () => {
+    closePin();
+    setLayer(layer, true);
+    setFeedMode(feed);
+    const source = sourceFor(layer);
+    if (state.viewer && source && source.entities.values.length) {
+      state.viewer.flyTo(source, { duration: 1.1 });
+    }
+  });
+  nav.append(fly);
+}
+
+function sourceFor(layer) {
+  if (layer === "gps") return state.gpsSource;
+  if (layer === "conflicts") return state.conflictSource;
+  return state.sdrSource;
+}
+
+function setLayer(layer, on) {
+  if (!Object.prototype.hasOwnProperty.call(state.layers, layer)) return;
+  state.layers[layer] = Boolean(on);
+  const source = sourceFor(layer);
+  if (source) source.show = state.layers[layer];
+  const button = document.querySelector(`[data-layer-toggle="${layer}"]`);
+  if (button) {
+    button.classList.toggle("on", state.layers[layer]);
+    button.setAttribute("aria-pressed", state.layers[layer] ? "true" : "false");
+  }
+}
+
+function layerStatus(error) {
+  const parts = [
+    `${state.sdrStations.length} SDR`,
+    state.gpsReady ? `${state.gpsZones.length} GPS ${state.gpsDate}`.trim() : "GPS …",
+    state.conflictsReady ? `${state.conflicts.length} CONFLICTS` : "CONFLICTS …",
+  ];
+  if (error) parts.push(error);
+  setStatus(`${parts.join(" · ")} · CLICK A PIN TO OPEN`);
 }
 
 function wrapName(name) {
@@ -446,6 +510,20 @@ function wrapName(name) {
   return lines.join("\n");
 }
 
+function sdrPin(station) {
+  return {
+    kind: "sdr",
+    id: station.id,
+    name: station.name,
+    url: station.url,
+    lat: station.lat,
+    lon: station.lon,
+    meta: [station.qth, station.users ? `${station.users} listening` : "", ...(station.bands || [])]
+      .filter(Boolean)
+      .join(" · "),
+  };
+}
+
 async function loadWebsdr() {
   const response = await fetch("/api/websdr");
   const body = await response.json();
@@ -453,35 +531,83 @@ async function loadWebsdr() {
   state.sdrStations = Array.isArray(body.stations) ? body.stations : [];
   const count = document.getElementById("sdr-count");
   if (count) count.textContent = String(state.sdrStations.length);
-  placeSdrPins(state.sdrStations);
+  placeMarkers(state.sdrSource, "sdr", state.sdrStations.map(sdrPin), "/icons/ham-radio.png", true);
+  const host = document.getElementById("cesium");
+  if (host && state.sdrSource) host.dataset.pins = String(state.sdrSource.entities.values.length);
   renderSdrList();
-  const cached = body.stale ? " · CACHED LIST" : "";
-  setStatus(`${state.sdrStations.length} WEBSDR PINS${cached} · CLICK A PIN TO LISTEN · websdr.org`);
+  layerStatus(body.stale ? "SDR CACHED" : "");
 }
 
-function placeSdrPins(stations) {
-  if (!state.viewer || !state.sdrSource) return;
-  state.sdrSource.entities.removeAll();
+async function loadGps() {
+  const response = await fetch("/api/gpsjam");
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "GPS Jam failed");
+  state.gpsZones = Array.isArray(body.zones) ? body.zones : [];
+  state.gpsDate = body.date || "";
+  state.gpsReady = true;
+  const count = document.getElementById("gps-count");
+  if (count) count.textContent = String(state.gpsZones.length);
+  const credit = document.getElementById("gps-credit");
+  if (credit) {
+    credit.textContent = `${body.date || ""}${body.stale ? " · cached" : ""} · gpsjam.org`;
+    credit.title = body.credit || "";
+  }
+  placeMarkers(state.gpsSource, "gps", state.gpsZones, "/icons/satellite.png", false);
+  const host = document.getElementById("cesium");
+  if (host && state.gpsSource) host.dataset.gps = String(state.gpsSource.entities.values.length);
+  renderGpsList();
+  layerStatus(body.stale ? "GPS CACHED" : "");
+}
+
+async function loadConflicts() {
+  const response = await fetch("/api/conflicts");
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "Conflict tracker failed");
+  state.conflicts = Array.isArray(body.conflicts) ? body.conflicts : [];
+  state.conflictsReady = true;
+  const count = document.getElementById("conflict-count");
+  if (count) count.textContent = String(state.conflicts.length);
+  const credit = document.getElementById("conflict-credit");
+  if (credit) {
+    credit.textContent = `${body.stale ? "cached · " : ""}cfr.org/global-conflict-tracker`;
+    credit.title = body.credit || "";
+  }
+  placeMarkers(state.conflictSource, "conflicts", state.conflicts, "/icons/bomb.png", false);
+  const host = document.getElementById("cesium");
+  if (host && state.conflictSource) host.dataset.conflicts = String(state.conflictSource.entities.values.length);
+  renderConflictList();
+  layerStatus(body.stale ? "CONFLICTS CACHED" : "");
+}
+
+function placeMarkers(source, layer, items, icon, stack) {
+  if (!state.viewer || !source) return;
+  source.entities.removeAll();
+  source.show = Boolean(state.layers[layer]);
   const stacks = new Map();
-  for (const station of stations) {
-    if (station.lat == null || station.lon == null) continue;
-    const key = `${Number(station.lat).toFixed(4)},${Number(station.lon).toFixed(4)}`;
-    const stack = stacks.get(key) || 0;
-    stacks.set(key, stack + 1);
-    const shift = stack * 26;
-    const entity = state.sdrSource.entities.add({
-      name: station.name,
-      position: Cesium.Cartesian3.fromDegrees(station.lon, station.lat, 0),
+  for (const item of items) {
+    if (item.lat == null || item.lon == null) continue;
+    let shift = 0;
+    if (stack) {
+      const key = `${Number(item.lat).toFixed(4)},${Number(item.lon).toFixed(4)}`;
+      const n = stacks.get(key) || 0;
+      stacks.set(key, n + 1);
+      shift = n * 28;
+    }
+    const entity = source.entities.add({
+      name: item.name,
+      position: Cesium.Cartesian3.fromDegrees(item.lon, item.lat, 0),
       billboard: {
-        image: state.sdrPin,
-        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        image: icon,
+        width: 48,
+        height: 48,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         pixelOffset: new Cesium.Cartesian2(shift, 0),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
         scaleByDistance: new Cesium.NearFarScalar(4e5, 1, 1.2e7, 0.62),
       },
       label: {
-        text: wrapName(station.name),
+        text: item.kind === "gps" ? `${wrapName(item.name)}\n${Math.round(item.pct)}%` : wrapName(item.name),
         font: "12px ui-monospace, monospace",
         fillColor: Cesium.Color.fromCssColorString("#e8f7ff"),
         outlineColor: Cesium.Color.fromCssColorString("#041018"),
@@ -492,15 +618,13 @@ function placeSdrPins(stations) {
         backgroundPadding: new Cesium.Cartesian2(6, 4),
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        pixelOffset: new Cesium.Cartesian2(shift, -52),
+        pixelOffset: new Cesium.Cartesian2(shift, -30),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
         scaleByDistance: new Cesium.NearFarScalar(5e5, 1, 7e6, 0.45),
       },
     });
-    entity._sdr = station;
+    entity._pin = item;
   }
-  const host = document.getElementById("cesium");
-  if (host) host.dataset.pins = String(state.sdrSource.entities.values.length);
 }
 
 function renderSdrList() {
@@ -523,10 +647,10 @@ function renderSdrList() {
     row.dataset.lat = String(station.lat);
     row.dataset.lon = String(station.lon);
     row.dataset.url = station.url;
-    if (station.id === state.sdrOpenId) row.classList.add("on");
+    if (state.openKind === "sdr" && station.id === state.openId) row.classList.add("on");
     const band = station.bands && station.bands.length ? station.bands[0] : "";
     row.innerHTML = `<div class="name">${esc(station.name)}</div><div class="host">${esc(station.qth || "")}${band ? " · " + esc(band) : ""} · ${station.users || 0} listening</div>`;
-    row.addEventListener("click", () => openSdr(station, { fly: true }));
+    row.addEventListener("click", () => openPin(sdrPin(station), { fly: true }));
     list.append(row);
   }
   if (state.feedMode === "sdr") {
@@ -534,51 +658,114 @@ function renderSdrList() {
   }
 }
 
-function findSdrEntity(id) {
-  if (!state.sdrSource) return null;
-  for (const entity of state.sdrSource.entities.values) {
-    if (entity._sdr && entity._sdr.id === id) return entity;
+function renderGpsList() {
+  const list = document.getElementById("gps-list");
+  if (!list) return;
+  const query = (document.getElementById("gps-filter").value || "").trim().toLowerCase();
+  const zones = state.gpsZones
+    .filter((zone) => {
+      if (!query) return true;
+      return `${zone.name} ${zone.note || ""} ${zone.pct} ${zone.date || ""}`.toLowerCase().includes(query);
+    })
+    .slice()
+    .sort((a, b) => b.pct - a.pct || a.name.localeCompare(b.name));
+  list.innerHTML = "";
+  for (const zone of zones) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "sdr-row";
+    row.dataset.lat = String(zone.lat);
+    row.dataset.lon = String(zone.lon);
+    row.dataset.url = zone.url;
+    if (state.openKind === "gps" && zone.id === state.openId) row.classList.add("on");
+    row.innerHTML = `<div class="name">${esc(zone.name)}</div><div class="host">${esc(zone.pct)}% · ${zone.hexes} hexes · ${zone.bad} aircraft</div>`;
+    row.addEventListener("click", () => openPin(zone, { fly: true }));
+    list.append(row);
+  }
+  if (state.feedMode === "gps") {
+    document.getElementById("feed-title").textContent = `GPS ${zones.length}`;
+  }
+}
+
+function renderConflictList() {
+  const list = document.getElementById("conflict-list");
+  if (!list) return;
+  const query = (document.getElementById("conflict-filter").value || "").trim().toLowerCase();
+  const conflicts = state.conflicts.filter((conflict) => {
+    if (!query) return true;
+    return `${conflict.name} ${conflict.region} ${conflict.status} ${conflict.types} ${conflict.description}`.toLowerCase().includes(query);
+  });
+  list.innerHTML = "";
+  for (const conflict of conflicts) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "sdr-row";
+    row.dataset.lat = String(conflict.lat);
+    row.dataset.lon = String(conflict.lon);
+    row.dataset.url = conflict.url;
+    if (state.openKind === "conflict" && conflict.id === state.openId) row.classList.add("on");
+    const status = String(conflict.status || "").toLowerCase().replace(/\s+/g, "-");
+    row.innerHTML = `<div class="name">${esc(conflict.name)}</div><div class="host"><span class="st-${esc(status)}">${esc(conflict.status || "")}</span>${conflict.region ? " · " + esc(conflict.region) : ""}${conflict.types ? " · " + esc(conflict.types) : ""}</div>`;
+    row.addEventListener("click", () => openPin(conflict, { fly: true }));
+    list.append(row);
+  }
+  if (state.feedMode === "conflicts") {
+    document.getElementById("feed-title").textContent = `CONFLICTS ${conflicts.length}`;
+  }
+}
+
+function findPin(kind, id) {
+  const source = sourceFor(kind === "conflict" ? "conflicts" : kind);
+  if (!source) return null;
+  for (const entity of source.entities.values) {
+    if (entity._pin && entity._pin.kind === kind && entity._pin.id === id) return entity;
   }
   return null;
 }
 
-function openSdr(station, options = {}) {
-  if (!station || !station.url) return;
-  state.sdrOpenId = station.id;
-  const panel = document.getElementById("sdr-listen");
-  document.getElementById("sdr-title").textContent = station.name;
-  const where = [station.qth, station.users ? `${station.users} listening` : "", ...(station.bands || [])]
-    .filter(Boolean)
-    .join(" · ");
-  document.getElementById("sdr-meta").textContent = where;
+function openPin(pin, options = {}) {
+  if (!pin || !pin.url) return;
+  state.openKind = pin.kind;
+  state.openId = pin.id;
+  const layer = pin.kind === "conflict" ? "conflicts" : pin.kind;
+  if (state.layers[layer] === false) setLayer(layer, true);
+  document.getElementById("sdr-title").textContent = pin.name;
+  document.getElementById("sdr-meta").textContent = pin.meta || "";
   const pop = document.getElementById("sdr-pop");
-  pop.href = station.url;
+  pop.href = pin.url;
   const frame = document.getElementById("sdr-frame");
-  if (frame.dataset.url !== station.url) {
-    frame.dataset.url = station.url;
-    frame.src = station.url;
+  frame.title = pin.name;
+  if (frame.dataset.url !== pin.url) {
+    frame.dataset.url = pin.url;
+    frame.src = pin.url;
   }
-  panel.hidden = false;
+  document.getElementById("sdr-listen").hidden = false;
   renderSdrList();
-  const entity = findSdrEntity(station.id);
+  renderGpsList();
+  renderConflictList();
+  const entity = findPin(pin.kind, pin.id);
   if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
     state.viewer.selectedEntity = entity;
   }
-  if (options.fly && state.viewer) {
+  if (options.fly && state.viewer && Number.isFinite(Number(pin.lat)) && Number.isFinite(Number(pin.lon))) {
+    const height = pin.kind === "sdr" ? 280000 : 800000;
     state.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(station.lon, station.lat, 280000),
+      destination: Cesium.Cartesian3.fromDegrees(pin.lon, pin.lat, height),
       duration: 0.9,
     });
   }
 }
 
-function closeSdr() {
+function closePin() {
   const frame = document.getElementById("sdr-frame");
   frame.src = "about:blank";
   frame.dataset.url = "";
-  state.sdrOpenId = "";
+  state.openKind = "";
+  state.openId = "";
   document.getElementById("sdr-listen").hidden = true;
   renderSdrList();
+  renderGpsList();
+  renderConflictList();
 }
 
 boot().catch((error) => setStatus(error.message || String(error)));
