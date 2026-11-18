@@ -3,7 +3,7 @@
 # The checker uses the website. The IP is a sample and can change.
 NATO | nato.int | NATO | 151.101.195.10
 US Department of Defense | defense.gov | United States | 23.43.12.118
-US Army | army.mil | United States | 140.13.10.67
+US Army | www.army.mil | United States | 23.0.162.146
 US Coast Guard | uscg.mil | United States | 152.121.184.21
 DARPA | darpa.mil | United States | 192.5.18.235
 Defense Information Systems Agency | disa.mil | United States | 156.112.108.76
