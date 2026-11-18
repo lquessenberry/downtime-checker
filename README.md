@@ -78,4 +78,6 @@ The same server also serves a CesiumJS globe at http://127.0.0.1:4173/cesium.htm
 
 Uniden BearTracker 885 radio sites load as a gold overlay from `MasterHpdb_*.gz`. Put that file in `~/Downloads/BT885_radio_database`, or set `BT885_HPDB` / `BT885_HPDB_DIR`. Click a site for agency name and sample frequencies. WebSDR pins still open the receiver.
 
+Live scanner streams are scraped from Broadcastify state/county listen pages (plus radio-browser and OpenMHz when those APIs answer) and matched onto HPDB counties. Broadcastify `ctid` is the same county id as the Uniden database. Purple STREAM pins open the public listen page. The catalog caches for 12 hours under `~/.cache/downtime/hpdb-streams.json`.
+
 `bash install.sh` adds Downtime UI and Downtime Cesium launchers in `Desktop/Pentesting` when that folder already exists, and in the application menu. Node.js is required for both globes.

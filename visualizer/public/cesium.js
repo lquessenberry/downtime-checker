@@ -21,6 +21,9 @@ const state = {
   radioPoints: [],
   radioOpenId: "",
   radioCount: 0,
+  streamSource: null,
+  streamPoints: [],
+  streamOpenId: "",
   feedMode: "sdr",
 };
 
@@ -54,12 +57,12 @@ async function boot() {
   hookUi();
   connectEvents();
   tickClock();
-  Promise.allSettled([loadWebsdr(), loadRadio()]).then((results) => {
+  Promise.allSettled([loadWebsdr(), loadRadio(), loadStreams()]).then((results) => {
     const failed = results.find((result) => result.status === "rejected");
     if (failed) setStatus(failed.reason?.message || String(failed.reason));
     else {
       setStatus(
-        `${state.sdrStations.length} WEBSDR · ${state.radioCount || state.radioPoints.length} UNIDEN RADIO · CLICK A PIN`,
+        `${state.sdrStations.length} WEBSDR · ${state.radioCount || state.radioPoints.length} RADIO · ${state.streamPoints.length} STREAMS · CLICK A PIN`,
       );
     }
   });
@@ -103,8 +106,10 @@ async function startGlobe() {
   state.viewer = viewer;
   state.sdrSource = new Cesium.CustomDataSource("websdr");
   state.radioSource = new Cesium.CustomDataSource("uniden-radio");
+  state.streamSource = new Cesium.CustomDataSource("hpdb-streams");
   viewer.dataSources.add(state.sdrSource);
   viewer.dataSources.add(state.radioSource);
+  viewer.dataSources.add(state.streamSource);
   state.sdrPin = new Cesium.PinBuilder().fromColor(Cesium.Color.fromCssColorString("#35d0ff"), 48);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
@@ -118,6 +123,10 @@ async function startGlobe() {
     }
     if (entity._radio) {
       openRadio(entity._radio, { fly: false });
+      return;
+    }
+    if (entity._stream) {
+      openStream(entity._stream, { fly: false });
       return;
     }
     if (entity._resultIndex == null) return;
@@ -152,6 +161,20 @@ function renderSearches(catalog) {
     });
   });
   nav.append(radioFly);
+  const streamFly = document.createElement("button");
+  streamFly.type = "button";
+  streamFly.id = "btn-stream-all";
+  streamFly.innerHTML = `<span>LIVE STREAMS</span><span class="count" id="stream-count">…</span>`;
+  streamFly.addEventListener("click", () => {
+    closeSdr();
+    setFeedMode("stream");
+    if (!state.viewer) return;
+    state.viewer.camera.flyTo({
+      destination: Cesium.Rectangle.fromDegrees(-126, 24, -66, 50),
+      duration: 1.2,
+    });
+  });
+  nav.append(streamFly);
   const groups = [
     ["GLOBAL", catalog.searches.filter((item) => item.group === "global")],
     ["UNITED STATES", catalog.searches.filter((item) => item.group === "us")],
@@ -187,6 +210,7 @@ function hookUi() {
   document.getElementById("sdr-back").addEventListener("click", closeSdr);
   document.getElementById("sdr-filter").addEventListener("input", renderSdrList);
   document.getElementById("radio-filter").addEventListener("input", renderRadioList);
+  document.getElementById("stream-filter").addEventListener("input", renderStreamList);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeSdr();
   });
@@ -451,9 +475,10 @@ function tickClock() {
 }
 
 function setFeedMode(mode) {
-  state.feedMode = mode === "returns" ? "returns" : mode === "radio" ? "radio" : "sdr";
+  state.feedMode = ["returns", "radio", "stream"].includes(mode) ? mode : "sdr";
   document.getElementById("sdr-pane").hidden = state.feedMode !== "sdr";
   document.getElementById("radio-pane").hidden = state.feedMode !== "radio";
+  document.getElementById("stream-pane").hidden = state.feedMode !== "stream";
   document.getElementById("returns-pane").hidden = state.feedMode !== "returns";
   for (const button of document.querySelectorAll("[data-feed]")) {
     button.classList.toggle("on", button.dataset.feed === state.feedMode);
@@ -462,6 +487,8 @@ function setFeedMode(mode) {
     document.getElementById("feed-title").textContent = `WEBSDR ${state.sdrStations.length}`;
   } else if (state.feedMode === "radio") {
     document.getElementById("feed-title").textContent = `RADIO ${state.radioCount || state.radioPoints.length}`;
+  } else if (state.feedMode === "stream") {
+    document.getElementById("feed-title").textContent = `STREAM ${state.streamPoints.length}`;
   } else {
     document.getElementById("feed-title").textContent = "LIVE RETURNS";
   }
@@ -691,6 +718,109 @@ function findRadioEntity(id) {
     if (entity._radio && entity._radio.id === id) return entity;
   }
   return null;
+}
+
+async function loadStreams() {
+  const response = await fetch("/api/streams");
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "Stream overlay failed");
+  state.streamPoints = Array.isArray(body.points) ? body.points : [];
+  const count = document.getElementById("stream-count");
+  if (count) count.textContent = String(state.streamPoints.length);
+  placeStreamPins(state.streamPoints);
+  renderStreamList();
+}
+
+function placeStreamPins(points) {
+  if (!state.viewer || !state.streamSource) return;
+  state.streamSource.entities.removeAll();
+  const color = Cesium.Color.fromCssColorString("#c084fc");
+  const outline = Cesium.Color.fromCssColorString("#2a1038");
+  for (const site of points) {
+    if (site.lat == null || site.lon == null) continue;
+    const entity = state.streamSource.entities.add({
+      name: site.name,
+      position: Cesium.Cartesian3.fromDegrees(site.lon, site.lat, 0),
+      point: {
+        pixelSize: site.online === false ? 6 : 8,
+        color: site.online === false ? color.withAlpha(0.35) : color,
+        outlineColor: outline,
+        outlineWidth: 1,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(2e5, 1.25, 8e6, 0.5),
+      },
+    });
+    entity._stream = site;
+  }
+}
+
+function renderStreamList() {
+  const list = document.getElementById("stream-list");
+  if (!list) return;
+  const query = (document.getElementById("stream-filter").value || "").trim().toLowerCase();
+  const sites = state.streamPoints
+    .filter((site) => {
+      if (!query) return true;
+      const hay = `${site.name} ${site.county} ${site.state} ${site.source} ${site.hpdbName || ""}`.toLowerCase();
+      return hay.includes(query);
+    })
+    .slice()
+    .sort((a, b) => (b.listeners || 0) - (a.listeners || 0) || a.name.localeCompare(b.name))
+    .slice(0, 500);
+  list.innerHTML = "";
+  for (const site of sites) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "stream-row";
+    if (site.id === state.streamOpenId) row.classList.add("on");
+    const where = [site.county, site.state, site.source].filter(Boolean).join(" · ");
+    row.innerHTML = `<div class="name">${esc(site.name)}</div><div class="host">${esc(where)}${site.listeners ? " · " + site.listeners + " listening" : ""}${site.hpdbName ? " · HPDB " + esc(site.hpdbName) : ""}</div>`;
+    row.addEventListener("click", () => openStream(site, { fly: true }));
+    list.append(row);
+  }
+  if (state.feedMode === "stream") {
+    document.getElementById("feed-title").textContent = `STREAM ${state.streamPoints.length}`;
+  }
+}
+
+function findStreamEntity(id) {
+  if (!state.streamSource) return null;
+  for (const entity of state.streamSource.entities.values) {
+    if (entity._stream && entity._stream.id === id) return entity;
+  }
+  return null;
+}
+
+function openStream(site, options = {}) {
+  if (!site || !site.url) return;
+  state.streamOpenId = site.id;
+  setFeedMode("stream");
+  const box = document.getElementById("selected");
+  box.hidden = false;
+  const match = site.hpdbName ? ` · HPDB ${site.hpdbName}` : "";
+  box.innerHTML = `<b>STREAM</b> ${esc(site.name)}<br>${esc(site.source || "")} · ${esc(site.county || "")} ${esc(site.state || "")}${match}<br>${site.lat.toFixed(4)}, ${site.lon.toFixed(4)}`;
+  renderStreamList();
+  const entity = findStreamEntity(site.id);
+  if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
+    state.viewer.selectedEntity = entity;
+  }
+  if (options.fly && state.viewer) {
+    state.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(site.lon, site.lat, 180000),
+      duration: 0.9,
+    });
+  }
+  const panel = document.getElementById("sdr-listen");
+  document.getElementById("sdr-title").textContent = site.name;
+  document.getElementById("sdr-meta").textContent = [site.county, site.state, site.source, site.hpdbName].filter(Boolean).join(" · ");
+  const pop = document.getElementById("sdr-pop");
+  pop.href = site.url;
+  const frame = document.getElementById("sdr-frame");
+  if (frame.dataset.url !== site.url) {
+    frame.dataset.url = site.url;
+    frame.src = site.url;
+  }
+  panel.hidden = false;
 }
 
 function openRadio(site, options = {}) {

@@ -197,13 +197,14 @@ button:hover { border-color: #9fd4e2; }
 .swatch.pending { background: var(--pending); }
 .swatch.sdr { background: #35d0ff; }
 .swatch.radio { background: #f5c542; }
+.swatch.stream { background: #c084fc; }
 
 .rail-head.sub { border-bottom: 1px solid var(--line); }
-#sdr-pane, #radio-pane, #returns-pane { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-#sdr-pane[hidden], #radio-pane[hidden], #returns-pane[hidden] { display: none; }
+#sdr-pane, #radio-pane, #stream-pane, #returns-pane { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+#sdr-pane[hidden], #radio-pane[hidden], #stream-pane[hidden], #returns-pane[hidden] { display: none; }
 .sdr-filter-wrap { display: block; padding: 8px 12px 0; }
 #sdr-filter { width: 100%; padding: 6px 8px; }
-.sdr-row, .radio-row {
+.sdr-row, .radio-row, .stream-row {
   width: 100%;
   display: block;
   text-align: left;
@@ -216,6 +217,7 @@ button:hover { border-color: #9fd4e2; }
 }
 .sdr-row:hover, .sdr-row.on { background: rgba(53, 208, 255, 0.08); }
 .radio-row:hover, .radio-row.on { background: rgba(245, 197, 66, 0.12); }
+.stream-row:hover, .stream-row.on { background: rgba(192, 132, 252, 0.14); }
 
 #sdr-listen {
   position: fixed;

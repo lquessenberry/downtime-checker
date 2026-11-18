@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { catalog, placesFor, SEARCHES } from "./lib/catalogs.mjs";
 import { loadRadioOverlay } from "./lib/hpdb.mjs";
+import { loadStreamOverlay } from "./lib/streams.mjs";
 import { websdrCatalog } from "./lib/websdr.mjs";
 import {
   LOOKUP_WORKERS,
@@ -228,6 +229,21 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/streams") {
+      const body = await loadStreamOverlay();
+      send(res, 200, {
+        source: body.source,
+        credit: body.credit,
+        count: body.count,
+        scraped: body.scraped,
+        unmatched: body.unmatched,
+        fetchedAt: body.fetchedAt,
+        stale: body.stale,
+        errors: body.errors,
+        points: body.points,
+      });
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/state") {
       send(res, 200, snapshot());
       return;
@@ -288,6 +304,7 @@ const server = http.createServer(async (req, res) => {
 
 catalog();
 loadRadioOverlay().catch((err) => console.error("radio overlay:", err.message || err));
+loadStreamOverlay().catch((err) => console.error("stream overlay:", err.message || err));
 server.listen(PORT, "127.0.0.1", () => {
   const { searches } = catalog();
   const weather = searches.find((s) => s.id === "weather");

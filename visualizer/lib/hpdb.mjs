@@ -158,6 +158,117 @@ async function parseHpdb(file) {
   return { groups, dateModified };
 }
 
+async function parseHpdbIndex(file) {
+  const rl = readline.createInterface({
+    input: createReadStream(file).pipe(createGunzip()),
+    crlfDelay: Infinity,
+  });
+  const states = {};
+  const counties = {};
+  const agencyCounties = new Map();
+  const groups = [];
+  for await (const line of rl) {
+    if (!line || line[0] === "<") continue;
+    const cols = line.split("\t");
+    const kind = cols[0];
+    if (kind === "StateInfo") {
+      const id = Number(String(cols[1] || "").split("=")[1]);
+      if (!Number.isFinite(id)) continue;
+      states[id] = { id, name: cols[3] || "", abbr: cols[4] || "" };
+      continue;
+    }
+    if (kind === "CountyInfo") {
+      const id = Number(String(cols[1] || "").split("=")[1]);
+      const stateId = Number(String(cols[2] || "").split("=")[1]);
+      if (!Number.isFinite(id)) continue;
+      counties[id] = { id, stateId, name: cols[3] || "", lat: null, lon: null, n: 0 };
+      continue;
+    }
+    if (kind === "AreaCounty") {
+      const agencyId = Number(String(cols[1] || "").split("=")[1]);
+      const countyId = Number(String(cols[2] || "").split("=")[1]);
+      if (!Number.isFinite(agencyId) || !Number.isFinite(countyId) || countyId <= 0) continue;
+      if (!agencyCounties.has(agencyId)) agencyCounties.set(agencyId, new Set());
+      agencyCounties.get(agencyId).add(countyId);
+      continue;
+    }
+    if (kind === "C-Group" || kind === "Site") {
+      const loc = latLonFromCols(cols);
+      if (!loc) continue;
+      const agencyId = Number(String(cols[2] || "").split("=")[1]);
+      groups.push({
+        lat: loc.lat,
+        lon: loc.lon,
+        name: (cols[3] || kind).trim() || kind,
+        mode: kind === "Site" ? "Trunk site" : "Conventional",
+        agencyId: Number.isFinite(agencyId) ? agencyId : null,
+      });
+    }
+  }
+  const countyGroups = new Map();
+  for (const group of groups) {
+    const ids = new Set(agencyCounties.get(group.agencyId) || []);
+    if (group.agencyId != null && counties[group.agencyId]) ids.add(group.agencyId);
+    for (const countyId of ids) {
+      if (!countyGroups.has(countyId)) countyGroups.set(countyId, []);
+      countyGroups.get(countyId).push(group);
+      const county = counties[countyId];
+      if (!county) continue;
+      county.n += 1;
+      county.lat = (county.lat == null ? 0 : county.lat) + group.lat;
+      county.lon = (county.lon == null ? 0 : county.lon) + group.lon;
+    }
+  }
+  for (const county of Object.values(counties)) {
+    if (county.n) {
+      county.lat /= county.n;
+      county.lon /= county.n;
+    }
+  }
+  return {
+    states,
+    counties,
+    countyGroups: Object.fromEntries([...countyGroups.entries()].map(([id, list]) => [id, list])),
+    groups,
+  };
+}
+
+export async function loadHpdbIndex() {
+  const file = findHpdbPath();
+  if (!file) {
+    throw new Error("HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR to the folder that holds it.");
+  }
+  const cache = `${file}.hpdb-index.json`;
+  const srcStat = statSync(file);
+  if (existsSync(cache)) {
+    try {
+      const cached = JSON.parse(readFileSync(cache, "utf8"));
+      if (cached.version === 1 && cached.sourceMtimeMs === srcStat.mtimeMs && cached.groups) {
+        return cached;
+      }
+    } catch {
+      /* rebuild */
+    }
+  }
+  const parsed = await parseHpdbIndex(file);
+  const payload = {
+    version: 1,
+    source: path.basename(file),
+    sourcePath: file,
+    sourceMtimeMs: srcStat.mtimeMs,
+    states: parsed.states,
+    counties: parsed.counties,
+    countyGroups: parsed.countyGroups,
+    groups: parsed.groups,
+  };
+  try {
+    writeFileSync(cache, JSON.stringify(payload));
+  } catch {
+    /* optional */
+  }
+  return payload;
+}
+
 export async function loadRadioOverlay() {
   const file = findHpdbPath();
   if (!file) {
