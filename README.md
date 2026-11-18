@@ -60,3 +60,20 @@ An offline archive is `Downtime Checker.tar.gz`. The steps to install it from a 
 ```bash
 python3 downtime.py
 ```
+
+## Live visualizer (Node)
+
+A globe dashboard that runs the same catalogs, ping + TCP 443/80 checks, and location cache as the Python CLI.
+
+```bash
+cd visualizer
+node server.mjs
+```
+
+Open http://127.0.0.1:4173 — pick a mission, watch nodes light up as they answer.
+
+## Cesium globe
+
+The same server also serves a CesiumJS globe at http://127.0.0.1:4173/cesium.html. It uses the same catalogs, ping and TCP checks, and location cache. The globe imagery is Cesium's Natural Earth texture, so it does not need a Cesium ion key. The first open downloads Cesium from cesium.com.
+
+`bash install.sh` adds Downtime UI and Downtime Cesium launchers in `Desktop/Pentesting` when that folder already exists, and in the application menu. Node.js is required for both globes.
