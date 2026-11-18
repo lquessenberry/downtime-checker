@@ -80,4 +80,11 @@ Uniden BearTracker 885 radio sites load as a gold overlay from `MasterHpdb_*.gz`
 
 Live scanner streams are scraped from Broadcastify state/county listen pages (plus radio-browser and OpenMHz when those APIs answer) and matched onto HPDB counties. Broadcastify `ctid` is the same county id as the Uniden database. Purple STREAM pins open the public listen page. The catalog caches for 12 hours under `~/.cache/downtime/hpdb-streams.json`.
 
+Cesium also pulls the same live overlays as the canvas globe:
+
+- GPS interference from GPSInterference / [gpsjam.org](https://gpsjam.org/)
+- Aircraft from [adsb.lol](https://adsb.lol) (LADD), not ADS-B Exchange
+- Ships from Digitraffic AIS
+- Conflicts from the [CFR Global Conflict Tracker](https://www.cfr.org/global-conflict-tracker)
+
 `bash install.sh` adds Downtime UI and Downtime Cesium launchers in `Desktop/Pentesting` when that folder already exists, and in the application menu. Node.js is required for both globes.

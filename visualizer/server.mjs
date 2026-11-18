@@ -4,6 +4,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { catalog, placesFor, SEARCHES } from "./lib/catalogs.mjs";
+import { snapshotFeeds, startFeeds } from "./lib/feeds.mjs";
 import { loadRadioOverlay } from "./lib/hpdb.mjs";
 import { loadStreamOverlay } from "./lib/streams.mjs";
 import { websdrCatalog } from "./lib/websdr.mjs";
@@ -214,6 +215,10 @@ const server = http.createServer(async (req, res) => {
       send(res, 200, { searches, countries });
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/feeds") {
+      send(res, 200, snapshotFeeds());
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/websdr") {
       const body = await websdrCatalog();
       send(res, 200, body);
@@ -303,6 +308,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 catalog();
+startFeeds();
 loadRadioOverlay().catch((err) => console.error("radio overlay:", err.message || err));
 loadStreamOverlay().catch((err) => console.error("stream overlay:", err.message || err));
 server.listen(PORT, "127.0.0.1", () => {

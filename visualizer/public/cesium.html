@@ -17,7 +17,7 @@
       <div class="pulse-dot" id="link-dot"></div>
       <div>
         <h1>DOWNTIME</h1>
-        <p class="tag">CESIUM GLOBE // WEBSDR + RADIO + STREAMS</p>
+        <p class="tag">CESIUM GLOBE // SDR · RADIO · STREAMS · JAM · ADS-B · WAR</p>
       </div>
     </div>
     <div class="meters">
@@ -40,6 +40,13 @@
       <select id="country"></select>
       <button type="button" id="btn-country">LOCK &amp; SCAN</button>
     </label>
+    <div class="live-overlays">
+      <div class="rail-head"><span>LIVE OVERLAYS</span></div>
+      <button type="button" class="layer on" data-live="jamming">JAM <em id="n-jamming">—</em></button>
+      <button type="button" class="layer on" data-live="aircraft">AIR <em id="n-aircraft">—</em></button>
+      <button type="button" class="layer on" data-live="ships">AIS <em id="n-ships">—</em></button>
+      <button type="button" class="layer on" data-live="conflicts">WAR <em id="n-conflicts">—</em></button>
+    </div>
   </aside>
 
   <main class="stage">
@@ -98,6 +105,10 @@
       <span class="swatch sdr"></span> WEBSDR
       <span class="swatch radio"></span> UNIDEN RADIO
       <span class="swatch stream"></span> LIVE STREAM
+      <span class="swatch jam"></span> GPS JAM
+      <span class="swatch air"></span> ADS-B
+      <span class="swatch ais"></span> AIS
+      <span class="swatch war"></span> CFR WAR
       <span class="swatch up"></span> ICMP / TCP UP
       <span class="swatch down"></span> NO ANSWER
       <span class="swatch pending"></span> IN FLIGHT

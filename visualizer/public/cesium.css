@@ -121,6 +121,31 @@ button:hover { border-color: #9fd4e2; }
 .searches button.on { border-color: #3dff9a; }
 .searches .count { color: var(--dim); }
 
+.live-overlays {
+  border-top: 1px solid var(--line);
+  padding: 6px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.layer {
+  font: inherit;
+  text-align: left;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--dim);
+  border: 1px solid transparent;
+  display: flex;
+  justify-content: space-between;
+  letter-spacing: 0.1em;
+  font-size: 11px;
+}
+.layer.on {
+  color: var(--text);
+  border-color: var(--line);
+  background: rgba(120, 190, 210, 0.08);
+}
+.layer em { font-style: normal; color: var(--dim); }
 .country-pick { display: grid; gap: 6px; border-top: 1px solid var(--line); }
 .country-pick span { color: var(--dim); font-size: 10px; letter-spacing: 0.12em; }
 .country-pick select, .country-pick button { width: 100%; }
@@ -198,6 +223,10 @@ button:hover { border-color: #9fd4e2; }
 .swatch.sdr { background: #35d0ff; }
 .swatch.radio { background: #f5c542; }
 .swatch.stream { background: #c084fc; }
+.swatch.jam { background: #ff7a3a; }
+.swatch.air { background: #7ec8ff; }
+.swatch.ais { background: #3dffd0; }
+.swatch.war { background: #ff3b6b; }
 
 .rail-head.sub { border-bottom: 1px solid var(--line); }
 #sdr-pane, #radio-pane, #stream-pane, #returns-pane { display: flex; flex-direction: column; min-height: 0; flex: 1; }

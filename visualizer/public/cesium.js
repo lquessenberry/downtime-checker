@@ -24,6 +24,12 @@ const state = {
   streamSource: null,
   streamPoints: [],
   streamOpenId: "",
+  live: {
+    jamming: { source: null, points: [] },
+    aircraft: { source: null, points: [] },
+    ships: { source: null, points: [] },
+    conflicts: { source: null, points: [] },
+  },
   feedMode: "sdr",
 };
 
@@ -57,15 +63,12 @@ async function boot() {
   hookUi();
   connectEvents();
   tickClock();
-  Promise.allSettled([loadWebsdr(), loadRadio(), loadStreams()]).then((results) => {
+  Promise.allSettled([loadWebsdr(), loadRadio(), loadStreams(), pollLiveFeeds()]).then((results) => {
     const failed = results.find((result) => result.status === "rejected");
     if (failed) setStatus(failed.reason?.message || String(failed.reason));
-    else {
-      setStatus(
-        `${state.sdrStations.length} WEBSDR · ${state.radioCount || state.radioPoints.length} RADIO · ${state.streamPoints.length} STREAMS · CLICK A PIN`,
-      );
-    }
+    else statusLive();
   });
+  setInterval(pollLiveFeeds, 8000);
 }
 
 function loadImagery() {
@@ -110,6 +113,10 @@ async function startGlobe() {
   viewer.dataSources.add(state.sdrSource);
   viewer.dataSources.add(state.radioSource);
   viewer.dataSources.add(state.streamSource);
+  for (const key of ["jamming", "aircraft", "ships", "conflicts"]) {
+    state.live[key].source = new Cesium.CustomDataSource(key);
+    viewer.dataSources.add(state.live[key].source);
+  }
   state.sdrPin = new Cesium.PinBuilder().fromColor(Cesium.Color.fromCssColorString("#35d0ff"), 48);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
@@ -127,6 +134,10 @@ async function startGlobe() {
     }
     if (entity._stream) {
       openStream(entity._stream, { fly: false });
+      return;
+    }
+    if (entity._live) {
+      showLive(entity._live);
       return;
     }
     if (entity._resultIndex == null) return;
@@ -211,6 +222,15 @@ function hookUi() {
   document.getElementById("sdr-filter").addEventListener("input", renderSdrList);
   document.getElementById("radio-filter").addEventListener("input", renderRadioList);
   document.getElementById("stream-filter").addEventListener("input", renderStreamList);
+  for (const button of document.querySelectorAll("[data-live]")) {
+    button.addEventListener("click", () => {
+      const key = button.dataset.live;
+      const layer = state.live[key];
+      if (!layer?.source) return;
+      layer.source.show = !layer.source.show;
+      button.classList.toggle("on", layer.source.show);
+    });
+  }
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeSdr();
   });
@@ -843,6 +863,72 @@ function openRadio(site, options = {}) {
       duration: 0.9,
     });
   }
+}
+
+const LIVE_STYLE = {
+  jamming: { color: "#ff7a3a", outline: "#3a1508", size: (p) => (p.pct > 80 ? 9 : 6), kind: "GPS JAM" },
+  aircraft: { color: "#7ec8ff", outline: "#082033", size: () => 5, kind: "ADS-B" },
+  ships: { color: "#3dffd0", outline: "#083028", size: () => 5, kind: "AIS" },
+  conflicts: { color: "#ff3b6b", outline: "#3a0814", size: () => 11, kind: "CFR WAR" },
+};
+
+async function pollLiveFeeds() {
+  const data = await fetch("/api/feeds").then((response) => response.json());
+  for (const key of ["jamming", "aircraft", "ships", "conflicts"]) {
+    const layer = data[key] || {};
+    state.live[key].points = layer.points || [];
+    const n = document.getElementById(`n-${key}`);
+    if (n) n.textContent = String(layer.count ?? state.live[key].points.length);
+    placeLiveLayer(key, state.live[key].points);
+  }
+  statusLive();
+}
+
+function placeLiveLayer(key, points) {
+  const layer = state.live[key];
+  if (!layer?.source) return;
+  const shown = layer.source.show;
+  layer.source.entities.removeAll();
+  layer.source.show = shown;
+  const style = LIVE_STYLE[key];
+  const color = Cesium.Color.fromCssColorString(style.color);
+  const outline = Cesium.Color.fromCssColorString(style.outline);
+  for (const point of points) {
+    if (point.lat == null || point.lon == null) continue;
+    const entity = layer.source.entities.add({
+      name: point.name,
+      position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, 0),
+      point: {
+        pixelSize: style.size(point),
+        color,
+        outlineColor: outline,
+        outlineWidth: 1,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    });
+    entity._live = { ...point, kind: style.kind, layer: key };
+  }
+}
+
+function showLive(item) {
+  const box = document.getElementById("selected");
+  box.hidden = false;
+  let extra = "";
+  if (item.url) extra = `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">CFR briefing</a>`;
+  else if (item.pct != null) extra = `<br>${item.pct}% bad NACp · ${item.bad || 0} degraded`;
+  else if (item.alt != null) extra = `<br>alt ${esc(item.alt)} · track ${esc(item.track || 0)}`;
+  else if (item.sog != null) extra = `<br>sog ${esc(item.sog)} kn`;
+  box.innerHTML = `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
+}
+
+function statusLive() {
+  const jam = document.getElementById("n-jamming")?.textContent || "0";
+  const air = document.getElementById("n-aircraft")?.textContent || "0";
+  const ais = document.getElementById("n-ships")?.textContent || "0";
+  const war = document.getElementById("n-conflicts")?.textContent || "0";
+  setStatus(
+    `${state.sdrStations.length} WEBSDR · ${state.radioCount || 0} RADIO · ${state.streamPoints.length} STREAMS · JAM ${jam} · AIR ${air} · AIS ${ais} · WAR ${war}`,
+  );
 }
 
 boot().catch((error) => setStatus(error.message || String(error)));
