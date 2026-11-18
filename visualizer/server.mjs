@@ -8,6 +8,8 @@ import { snapshotFeeds, startFeeds } from "./lib/feeds.mjs";
 import { loadRadioOverlay } from "./lib/hpdb.mjs";
 import { loadStreamOverlay } from "./lib/streams.mjs";
 import { websdrCatalog } from "./lib/websdr.mjs";
+import { gpsjamCatalog } from "./lib/gpsjam.mjs";
+import { conflictCatalog } from "./lib/conflicts.mjs";
 import {
   LOOKUP_WORKERS,
   checkHost,
@@ -247,6 +249,16 @@ const server = http.createServer(async (req, res) => {
         errors: body.errors,
         points: body.points,
       });
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/gpsjam") {
+      const body = await gpsjamCatalog();
+      send(res, 200, body);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/conflicts") {
+      const body = await conflictCatalog();
+      send(res, 200, body);
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/state") {

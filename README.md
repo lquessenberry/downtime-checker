@@ -80,12 +80,12 @@ Uniden BearTracker 885 radio sites load as a gold overlay from `MasterHpdb_*.gz`
 
 Live scanner streams are scraped from Broadcastify state/county listen pages (plus radio-browser and OpenMHz when those APIs answer) and matched onto HPDB counties. Broadcastify `ctid` is the same county id as the Uniden database. Purple STREAM pins open the public listen page. The catalog caches for 12 hours under `~/.cache/downtime/hpdb-streams.json`.
 
-Cesium also pulls the same live overlays as the canvas globe:
+Cesium also pulls live overlays:
 
-- GPS interference from GPSInterference / [gpsjam.org](https://gpsjam.org/)
+- GPS jam zones from [gpsjam.org](https://gpsjam.org/) (daily H3 grid, satellite pins; click opens the map). Live GPSInterference dots remain on the JAM toggle.
 - Aircraft from [adsb.lol](https://adsb.lol) public v2 (military, LADD, PIA, 7700, 250 nm circles; same readsb fields as globe.adsb.lol), not ADS-B Exchange. Unkeyed cap is 500/day. A local 1090 MHz feeder is documented in [wiki/ADS-B-IM-Feeder.md](wiki/ADS-B-IM-Feeder.md) ([adsb.im/howto](https://adsb.im/howto)); that box is not built yet. Optional `ADSB_LOL_API_KEY` and `ADS_B_FEEDER_URL`.
 - Ships from Digitraffic AIS
-- Conflicts from the [CFR Global Conflict Tracker](https://www.cfr.org/global-conflict-tracker)
+- Conflicts from the [CFR Global Conflict Tracker](https://www.cfr.org/global-conflict-tracker) (bomb pins with status; click opens the briefing)
 
 Wiki index: [wiki/Home.md](wiki/Home.md).
 
