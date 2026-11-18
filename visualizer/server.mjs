@@ -4,6 +4,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { catalog, placesFor, SEARCHES } from "./lib/catalogs.mjs";
+import { websdrCatalog } from "./lib/websdr.mjs";
 import {
   LOOKUP_WORKERS,
   checkHost,
@@ -209,6 +210,11 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/catalog") {
       const { searches, countries } = catalog();
       send(res, 200, { searches, countries });
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/websdr") {
+      const body = await websdrCatalog();
+      send(res, 200, body);
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/state") {

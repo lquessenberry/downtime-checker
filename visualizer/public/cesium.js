@@ -13,6 +13,11 @@ const state = {
   points: new Map(),
   arcs: new Map(),
   origin: null,
+  sdrSource: null,
+  sdrPin: null,
+  sdrStations: [],
+  sdrOpenId: "",
+  feedMode: "sdr",
 };
 
 const COLORS = {
@@ -45,6 +50,7 @@ async function boot() {
   hookUi();
   connectEvents();
   tickClock();
+  loadWebsdr().catch((error) => setStatus(error.message || String(error)));
 }
 
 function loadImagery() {
@@ -83,9 +89,20 @@ async function startGlobe() {
   viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10202c");
   viewer.scene.globe.enableLighting = false;
   state.viewer = viewer;
+  state.sdrSource = new Cesium.CustomDataSource("websdr");
+  viewer.dataSources.add(state.sdrSource);
+  state.sdrPin = new Cesium.PinBuilder().fromColor(Cesium.Color.fromCssColorString("#35d0ff"), 48);
+  viewer.camera.setView({
+    destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
+  });
   ensureOrigin();
   viewer.selectedEntityChanged.addEventListener((entity) => {
-    if (!entity || entity._resultIndex == null) return;
+    if (!entity) return;
+    if (entity._sdr) {
+      openSdr(entity._sdr);
+      return;
+    }
+    if (entity._resultIndex == null) return;
     const result = state.results[entity._resultIndex];
     if (result) showSelected(result);
   });
@@ -93,6 +110,16 @@ async function startGlobe() {
 
 function renderSearches(catalog) {
   const nav = document.getElementById("searches");
+  const fly = document.createElement("button");
+  fly.type = "button";
+  fly.id = "btn-sdr-all";
+  fly.innerHTML = `<span>WEBSDR PINS</span><span class="count" id="sdr-count">…</span>`;
+  fly.addEventListener("click", () => {
+    closeSdr();
+    setFeedMode("sdr");
+    if (state.viewer && state.sdrSource) state.viewer.flyTo(state.sdrSource, { duration: 1.1 });
+  });
+  nav.append(fly);
   const groups = [
     ["GLOBAL", catalog.searches.filter((item) => item.group === "global")],
     ["UNITED STATES", catalog.searches.filter((item) => item.group === "us")],
@@ -125,9 +152,17 @@ function hookUi() {
     const country = document.getElementById("country").value;
     startScan("country", country);
   });
-  for (const chip of document.querySelectorAll(".chip")) {
+  document.getElementById("sdr-back").addEventListener("click", closeSdr);
+  document.getElementById("sdr-filter").addEventListener("input", renderSdrList);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeSdr();
+  });
+  for (const button of document.querySelectorAll("[data-feed]")) {
+    button.addEventListener("click", () => setFeedMode(button.dataset.feed));
+  }
+  for (const chip of document.querySelectorAll("[data-filter]")) {
     chip.addEventListener("click", () => {
-      for (const other of document.querySelectorAll(".chip")) other.classList.remove("on");
+      for (const other of document.querySelectorAll("[data-filter]")) other.classList.remove("on");
       chip.classList.add("on");
       state.filter = chip.dataset.filter;
       renderFeed();
@@ -166,6 +201,7 @@ function connectEvents() {
       state.selected = null;
       document.getElementById("heading").textContent = event.heading.toUpperCase();
       document.getElementById("btn-stop").hidden = false;
+      setFeedMode("returns");
       document.getElementById("link-dot").className = "pulse-dot live";
       document.getElementById("selected").hidden = true;
       setStatus(`TASKING ${event.total} NODES · ${event.heading.toUpperCase()}`);
@@ -379,6 +415,170 @@ function setStatus(text) {
 function tickClock() {
   document.getElementById("clock").textContent = new Date().toISOString().slice(11, 19) + "Z";
   setTimeout(tickClock, 1000);
+}
+
+function setFeedMode(mode) {
+  state.feedMode = mode === "returns" ? "returns" : "sdr";
+  document.getElementById("sdr-pane").hidden = state.feedMode !== "sdr";
+  document.getElementById("returns-pane").hidden = state.feedMode !== "returns";
+  for (const button of document.querySelectorAll("[data-feed]")) {
+    button.classList.toggle("on", button.dataset.feed === state.feedMode);
+  }
+  document.getElementById("feed-title").textContent = state.feedMode === "sdr"
+    ? `WEBSDR ${state.sdrStations.length}`
+    : "LIVE RETURNS";
+}
+
+function wrapName(name) {
+  const words = String(name || "").split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > 34 && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.join("\n");
+}
+
+async function loadWebsdr() {
+  const response = await fetch("/api/websdr");
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "WebSDR list failed");
+  state.sdrStations = Array.isArray(body.stations) ? body.stations : [];
+  const count = document.getElementById("sdr-count");
+  if (count) count.textContent = String(state.sdrStations.length);
+  placeSdrPins(state.sdrStations);
+  renderSdrList();
+  const cached = body.stale ? " · CACHED LIST" : "";
+  setStatus(`${state.sdrStations.length} WEBSDR PINS${cached} · CLICK A PIN TO LISTEN · websdr.org`);
+}
+
+function placeSdrPins(stations) {
+  if (!state.viewer || !state.sdrSource) return;
+  state.sdrSource.entities.removeAll();
+  const stacks = new Map();
+  for (const station of stations) {
+    if (station.lat == null || station.lon == null) continue;
+    const key = `${Number(station.lat).toFixed(4)},${Number(station.lon).toFixed(4)}`;
+    const stack = stacks.get(key) || 0;
+    stacks.set(key, stack + 1);
+    const shift = stack * 26;
+    const entity = state.sdrSource.entities.add({
+      name: station.name,
+      position: Cesium.Cartesian3.fromDegrees(station.lon, station.lat, 0),
+      billboard: {
+        image: state.sdrPin,
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        pixelOffset: new Cesium.Cartesian2(shift, 0),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(4e5, 1, 1.2e7, 0.62),
+      },
+      label: {
+        text: wrapName(station.name),
+        font: "12px ui-monospace, monospace",
+        fillColor: Cesium.Color.fromCssColorString("#e8f7ff"),
+        outlineColor: Cesium.Color.fromCssColorString("#041018"),
+        outlineWidth: 3,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        showBackground: true,
+        backgroundColor: Cesium.Color.fromCssColorString("#102028").withAlpha(0.9),
+        backgroundPadding: new Cesium.Cartesian2(6, 4),
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        pixelOffset: new Cesium.Cartesian2(shift, -52),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(5e5, 1, 7e6, 0.45),
+      },
+    });
+    entity._sdr = station;
+  }
+  const host = document.getElementById("cesium");
+  if (host) host.dataset.pins = String(state.sdrSource.entities.values.length);
+}
+
+function renderSdrList() {
+  const list = document.getElementById("sdr-list");
+  if (!list) return;
+  const query = (document.getElementById("sdr-filter").value || "").trim().toLowerCase();
+  const stations = state.sdrStations
+    .filter((station) => {
+      if (!query) return true;
+      const hay = `${station.name} ${station.qth} ${station.url} ${(station.bands || []).join(" ")}`.toLowerCase();
+      return hay.includes(query);
+    })
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
+  list.innerHTML = "";
+  for (const station of stations) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "sdr-row";
+    row.dataset.lat = String(station.lat);
+    row.dataset.lon = String(station.lon);
+    row.dataset.url = station.url;
+    if (station.id === state.sdrOpenId) row.classList.add("on");
+    const band = station.bands && station.bands.length ? station.bands[0] : "";
+    row.innerHTML = `<div class="name">${esc(station.name)}</div><div class="host">${esc(station.qth || "")}${band ? " · " + esc(band) : ""} · ${station.users || 0} listening</div>`;
+    row.addEventListener("click", () => openSdr(station, { fly: true }));
+    list.append(row);
+  }
+  if (state.feedMode === "sdr") {
+    document.getElementById("feed-title").textContent = `WEBSDR ${stations.length}`;
+  }
+}
+
+function findSdrEntity(id) {
+  if (!state.sdrSource) return null;
+  for (const entity of state.sdrSource.entities.values) {
+    if (entity._sdr && entity._sdr.id === id) return entity;
+  }
+  return null;
+}
+
+function openSdr(station, options = {}) {
+  if (!station || !station.url) return;
+  state.sdrOpenId = station.id;
+  const panel = document.getElementById("sdr-listen");
+  document.getElementById("sdr-title").textContent = station.name;
+  const where = [station.qth, station.users ? `${station.users} listening` : "", ...(station.bands || [])]
+    .filter(Boolean)
+    .join(" · ");
+  document.getElementById("sdr-meta").textContent = where;
+  const pop = document.getElementById("sdr-pop");
+  pop.href = station.url;
+  const frame = document.getElementById("sdr-frame");
+  if (frame.dataset.url !== station.url) {
+    frame.dataset.url = station.url;
+    frame.src = station.url;
+  }
+  panel.hidden = false;
+  renderSdrList();
+  const entity = findSdrEntity(station.id);
+  if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
+    state.viewer.selectedEntity = entity;
+  }
+  if (options.fly && state.viewer) {
+    state.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(station.lon, station.lat, 280000),
+      duration: 0.9,
+    });
+  }
+}
+
+function closeSdr() {
+  const frame = document.getElementById("sdr-frame");
+  frame.src = "about:blank";
+  frame.dataset.url = "";
+  state.sdrOpenId = "";
+  document.getElementById("sdr-listen").hidden = true;
+  renderSdrList();
 }
 
 boot().catch((error) => setStatus(error.message || String(error)));
