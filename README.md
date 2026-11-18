@@ -76,4 +76,6 @@ Open http://127.0.0.1:4173 — pick a mission, watch nodes light up as they answ
 
 The same server also serves a CesiumJS globe at http://127.0.0.1:4173/cesium.html. It uses the same catalogs, ping and TCP checks, and location cache. Search lines arc from the same central point as the canvas globe. The imagery is Esri World Imagery, so scrolling in shows streets and buildings. It does not need a Cesium ion key. Esri's credit stays on the globe. The first open downloads Cesium from cesium.com.
 
+Uniden BearTracker 885 radio sites load as a gold overlay from `MasterHpdb_*.gz`. Put that file in `~/Downloads/BT885_radio_database`, or set `BT885_HPDB` / `BT885_HPDB_DIR`. Click a site for agency name and sample frequencies. WebSDR pins still open the receiver.
+
 `bash install.sh` adds Downtime UI and Downtime Cesium launchers in `Desktop/Pentesting` when that folder already exists, and in the application menu. Node.js is required for both globes.

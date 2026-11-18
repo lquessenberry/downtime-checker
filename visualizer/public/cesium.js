@@ -17,6 +17,10 @@ const state = {
   sdrPin: null,
   sdrStations: [],
   sdrOpenId: "",
+  radioSource: null,
+  radioPoints: [],
+  radioOpenId: "",
+  radioCount: 0,
   feedMode: "sdr",
 };
 
@@ -50,7 +54,15 @@ async function boot() {
   hookUi();
   connectEvents();
   tickClock();
-  loadWebsdr().catch((error) => setStatus(error.message || String(error)));
+  Promise.allSettled([loadWebsdr(), loadRadio()]).then((results) => {
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) setStatus(failed.reason?.message || String(failed.reason));
+    else {
+      setStatus(
+        `${state.sdrStations.length} WEBSDR · ${state.radioCount || state.radioPoints.length} UNIDEN RADIO · CLICK A PIN`,
+      );
+    }
+  });
 }
 
 function loadImagery() {
@@ -90,7 +102,9 @@ async function startGlobe() {
   viewer.scene.globe.enableLighting = false;
   state.viewer = viewer;
   state.sdrSource = new Cesium.CustomDataSource("websdr");
+  state.radioSource = new Cesium.CustomDataSource("uniden-radio");
   viewer.dataSources.add(state.sdrSource);
+  viewer.dataSources.add(state.radioSource);
   state.sdrPin = new Cesium.PinBuilder().fromColor(Cesium.Color.fromCssColorString("#35d0ff"), 48);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
@@ -100,6 +114,10 @@ async function startGlobe() {
     if (!entity) return;
     if (entity._sdr) {
       openSdr(entity._sdr);
+      return;
+    }
+    if (entity._radio) {
+      openRadio(entity._radio, { fly: false });
       return;
     }
     if (entity._resultIndex == null) return;
@@ -120,6 +138,20 @@ function renderSearches(catalog) {
     if (state.viewer && state.sdrSource) state.viewer.flyTo(state.sdrSource, { duration: 1.1 });
   });
   nav.append(fly);
+  const radioFly = document.createElement("button");
+  radioFly.type = "button";
+  radioFly.id = "btn-radio-all";
+  radioFly.innerHTML = `<span>UNIDEN RADIO</span><span class="count" id="radio-count">…</span>`;
+  radioFly.addEventListener("click", () => {
+    closeSdr();
+    setFeedMode("radio");
+    if (!state.viewer) return;
+    state.viewer.camera.flyTo({
+      destination: Cesium.Rectangle.fromDegrees(-126, 24, -66, 50),
+      duration: 1.2,
+    });
+  });
+  nav.append(radioFly);
   const groups = [
     ["GLOBAL", catalog.searches.filter((item) => item.group === "global")],
     ["UNITED STATES", catalog.searches.filter((item) => item.group === "us")],
@@ -154,6 +186,7 @@ function hookUi() {
   });
   document.getElementById("sdr-back").addEventListener("click", closeSdr);
   document.getElementById("sdr-filter").addEventListener("input", renderSdrList);
+  document.getElementById("radio-filter").addEventListener("input", renderRadioList);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeSdr();
   });
@@ -418,15 +451,20 @@ function tickClock() {
 }
 
 function setFeedMode(mode) {
-  state.feedMode = mode === "returns" ? "returns" : "sdr";
+  state.feedMode = mode === "returns" ? "returns" : mode === "radio" ? "radio" : "sdr";
   document.getElementById("sdr-pane").hidden = state.feedMode !== "sdr";
+  document.getElementById("radio-pane").hidden = state.feedMode !== "radio";
   document.getElementById("returns-pane").hidden = state.feedMode !== "returns";
   for (const button of document.querySelectorAll("[data-feed]")) {
     button.classList.toggle("on", button.dataset.feed === state.feedMode);
   }
-  document.getElementById("feed-title").textContent = state.feedMode === "sdr"
-    ? `WEBSDR ${state.sdrStations.length}`
-    : "LIVE RETURNS";
+  if (state.feedMode === "sdr") {
+    document.getElementById("feed-title").textContent = `WEBSDR ${state.sdrStations.length}`;
+  } else if (state.feedMode === "radio") {
+    document.getElementById("feed-title").textContent = `RADIO ${state.radioCount || state.radioPoints.length}`;
+  } else {
+    document.getElementById("feed-title").textContent = "LIVE RETURNS";
+  }
 }
 
 function wrapName(name) {
@@ -579,6 +617,102 @@ function closeSdr() {
   state.sdrOpenId = "";
   document.getElementById("sdr-listen").hidden = true;
   renderSdrList();
+}
+
+async function loadRadio() {
+  const response = await fetch("/api/radio");
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "Uniden radio overlay failed");
+  state.radioPoints = Array.isArray(body.points) ? body.points : [];
+  state.radioCount = Number(body.count) || state.radioPoints.length;
+  const count = document.getElementById("radio-count");
+  if (count) count.textContent = String(state.radioCount);
+  placeRadioPins(state.radioPoints);
+  renderRadioList();
+  const stamp = body.updated ? ` · ${body.updated}` : "";
+  setStatus(`${state.radioCount} UNIDEN SITES${stamp} · ${state.radioPoints.length} ON GLOBE · ${body.source || "HPDB"}`);
+}
+
+function placeRadioPins(points) {
+  if (!state.viewer || !state.radioSource) return;
+  state.radioSource.entities.removeAll();
+  const gold = Cesium.Color.fromCssColorString("#f5c542");
+  const outline = Cesium.Color.fromCssColorString("#2a1c04");
+  for (const site of points) {
+    if (site.lat == null || site.lon == null) continue;
+    const entity = state.radioSource.entities.add({
+      name: site.name,
+      position: Cesium.Cartesian3.fromDegrees(site.lon, site.lat, 0),
+      point: {
+        pixelSize: site.n > 20 ? 8 : 5,
+        color: gold,
+        outlineColor: outline,
+        outlineWidth: 1,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(2e5, 1.2, 8e6, 0.45),
+      },
+    });
+    entity._radio = site;
+  }
+}
+
+function renderRadioList() {
+  const list = document.getElementById("radio-list");
+  if (!list) return;
+  const query = (document.getElementById("radio-filter").value || "").trim().toLowerCase();
+  const sites = state.radioPoints
+    .filter((site) => {
+      if (!query) return true;
+      const hay = `${site.name} ${site.mode} ${(site.mhz || []).join(" ")}`.toLowerCase();
+      return hay.includes(query);
+    })
+    .slice()
+    .sort((a, b) => (b.n || 0) - (a.n || 0) || a.name.localeCompare(b.name))
+    .slice(0, 500);
+  list.innerHTML = "";
+  for (const site of sites) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "radio-row";
+    if (site.id === state.radioOpenId) row.classList.add("on");
+    const mhz = (site.mhz || []).map((m) => `${m} MHz`).join(" · ");
+    row.innerHTML = `<div class="name">${esc(site.name)}</div><div class="host">${esc(site.mode || "HPDB")} · ${site.n || 0} freqs${mhz ? " · " + esc(mhz) : ""}</div>`;
+    row.addEventListener("click", () => openRadio(site, { fly: true }));
+    list.append(row);
+  }
+  if (state.feedMode === "radio") {
+    document.getElementById("feed-title").textContent = `RADIO ${state.radioCount || state.radioPoints.length}`;
+  }
+}
+
+function findRadioEntity(id) {
+  if (!state.radioSource) return null;
+  for (const entity of state.radioSource.entities.values) {
+    if (entity._radio && entity._radio.id === id) return entity;
+  }
+  return null;
+}
+
+function openRadio(site, options = {}) {
+  if (!site) return;
+  closeSdr();
+  state.radioOpenId = site.id;
+  setFeedMode("radio");
+  const mhz = (site.mhz || []).map((m) => `${m} MHz`).join(" · ");
+  const box = document.getElementById("selected");
+  box.hidden = false;
+  box.innerHTML = `<b>RADIO</b> ${esc(site.name)}<br>${esc(site.mode || "HPDB")} · ${site.n || 0} freqs<br>${site.lat.toFixed(4)}, ${site.lon.toFixed(4)}${mhz ? "<br>" + esc(mhz) : ""}`;
+  renderRadioList();
+  const entity = findRadioEntity(site.id);
+  if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
+    state.viewer.selectedEntity = entity;
+  }
+  if (options.fly && state.viewer) {
+    state.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(site.lon, site.lat, 180000),
+      duration: 0.9,
+    });
+  }
 }
 
 boot().catch((error) => setStatus(error.message || String(error)));

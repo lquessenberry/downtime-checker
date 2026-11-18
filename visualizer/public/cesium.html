@@ -17,7 +17,7 @@
       <div class="pulse-dot" id="link-dot"></div>
       <div>
         <h1>DOWNTIME</h1>
-        <p class="tag">CESIUM GLOBE // WEBSDR PINS</p>
+        <p class="tag">CESIUM GLOBE // WEBSDR + UNIDEN RADIO</p>
       </div>
     </div>
     <div class="meters">
@@ -46,7 +46,7 @@
     <div id="cesium"></div>
     <div class="stage-meta">
       <div id="heading">AWAITING TASKING</div>
-      <div id="hint">DRAG ORBIT · SCROLL ZOOMS · CLICK A WEBSDR PIN TO LISTEN</div>
+      <div id="hint">DRAG ORBIT · SCROLL ZOOMS · CLICK SDR TO LISTEN · CLICK RADIO FOR FREQS</div>
     </div>
     <div class="selected" id="selected" hidden></div>
     <div class="progress-wrap"><div class="progress" id="progress"></div></div>
@@ -57,6 +57,7 @@
       <span id="feed-title">WEBSDR</span>
       <div class="toggles" id="feed-mode">
         <button type="button" class="chip on" data-feed="sdr">SDR</button>
+        <button type="button" class="chip" data-feed="radio">RADIO</button>
         <button type="button" class="chip" data-feed="returns">SCAN</button>
       </div>
     </div>
@@ -65,6 +66,12 @@
         <input id="sdr-filter" type="search" placeholder="Name, grid, or band" autocomplete="off" />
       </label>
       <div class="feed" id="sdr-list"></div>
+    </div>
+    <div id="radio-pane" hidden>
+      <label class="sdr-filter-wrap">
+        <input id="radio-filter" type="search" placeholder="Agency, site, or MHz" autocomplete="off" />
+      </label>
+      <div class="feed" id="radio-list"></div>
     </div>
     <div id="returns-pane" hidden>
       <div class="rail-head sub">
@@ -82,6 +89,7 @@
   <footer class="hud-bot">
     <div class="legend">
       <span class="swatch sdr"></span> WEBSDR
+      <span class="swatch radio"></span> UNIDEN RADIO
       <span class="swatch up"></span> ICMP / TCP UP
       <span class="swatch down"></span> NO ANSWER
       <span class="swatch pending"></span> IN FLIGHT
