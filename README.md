@@ -83,8 +83,10 @@ Live scanner streams are scraped from Broadcastify state/county listen pages (pl
 Cesium also pulls the same live overlays as the canvas globe:
 
 - GPS interference from GPSInterference / [gpsjam.org](https://gpsjam.org/)
-- Aircraft from [adsb.lol](https://adsb.lol) (LADD), not ADS-B Exchange
+- Aircraft from [adsb.lol](https://adsb.lol) (LADD), not ADS-B Exchange. A local 1090 MHz feeder is documented in [wiki/ADS-B-IM-Feeder.md](wiki/ADS-B-IM-Feeder.md) ([adsb.im/howto](https://adsb.im/howto)); that box is not built yet.
 - Ships from Digitraffic AIS
 - Conflicts from the [CFR Global Conflict Tracker](https://www.cfr.org/global-conflict-tracker)
+
+Wiki index: [wiki/Home.md](wiki/Home.md).
 
 `bash install.sh` adds Downtime UI and Downtime Cesium launchers in `Desktop/Pentesting` when that folder already exists, and in the application menu. Node.js is required for both globes.
