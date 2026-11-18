@@ -287,6 +287,9 @@ async function buildStreamOverlay() {
     return { ...cached, stale: false };
   }
   const index = await loadHpdbIndex();
+  if (!index.countyGroups) index.countyGroups = {};
+  if (!index.counties) index.counties = {};
+  if (!Array.isArray(index.groups)) index.groups = [];
   const [bcfy, radioBrowser, openmhz] = await Promise.all([
     scrapeBroadcastify(),
     scrapeRadioBrowser(),

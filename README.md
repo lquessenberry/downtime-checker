@@ -90,3 +90,15 @@ Cesium also pulls live overlays:
 Wiki index: [wiki/Home.md](wiki/Home.md).
 
 `bash install.sh` adds Downtime UI and Downtime Cesium launchers in `Desktop/Pentesting` when that folder already exists, and in the application menu. Node.js is required for both globes.
+
+## Public app (Fly.io)
+
+The Cesium globe deploys as a public HTTPS app. The Node server already proxies overlays, so visitors do not hit adsb.lol or gpsjam.org directly.
+
+```bash
+fly deploy --ha=false
+```
+
+Live URL: https://downtime-globe.fly.dev — `/` is the Cesium globe, `/index.html` is the canvas grid, `/healthz` is the health check.
+
+The container binds `0.0.0.0:8080`. Catalog scans from the public host wait 15 seconds between runs. Uniden RADIO stays empty unless `BT885_HPDB` is mounted; STREAM pins that already have coordinates still load. Optional secrets: `ADSB_LOL_API_KEY`, `ADS_B_FEEDER_URL`, `AISSTREAM_API_KEY`. Do not bake keys into the image.

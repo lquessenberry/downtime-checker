@@ -236,7 +236,15 @@ async function parseHpdbIndex(file) {
 export async function loadHpdbIndex() {
   const file = findHpdbPath();
   if (!file) {
-    throw new Error("HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR to the folder that holds it.");
+    return {
+      version: 1,
+      source: null,
+      states: {},
+      counties: {},
+      countyGroups: {},
+      groups: [],
+      error: "HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR to the folder that holds it.",
+    };
   }
   const cache = `${file}.hpdb-index.json`;
   const srcStat = statSync(file);
@@ -272,7 +280,13 @@ export async function loadHpdbIndex() {
 export async function loadRadioOverlay() {
   const file = findHpdbPath();
   if (!file) {
-    throw new Error("HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR to the folder that holds it.");
+    return {
+      version: 2,
+      source: null,
+      count: 0,
+      points: [],
+      error: "HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR to the folder that holds it.",
+    };
   }
   const cache = `${file}.radio-overlay.json`;
   const srcStat = statSync(file);

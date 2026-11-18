@@ -22,7 +22,11 @@ import {
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(DIR, "public");
 const PORT = Number(process.env.PORT) || 4173;
+const HOST = process.env.HOST || (process.env.FLY_APP_NAME ? "0.0.0.0" : "127.0.0.1");
+const PUBLIC_HOME = process.env.PUBLIC_HOME || (process.env.FLY_APP_NAME ? "cesium" : "");
+const SCAN_COOLDOWN_MS = Number(process.env.SCAN_COOLDOWN_MS || (process.env.FLY_APP_NAME ? 15000 : 0));
 const WORKERS = 24;
+let lastScanAt = 0;
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -177,6 +181,7 @@ async function runScan({ id, country }) {
 
 function serveStatic(req, res) {
   let urlPath = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
+  if (urlPath === "/" && PUBLIC_HOME === "cesium") urlPath = "/cesium.html";
   if (urlPath === "/") urlPath = "/index.html";
   const file = path.normalize(path.join(PUBLIC, urlPath));
   if (!file.startsWith(PUBLIC)) {
@@ -212,6 +217,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    if (req.method === "GET" && url.pathname === "/healthz") {
+      send(res, 200, { ok: true, home: PUBLIC_HOME || "grid" });
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/catalog") {
       const { searches, countries } = catalog();
       send(res, 200, { searches, countries });
@@ -227,13 +236,18 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/radio") {
-      const body = await loadRadioOverlay();
-      send(res, 200, {
-        source: body.source,
-        updated: body.updated,
-        count: body.count,
-        points: body.points,
-      });
+      try {
+        const body = await loadRadioOverlay();
+        send(res, 200, {
+          source: body.source,
+          updated: body.updated,
+          count: body.count,
+          points: body.points,
+          error: body.error || null,
+        });
+      } catch (err) {
+        send(res, 200, { source: null, count: 0, points: [], error: err.message || String(err) });
+      }
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/streams") {
@@ -282,6 +296,10 @@ const server = http.createServer(async (req, res) => {
         send(res, 409, { error: "A scan is already running." });
         return;
       }
+      if (SCAN_COOLDOWN_MS && Date.now() - lastScanAt < SCAN_COOLDOWN_MS) {
+        send(res, 429, { error: "Scan cooldown. Try again in a few seconds." });
+        return;
+      }
       const body = await readJson(req);
       const id = String(body.id || "").trim();
       const country = String(body.country || "").trim();
@@ -290,6 +308,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       send(res, 202, { ok: true });
+      lastScanAt = Date.now();
       runScan({ id, country }).catch((err) => {
         state.running = false;
         emit({ type: "error", message: err.message || String(err) });
@@ -323,10 +342,12 @@ catalog();
 startFeeds();
 loadRadioOverlay().catch((err) => console.error("radio overlay:", err.message || err));
 loadStreamOverlay().catch((err) => console.error("stream overlay:", err.message || err));
-server.listen(PORT, "127.0.0.1", () => {
+server.listen(PORT, HOST, () => {
   const { searches } = catalog();
   const weather = searches.find((s) => s.id === "weather");
-  console.log(`Downtime visualizer  http://127.0.0.1:${PORT}`);
+  const local = HOST === "0.0.0.0" ? "127.0.0.1" : HOST;
+  console.log(`Downtime visualizer  http://${local}:${PORT}`);
+  if (PUBLIC_HOME === "cesium") console.log(`Public home  http://${local}:${PORT}/cesium.html`);
   console.log(`${searches.reduce((n, s) => n + (s.group === "global" ? s.count : 0), 0)} catalog rows across searches`);
   if (weather) console.log(`Weather search: ${weather.count} places`);
 });
