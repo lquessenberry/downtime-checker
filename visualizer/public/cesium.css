@@ -153,6 +153,15 @@ button, select {
 button { cursor: pointer; padding: 4px 8px; }
 button:hover { border-color: #9fd4e2; }
 
+.grid-status { padding: 10px 12px 12px; border-bottom: 1px solid var(--line); }
+.grid-copy { margin: 8px 0 10px; color: var(--dim); font-size: 12px; line-height: 1.35; }
+.grid-pick { display: grid; gap: 6px; margin: 0 0 8px; }
+.grid-pick span { color: var(--dim); font-size: 10px; letter-spacing: 0.12em; }
+.grid-pick select, .grid-actions button { width: 100%; }
+.grid-actions { display: grid; gap: 6px; }
+.grid-actions button { padding: 8px 10px; letter-spacing: 0.08em; }
+#btn-grid-run { border-color: #3dff9a; color: #3dff9a; }
+
 .searches { overflow: auto; flex: 1; }
 .searches h3 { margin: 12px 0 6px; color: var(--dim); font-size: 10px; letter-spacing: 0.14em; }
 .searches button {
@@ -166,12 +175,12 @@ button:hover { border-color: #9fd4e2; }
 .searches .count { color: var(--dim); }
 
 .live-overlays {
-  border-top: 1px solid var(--line);
+  border-top: 0;
   padding: 6px 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  max-height: 42%;
+  flex: 1;
   overflow: auto;
 }
 .layer {

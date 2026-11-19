@@ -9,6 +9,7 @@ import { offline, readDataset, writeDataset } from "./datapack.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DISPLAY_CAP = 4000;
+const FREQ_CAP = 16;
 const STALE_MS = Number(process.env.BT885_FTP_MAX_AGE_MS) || 7 * 24 * 60 * 60 * 1000;
 let ensuring = null;
 
@@ -203,13 +204,13 @@ async function parseHpdb(file) {
     if (!current) continue;
     if (kind === "C-Freq" && current.mode === "Conventional") {
       current.n += 1;
-      if (current.mhz.length < 3) {
+      if (current.mhz.length < FREQ_CAP) {
         const mhz = mhzFromRaw(cols[5]);
         if (mhz != null) current.mhz.push(mhz);
       }
     } else if (kind === "T-Freq" && current.mode === "Trunk site") {
       current.n += 1;
-      if (current.mhz.length < 3) {
+      if (current.mhz.length < FREQ_CAP) {
         const mhz = mhzFromRaw(cols[5]);
         if (mhz != null) current.mhz.push(mhz);
       }
@@ -356,7 +357,7 @@ export async function loadRadioOverlay() {
     file = await ensureHpdb();
   } catch (err) {
     return {
-      version: 2,
+      version: 3,
       source: null,
       count: 0,
       points: [],
@@ -367,7 +368,7 @@ export async function loadRadioOverlay() {
     const packed = readDataset("radio");
     if (packed?.points?.length) return { ...packed, stale: true };
     return {
-      version: 2,
+      version: 3,
       source: null,
       count: 0,
       points: [],
@@ -379,7 +380,7 @@ export async function loadRadioOverlay() {
   if (existsSync(cache)) {
     try {
       const cached = JSON.parse(readFileSync(cache, "utf8"));
-      if (cached.version === 2 && cached.sourceMtimeMs === srcStat.mtimeMs && Array.isArray(cached.points)) {
+      if (cached.version === 3 && cached.sourceMtimeMs === srcStat.mtimeMs && Array.isArray(cached.points)) {
         try { writeDataset("radio", cached); } catch { /* optional */ }
         return cached;
       }
@@ -390,7 +391,7 @@ export async function loadRadioOverlay() {
   const { groups, dateModified } = await parseHpdb(file);
   const points = gridSample(groups, DISPLAY_CAP).map(compact);
   const payload = {
-    version: 2,
+    version: 3,
     source: path.basename(file),
     sourcePath: file,
     sourceMtimeMs: srcStat.mtimeMs,

@@ -318,29 +318,17 @@ async function startGlobe() {
 }
 
 function renderSearches(catalog) {
-  const nav = document.getElementById("searches");
-  addFlyButton(nav, { id: "btn-sdr-all", label: "WEBSDR PINS", countId: "sdr-count", layer: "sdr", feed: "sdr" });
-  addFlyButton(nav, { id: "btn-radio-all", label: "UNIDEN RADIO", countId: "radio-count", layer: "radio", feed: "radio", rectangle: [-126, 24, -66, 50] });
-  addFlyButton(nav, { id: "btn-stream-all", label: "LIVE STREAMS", countId: "stream-count", layer: "stream", feed: "stream", rectangle: [-126, 24, -66, 50] });
-  addFlyButton(nav, { id: "btn-gps-all", label: "GPS JAM", countId: "gps-count", layer: "gps", feed: "gps" });
-  addFlyButton(nav, { id: "btn-conflict-all", label: "CONFLICTS", countId: "conflict-count", layer: "conflicts", feed: "conflicts" });
+  const select = document.getElementById("grid-search");
+  if (!select) return;
   const groups = [
-    ["GLOBAL", catalog.searches.filter((item) => item.group === "global")],
-    ["UNITED STATES", catalog.searches.filter((item) => item.group === "us")],
+    ["Global", catalog.searches.filter((item) => item.group === "global")],
+    ["United States", catalog.searches.filter((item) => item.group === "us")],
   ];
-  for (const [label, items] of groups) {
-    const heading = document.createElement("h3");
-    heading.textContent = label;
-    nav.append(heading);
-    for (const item of items) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.id = item.id;
-      button.innerHTML = `<span>${esc(item.label)}</span><span class="count">${item.count}</span>`;
-      button.addEventListener("click", () => startScan(item.id));
-      nav.append(button);
-    }
-  }
+  select.innerHTML = groups.map(([label, items]) => {
+    const opts = items.map((item) => `<option value="${esc(item.id)}">${esc(item.label)} (${item.count})</option>`).join("");
+    return `<optgroup label="${esc(label)}">${opts}</optgroup>`;
+  }).join("");
+  if ([...select.options].some((opt) => opt.value === "everything")) select.value = "everything";
 }
 
 function fillCountries(list) {
@@ -351,6 +339,10 @@ function fillCountries(list) {
 function hookUi() {
   document.getElementById("btn-stop").addEventListener("click", () => {
     fetch("/api/stop", { method: "POST" });
+  });
+  document.getElementById("btn-grid-run").addEventListener("click", () => {
+    const id = document.getElementById("grid-search").value;
+    if (id) startScan(id);
   });
   document.getElementById("btn-country").addEventListener("click", () => {
     const country = document.getElementById("country").value;

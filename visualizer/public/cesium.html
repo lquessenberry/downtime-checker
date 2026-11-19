@@ -17,7 +17,7 @@
       <div class="pulse-dot" id="link-dot"></div>
       <div>
         <h1>DOWNTIME</h1>
-        <p class="tag">CESIUM GLOBE // SDR · RADIO · STREAMS · GPS · ADS-B · WAR</p>
+        <p class="tag">INTERNET GRID · SDR · RADIO · STREAMS · GPS · ADS-B · WAR</p>
       </div>
     </div>
     <div class="meters">
@@ -33,16 +33,26 @@
   </header>
 
   <aside class="rail">
-    <div class="rail-head">
-      <span>MISSIONS</span>
-      <button type="button" id="btn-stop" hidden>ABORT</button>
-    </div>
-    <nav id="searches" class="searches"></nav>
-    <label class="country-pick">
-      <span>COUNTRY TARGET</span>
-      <select id="country"></select>
-      <button type="button" id="btn-country">LOCK &amp; SCAN</button>
-    </label>
+    <section class="grid-status" id="grid-status">
+      <div class="rail-head">
+        <span>INTERNET GRID STATUS</span>
+        <button type="button" id="btn-stop" hidden>ABORT</button>
+      </div>
+      <p class="grid-copy">Check whether public websites answer. Pick a web grid, then run it.</p>
+      <label class="grid-pick">
+        <span>WEB GRID</span>
+        <select id="grid-search"></select>
+      </label>
+      <label class="grid-pick">
+        <span>COUNTRY</span>
+        <select id="country"></select>
+      </label>
+      <div class="grid-actions">
+        <button type="button" id="btn-grid-run">CHECK GRID</button>
+        <button type="button" id="btn-country">CHECK COUNTRY</button>
+      </div>
+    </section>
+    <nav id="searches" class="searches" hidden></nav>
     <div class="live-overlays">
       <div class="rail-head"><span>LAYERS</span></div>
       <button type="button" class="layer on" data-layer-toggle="sdr" aria-pressed="true"><span class="layer-name"><span class="swatch sdr"></span> SDR</span><span class="layer-meta"><em data-count="sdr">—</em><span class="switch" aria-hidden="true"></span></span></button>
