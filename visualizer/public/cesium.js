@@ -264,7 +264,7 @@ async function startGlobe() {
   controller.minimumZoomDistance = 40;
   controller.maximumZoomDistance = 40000000;
   viewer.scene.globe.maximumScreenSpaceError = 1.4;
-  viewer.scene.globe.depthTestAgainstTerrain = false;
+  viewer.scene.globe.depthTestAgainstTerrain = true;
   viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#070b10");
   viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10202c");
   viewer.scene.globe.enableLighting = false;
@@ -499,7 +499,8 @@ function ensureOrigin() {
       color: Cesium.Color.fromCssColorString("#7ef6ff"),
       outlineColor: Cesium.Color.BLACK,
       outlineWidth: 1,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      disableDepthTestDistance: 0,
     },
   });
 }
@@ -560,7 +561,8 @@ function upsertPoint(result) {
         color,
         outlineColor: Cesium.Color.BLACK,
         outlineWidth: 1,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: 0,
       },
     });
     entity._resultIndex = result.index;
@@ -826,7 +828,8 @@ function placeMarkers(source, layer, items, icon, stack) {
         verticalOrigin: Cesium.VerticalOrigin.CENTER,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         pixelOffset: new Cesium.Cartesian2(shift, 0),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: 0,
         scaleByDistance: new Cesium.NearFarScalar(4e5, 1, 1.2e7, 0.62),
       },
       label: {
@@ -842,7 +845,8 @@ function placeMarkers(source, layer, items, icon, stack) {
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         pixelOffset: new Cesium.Cartesian2(shift, -30),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: 0,
         scaleByDistance: new Cesium.NearFarScalar(5e5, 1, 7e6, 0.45),
       },
     });
@@ -1024,7 +1028,8 @@ function placeRadioPins(points) {
         color: gold,
         outlineColor: outline,
         outlineWidth: 1,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: 0,
         scaleByDistance: new Cesium.NearFarScalar(2e5, 1.2, 8e6, 0.45),
       },
     });
@@ -1095,7 +1100,8 @@ function placeStreamPins(points) {
         color: site.online === false ? color.withAlpha(0.35) : color,
         outlineColor: outline,
         outlineWidth: 1,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: 0,
         scaleByDistance: new Cesium.NearFarScalar(2e5, 1.25, 8e6, 0.5),
       },
     });
@@ -1248,7 +1254,8 @@ function placeLiveLayer(key, points) {
         color: Cesium.Color.fromCssColorString(style.color),
         outlineColor: Cesium.Color.fromCssColorString(style.outline),
         outlineWidth: 1,
-        disableDepthTestDistance: key === "aircraft" ? 0 : Number.POSITIVE_INFINITY,
+        heightReference: key === "aircraft" ? Cesium.HeightReference.NONE : Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: 0,
       },
     });
     entity._live = { ...point, kind: style.kind, layer: key };
