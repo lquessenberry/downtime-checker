@@ -337,6 +337,38 @@ button:hover { border-color: #9fd4e2; }
 .layer-credit { margin: 8px 12px 0; color: var(--dim); font-size: 10px; letter-spacing: 0.04em; }
 .sdr-filter-wrap { display: block; padding: 8px 12px 0; }
 #sdr-filter, #radio-filter, #stream-filter, #gps-filter, #conflict-filter { width: 100%; padding: 6px 8px; }
+.radio-countries {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 0;
+  flex-wrap: wrap;
+}
+.radio-countries .chip { font-size: 10px; letter-spacing: 0.06em; padding: 4px 8px; }
+.radio-countries .chip.on { border-color: #f5c542; color: #f5c542; }
+.radio-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  padding: 8px 12px 0;
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.radio-nav button {
+  border: 0;
+  background: transparent;
+  color: #f5c542;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.radio-nav button:hover { text-decoration: underline; }
+.radio-nav span.here { color: var(--text); }
+.radio-row .kind {
+  color: #f5c542;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
 .sdr-row, .radio-row, .stream-row {
   width: 100%;
   display: block;

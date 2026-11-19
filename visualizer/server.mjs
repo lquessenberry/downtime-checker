@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { catalog, placesFor, SEARCHES } from "./lib/catalogs.mjs";
 import { snapshotFeeds, startFeeds } from "./lib/feeds.mjs";
-import { loadRadioOverlay } from "./lib/hpdb.mjs";
+import { loadRadioCounty, loadRadioOverlay, loadRadioState, loadRadioTree } from "./lib/hpdb.mjs";
 import { loadStreamOverlay } from "./lib/streams.mjs";
 import { websdrCatalog } from "./lib/websdr.mjs";
 import { gpsjamCatalog } from "./lib/gpsjam.mjs";
@@ -329,18 +329,38 @@ const server = http.createServer(async (req, res) => {
       send(res, 200, body);
       return;
     }
+    const radioState = url.pathname.match(/^\/api\/radio\/state\/(\d+)$/);
+    if (req.method === "GET" && radioState) {
+      try {
+        send(res, 200, await loadRadioState(radioState[1]));
+      } catch (err) {
+        send(res, 200, { error: err.message || String(err), state: null, regions: [] });
+      }
+      return;
+    }
+    const radioCounty = url.pathname.match(/^\/api\/radio\/county\/(\d+)$/);
+    if (req.method === "GET" && radioCounty) {
+      try {
+        send(res, 200, await loadRadioCounty(radioCounty[1]));
+      } catch (err) {
+        send(res, 200, { error: err.message || String(err), region: null, sites: [] });
+      }
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/radio") {
       try {
-        const body = await loadRadioOverlay();
+        const [body, tree] = await Promise.all([loadRadioOverlay(), loadRadioTree()]);
         send(res, 200, {
           source: body.source,
           updated: body.updated,
           count: body.count,
           points: body.points,
-          error: body.error || null,
+          countries: tree.countries,
+          states: tree.states,
+          error: body.error || tree.error || null,
         });
       } catch (err) {
-        send(res, 200, { source: null, count: 0, points: [], error: err.message || String(err) });
+        send(res, 200, { source: null, count: 0, points: [], countries: [], states: [], error: err.message || String(err) });
       }
       return;
     }

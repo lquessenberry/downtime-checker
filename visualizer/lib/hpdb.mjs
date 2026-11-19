@@ -234,8 +234,14 @@ async function parseHpdbIndex(file) {
     const kind = cols[0];
     if (kind === "StateInfo") {
       const id = Number(String(cols[1] || "").split("=")[1]);
+      const countryId = Number(String(cols[2] || "").split("=")[1]);
       if (!Number.isFinite(id)) continue;
-      states[id] = { id, name: cols[3] || "", abbr: cols[4] || "" };
+      states[id] = {
+        id,
+        countryId: Number.isFinite(countryId) ? countryId : 0,
+        name: cols[3] || "",
+        abbr: cols[4] || "",
+      };
       continue;
     }
     if (kind === "CountyInfo") {
@@ -267,6 +273,7 @@ async function parseHpdbIndex(file) {
     }
   }
   const countyGroups = new Map();
+  const coords = new Map();
   for (const group of groups) {
     const ids = new Set(agencyCounties.get(group.agencyId) || []);
     if (group.agencyId != null && counties[group.agencyId]) ids.add(group.agencyId);
@@ -276,15 +283,20 @@ async function parseHpdbIndex(file) {
       const county = counties[countyId];
       if (!county) continue;
       county.n += 1;
-      county.lat = (county.lat == null ? 0 : county.lat) + group.lat;
-      county.lon = (county.lon == null ? 0 : county.lon) + group.lon;
+      let bucket = coords.get(countyId);
+      if (!bucket) {
+        bucket = { lats: [], lons: [] };
+        coords.set(countyId, bucket);
+      }
+      bucket.lats.push(group.lat);
+      bucket.lons.push(group.lon);
     }
   }
   for (const county of Object.values(counties)) {
-    if (county.n) {
-      county.lat /= county.n;
-      county.lon /= county.n;
-    }
+    const bucket = coords.get(county.id);
+    if (!bucket || !bucket.lats.length) continue;
+    county.lat = median(bucket.lats);
+    county.lon = median(bucket.lons);
   }
   return {
     states,
@@ -294,38 +306,128 @@ async function parseHpdbIndex(file) {
   };
 }
 
+function median(values) {
+  const sorted = values.slice().sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2) return sorted[mid];
+  return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+const COUNTRY_META = {
+  1: { id: 1, name: "United States", unit: "State" },
+  2: { id: 2, name: "Canada", unit: "Province" },
+};
+
+export function regionKindFor(state) {
+  const abbr = String(state?.abbr || "").toUpperCase();
+  const countryId = Number(state?.countryId);
+  if (countryId === 2) {
+    if (abbr === "QC") return "Region";
+    return "Municipality";
+  }
+  if (abbr === "LA") return "Parish";
+  if (abbr === "AK") return "Borough";
+  if (abbr === "PR") return "Municipality";
+  if (abbr === "DC") return "District";
+  return "County";
+}
+
+export function regionLabel(name, kind) {
+  const n = String(name || "").trim();
+  if (!n) return kind || "Region";
+  if (!kind) return n;
+  if (new RegExp(`\\b${kind}\\b`, "i").test(n)) return n;
+  return `${n} ${kind}`;
+}
+
+function emptyIndex(error) {
+  return {
+    version: 3,
+    source: null,
+    states: {},
+    counties: {},
+    countyGroups: {},
+    groups: [],
+    error: error || null,
+  };
+}
+
+function lookup(map, id) {
+  if (!map) return null;
+  return map[id] || map[String(id)] || null;
+}
+
+function buildRadioTree(index) {
+  const states = [];
+  const byCountry = {};
+  for (const state of Object.values(index.states || {})) {
+    if (!state || !state.id) continue;
+    const country = COUNTRY_META[state.countryId];
+    if (!country) continue;
+    const kind = regionKindFor(state);
+    let nRegions = 0;
+    let lat = 0;
+    let lon = 0;
+    let weight = 0;
+    const seen = new Set();
+    for (const county of Object.values(index.counties || {})) {
+      if (county.stateId !== state.id || !county.n) continue;
+      nRegions += 1;
+      const groups = lookup(index.countyGroups, county.id) || [];
+      for (const group of groups) seen.add(`${group.name}|${group.lat}|${group.lon}`);
+      if (county.lat != null && county.lon != null) {
+        lat += county.lat;
+        lon += county.lon;
+        weight += 1;
+      }
+    }
+    if (!nRegions) continue;
+    const nSites = seen.size;
+    states.push({
+      id: state.id,
+      countryId: state.countryId,
+      name: state.name,
+      abbr: state.abbr,
+      unit: country.unit,
+      regionKind: kind,
+      nRegions,
+      nSites,
+      lat: weight ? lat / weight : null,
+      lon: weight ? lon / weight : null,
+      kind: "state",
+    });
+    if (!byCountry[country.id]) {
+      byCountry[country.id] = { ...country, nStates: 0, nRegions: 0, nSites: 0 };
+    }
+    byCountry[country.id].nStates += 1;
+    byCountry[country.id].nRegions += nRegions;
+    byCountry[country.id].nSites += nSites;
+  }
+  states.sort((a, b) => a.name.localeCompare(b.name));
+  return {
+    source: index.source || null,
+    error: index.error || null,
+    countries: Object.values(byCountry).sort((a, b) => a.id - b.id),
+    states,
+  };
+}
+
 export async function loadHpdbIndex() {
   let file;
   try {
     file = await ensureHpdb();
   } catch (err) {
-    return {
-      version: 1,
-      source: null,
-      states: {},
-      counties: {},
-      countyGroups: {},
-      groups: [],
-      error: err.message || String(err),
-    };
+    return emptyIndex(err.message || String(err));
   }
   if (!file) {
-    return {
-      version: 1,
-      source: null,
-      states: {},
-      counties: {},
-      countyGroups: {},
-      groups: [],
-      error: "HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR, or allow BT885_FTP to pull it from Uniden.",
-    };
+    return emptyIndex("HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR, or allow BT885_FTP to pull it from Uniden.");
   }
   const cache = `${file}.hpdb-index.json`;
   const srcStat = statSync(file);
   if (existsSync(cache)) {
     try {
       const cached = JSON.parse(readFileSync(cache, "utf8"));
-      if (cached.version === 1 && cached.sourceMtimeMs === srcStat.mtimeMs && cached.groups) {
+      if (cached.version === 3 && cached.sourceMtimeMs === srcStat.mtimeMs && cached.groups) {
         return cached;
       }
     } catch {
@@ -334,7 +436,7 @@ export async function loadHpdbIndex() {
   }
   const parsed = await parseHpdbIndex(file);
   const payload = {
-    version: 1,
+    version: 3,
     source: path.basename(file),
     sourcePath: file,
     sourceMtimeMs: srcStat.mtimeMs,
@@ -349,6 +451,105 @@ export async function loadHpdbIndex() {
     /* optional */
   }
   return payload;
+}
+
+export async function loadRadioTree() {
+  const index = await loadHpdbIndex();
+  return buildRadioTree(index);
+}
+
+export async function loadRadioState(stateId) {
+  const id = Number(stateId);
+  const index = await loadHpdbIndex();
+  const state = lookup(index.states, id);
+  if (!Number.isFinite(id) || !state) {
+    return { source: index.source || null, error: "state not found", state: null, regions: [] };
+  }
+  const tree = buildRadioTree(index);
+  const summary = tree.states.find((row) => row.id === id) || {
+    id: state.id,
+    countryId: state.countryId,
+    name: state.name,
+    abbr: state.abbr,
+    unit: COUNTRY_META[state.countryId]?.unit || "State",
+    regionKind: regionKindFor(state),
+    nRegions: 0,
+    nSites: 0,
+    lat: null,
+    lon: null,
+    kind: "state",
+  };
+  const kind = summary.regionKind;
+  const regions = Object.values(index.counties || {})
+    .filter((county) => county.stateId === id && county.n && county.lat != null && county.lon != null)
+    .map((county) => ({
+      id: county.id,
+      stateId: id,
+      name: county.name,
+      label: regionLabel(county.name, kind),
+      kind,
+      n: county.n,
+      lat: county.lat,
+      lon: county.lon,
+      level: "region",
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  return {
+    source: index.source || null,
+    error: index.error || null,
+    state: summary,
+    regions,
+  };
+}
+
+export async function loadRadioCounty(countyId) {
+  const id = Number(countyId);
+  const index = await loadHpdbIndex();
+  const county = lookup(index.counties, id);
+  if (!Number.isFinite(id) || !county) {
+    return { source: index.source || null, error: "region not found", region: null, sites: [] };
+  }
+  const stateRow = lookup(index.states, county.stateId) || { id: county.stateId, name: "", abbr: "", countryId: 0 };
+  const kind = regionKindFor(stateRow);
+  const country = COUNTRY_META[stateRow.countryId];
+  const groups = lookup(index.countyGroups, id) || [];
+  const sites = groups.map((group, i) => ({
+    id: `radio-${id}-${i}`,
+    countyId: id,
+    stateId: county.stateId,
+    name: group.name,
+    mode: group.mode,
+    lat: group.lat,
+    lon: group.lon,
+    n: 0,
+    mhz: [],
+    kind: "site",
+  }));
+  return {
+    source: index.source || null,
+    error: index.error || null,
+    state: {
+      id: stateRow.id,
+      countryId: stateRow.countryId,
+      name: stateRow.name,
+      abbr: stateRow.abbr,
+      unit: country?.unit || "State",
+      regionKind: kind,
+      kind: "state",
+    },
+    region: {
+      id: county.id,
+      stateId: county.stateId,
+      name: county.name,
+      label: regionLabel(county.name, kind),
+      kind,
+      n: county.n || sites.length,
+      lat: county.lat,
+      lon: county.lon,
+      level: "region",
+    },
+    sites,
+  };
 }
 
 export async function loadRadioOverlay() {

@@ -24,6 +24,14 @@ const state = {
   radioPoints: [],
   radioOpenId: "",
   radioCount: 0,
+  radioCountries: [],
+  radioStates: [],
+  radioCountryId: 1,
+  radioState: null,
+  radioRegions: [],
+  radioRegion: null,
+  radioSites: [],
+  radioOverlay: [],
   streamPoints: [],
   streamOpenId: "",
   gpsZones: [],
@@ -300,7 +308,7 @@ async function startGlobe() {
       return;
     }
     if (entity._radio) {
-      openRadio(entity._radio, { fly: false });
+      handleRadioPick(entity._radio, { fly: false });
       return;
     }
     if (entity._stream) {
@@ -654,7 +662,7 @@ function setFeedMode(mode) {
   }
   const title = document.getElementById("feed-title");
   if (state.feedMode === "sdr") title.textContent = `WEBSDR ${state.sdrStations.length}`;
-  else if (state.feedMode === "radio") title.textContent = `RADIO ${state.radioCount || state.radioPoints.length}`;
+  else if (state.feedMode === "radio") title.textContent = radioTitle();
   else if (state.feedMode === "stream") title.textContent = `STREAM ${state.streamPoints.length}`;
   else if (state.feedMode === "gps") title.textContent = `GPS ${state.gpsZones.length}`;
   else if (state.feedMode === "conflicts") title.textContent = `CONFLICTS ${state.conflicts.length}`;
@@ -999,32 +1007,183 @@ function closePin() {
   renderStreamList();
 }
 
+const RADIO_BOUNDS = {
+  1: [-168, 17, -64, 72],
+  2: [-141, 41, -52, 70],
+};
+
+function pluralRegion(kind, n) {
+  const key = String(kind || "County");
+  if (n === 1) return key.toLowerCase();
+  if (key === "Municipality") return "municipalities";
+  if (key === "Parish") return "parishes";
+  if (key === "County") return "counties";
+  if (key === "Borough") return "boroughs";
+  if (key === "District") return "districts";
+  if (key === "Region") return "regions";
+  return `${key.toLowerCase()}s`;
+}
+
+function radioTitle() {
+  const n = state.radioCount || 0;
+  if (state.radioRegion) return `${state.radioRegion.label} · ${state.radioSites.length}`;
+  if (state.radioState) return `${state.radioState.name} · ${state.radioState.nRegions || state.radioRegions.length}`;
+  const country = state.radioCountries.find((row) => row.id === state.radioCountryId);
+  if (country) return `RADIO ${country.name} · ${country.nStates}`;
+  return `RADIO ${n}`;
+}
+
+function radioFilterPlaceholder() {
+  if (state.radioRegion) return "Agency or site";
+  if (state.radioState) {
+    const kind = state.radioState.regionKind || "County";
+    if (kind === "Parish") return "Parish";
+    if (kind === "Municipality") return "Municipality";
+    if (kind === "Borough") return "Borough or municipality";
+    if (kind === "Region") return "Region";
+    if (kind === "District") return "District";
+    return "County, parish, or municipality";
+  }
+  const country = state.radioCountries.find((row) => row.id === state.radioCountryId);
+  if (country?.unit === "Province") return "Province";
+  return "State or province";
+}
+
 async function loadRadio() {
   const response = await fetch("/api/radio");
   const body = await response.json();
   if (!response.ok) throw new Error(body.error || "Uniden radio overlay failed");
-  state.radioPoints = Array.isArray(body.points) ? body.points : [];
-  state.radioCount = Number(body.count) || state.radioPoints.length;
+  state.radioCountries = Array.isArray(body.countries) ? body.countries : [];
+  state.radioStates = Array.isArray(body.states) ? body.states : [];
+  state.radioOverlay = Array.isArray(body.points) ? body.points : [];
+  state.radioCount = Number(body.count) || state.radioOverlay.length;
+  if (!state.radioCountries.some((row) => row.id === state.radioCountryId)) {
+    state.radioCountryId = state.radioCountries[0]?.id || 1;
+  }
+  state.radioState = null;
+  state.radioRegions = [];
+  state.radioRegion = null;
+  state.radioSites = [];
   setCount("radio", state.radioCount);
-  placeRadioPins(state.radioPoints);
-  renderRadioList();
+  showRadioLevel();
   const stamp = body.updated ? ` · ${body.updated}` : "";
-  setStatus(`${state.radioCount} UNIDEN SITES${stamp} · ${state.radioPoints.length} ON GLOBE · ${body.source || "HPDB"}`);
+  const country = state.radioCountries.find((row) => row.id === state.radioCountryId);
+  setStatus(
+    `${state.radioCount} UNIDEN SITES${stamp} · ${country ? country.nStates + " " + country.unit.toUpperCase() + "S" : "REGIONS"} · ${body.source || "HPDB"}`
+  );
 }
 
-function placeRadioPins(points) {
+function radioStatesHere() {
+  return state.radioStates.filter((row) => row.countryId === state.radioCountryId);
+}
+
+function showRadioLevel() {
+  if (state.radioRegion) placeRadioPins(state.radioSites, "site");
+  else if (state.radioState) placeRadioPins(state.radioRegions, "region");
+  else if (radioStatesHere().length) placeRadioPins(radioStatesHere(), "state");
+  else placeRadioPins(state.radioOverlay, "site");
+  renderRadioCountries();
+  renderRadioNav();
+  const filter = document.getElementById("radio-filter");
+  if (filter) filter.placeholder = radioFilterPlaceholder();
+  renderRadioList();
+}
+
+function flyRadioTo(lat, lon, height) {
+  if (!state.viewer || lat == null || lon == null) return;
+  state.viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
+    duration: 0.9,
+  });
+}
+
+function flyRadioCountry(countryId) {
+  if (!state.viewer) return;
+  const box = RADIO_BOUNDS[countryId];
+  if (!box) return;
+  state.viewer.camera.flyTo({
+    destination: Cesium.Rectangle.fromDegrees(box[0], box[1], box[2], box[3]),
+    duration: 0.9,
+  });
+}
+
+function selectRadioCountry(countryId, options = {}) {
+  state.radioCountryId = Number(countryId) || 1;
+  state.radioState = null;
+  state.radioRegions = [];
+  state.radioRegion = null;
+  state.radioSites = [];
+  state.radioOpenId = "";
+  const filter = document.getElementById("radio-filter");
+  if (filter) filter.value = "";
+  showRadioLevel();
+  if (options.fly !== false) flyRadioCountry(state.radioCountryId);
+}
+
+async function selectRadioState(stateId, options = {}) {
+  const id = Number(stateId);
+  if (!Number.isFinite(id)) return;
+  const response = await fetch(`/api/radio/state/${id}`);
+  const body = await response.json();
+  if (!body.state) return;
+  state.radioState = body.state;
+  state.radioCountryId = body.state.countryId || state.radioCountryId;
+  state.radioRegions = Array.isArray(body.regions) ? body.regions : [];
+  state.radioRegion = null;
+  state.radioSites = [];
+  state.radioOpenId = "";
+  const filter = document.getElementById("radio-filter");
+  if (filter && options.keepFilter !== true) filter.value = "";
+  showRadioLevel();
+  if (options.fly !== false) flyRadioTo(body.state.lat, body.state.lon, 1200000);
+}
+
+async function selectRadioCounty(countyId, options = {}) {
+  const id = Number(countyId);
+  if (!Number.isFinite(id)) return;
+  const response = await fetch(`/api/radio/county/${id}`);
+  const body = await response.json();
+  if (!body.region) return;
+  if (body.state) {
+    state.radioState = { ...state.radioState, ...body.state };
+    state.radioCountryId = body.state.countryId || state.radioCountryId;
+  }
+  state.radioRegion = body.region;
+  state.radioSites = Array.isArray(body.sites) ? body.sites : [];
+  state.radioOpenId = "";
+  const filter = document.getElementById("radio-filter");
+  if (filter && options.keepFilter !== true) filter.value = "";
+  showRadioLevel();
+  if (options.fly !== false) flyRadioTo(body.region.lat, body.region.lon, 280000);
+}
+
+function handleRadioPick(item, options = {}) {
+  if (!item) return;
+  if (item.kind === "state") {
+    selectRadioState(item.id, { fly: options.fly !== false });
+    return;
+  }
+  if (item.level === "region") {
+    selectRadioCounty(item.id, { fly: options.fly !== false });
+    return;
+  }
+  openRadio(item, options);
+}
+
+function placeRadioPins(points, level) {
   if (!state.viewer || !state.radioSource) return;
   state.radioSource.entities.removeAll();
   state.radioSource.show = Boolean(state.layers.radio);
   const gold = Cesium.Color.fromCssColorString("#f5c542");
   const outline = Cesium.Color.fromCssColorString("#2a1c04");
-  for (const site of points) {
+  const size = level === "state" ? 10 : level === "region" ? 7 : 5;
+  for (const site of points || []) {
     if (site.lat == null || site.lon == null) continue;
     const entity = state.radioSource.entities.add({
-      name: site.name,
+      name: site.label || site.name,
       position: Cesium.Cartesian3.fromDegrees(site.lon, site.lat, 0),
       point: {
-        pixelSize: site.n > 20 ? 8 : 5,
+        pixelSize: level === "site" && site.n > 20 ? 8 : size,
         color: gold,
         outlineColor: outline,
         outlineWidth: 1,
@@ -1037,32 +1196,130 @@ function placeRadioPins(points) {
   }
 }
 
+function renderRadioCountries() {
+  const wrap = document.getElementById("radio-countries");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  for (const country of state.radioCountries) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip" + (country.id === state.radioCountryId ? " on" : "");
+    button.textContent = `${country.name} · ${country.nStates}`;
+    button.addEventListener("click", () => selectRadioCountry(country.id));
+    wrap.append(button);
+  }
+}
+
+function renderRadioNav() {
+  const nav = document.getElementById("radio-nav");
+  if (!nav) return;
+  nav.innerHTML = "";
+  const addCrumb = (label, onClick) => {
+    if (onClick) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.addEventListener("click", onClick);
+      nav.append(button);
+    } else {
+      const here = document.createElement("span");
+      here.className = "here";
+      here.textContent = label;
+      nav.append(here);
+    }
+  };
+  const slash = () => nav.append(document.createTextNode(" / "));
+  const country = state.radioCountries.find((row) => row.id === state.radioCountryId);
+  addCrumb(country ? country.name : "RADIO", state.radioState ? () => selectRadioCountry(state.radioCountryId) : null);
+  if (state.radioState) {
+    slash();
+    const label = state.radioState.abbr
+      ? `${state.radioState.name} (${state.radioState.abbr})`
+      : state.radioState.name;
+    addCrumb(label, state.radioRegion ? () => selectRadioState(state.radioState.id, { fly: true }) : null);
+  }
+  if (state.radioRegion) {
+    slash();
+    addCrumb(state.radioRegion.label);
+  }
+}
+
 function renderRadioList() {
   const list = document.getElementById("radio-list");
   if (!list) return;
   const query = (document.getElementById("radio-filter").value || "").trim().toLowerCase();
-  const sites = state.radioPoints
-    .filter((site) => {
-      if (!query) return true;
-      const hay = `${site.name} ${site.mode} ${(site.mhz || []).join(" ")}`.toLowerCase();
-      return hay.includes(query);
-    })
-    .slice()
-    .sort((a, b) => (b.n || 0) - (a.n || 0) || a.name.localeCompare(b.name))
-    .slice(0, 500);
   list.innerHTML = "";
-  for (const site of sites) {
+  const addRow = (item, html, onClick, on) => {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "radio-row";
-    if (site.id === state.radioOpenId) row.classList.add("on");
-    const mhz = (site.mhz || []).map((m) => `${m} MHz`).join(" · ");
-    row.innerHTML = `<div class="name">${esc(site.name)}</div><div class="host">${esc(site.mode || "HPDB")} · ${site.n || 0} freqs${mhz ? " · " + esc(mhz) : ""}</div>`;
-    row.addEventListener("click", () => openRadio(site, { fly: true }));
+    if (on) row.classList.add("on");
+    row.innerHTML = html;
+    row.addEventListener("click", onClick);
     list.append(row);
+  };
+  if (state.radioRegion) {
+    const sites = state.radioSites
+      .filter((site) => {
+        if (!query) return true;
+        const hay = `${site.name} ${site.mode || ""}`.toLowerCase();
+        return hay.includes(query);
+      })
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 800);
+    for (const site of sites) {
+      addRow(
+        site,
+        `<div class="name">${esc(site.name)}</div><div class="host">${esc(site.mode || "HPDB")}</div>`,
+        () => openRadio(site, { fly: true }),
+        site.id === state.radioOpenId
+      );
+    }
+  } else if (state.radioState) {
+    const regions = state.radioRegions.filter((row) => {
+      if (!query) return true;
+      return `${row.label} ${row.name} ${row.kind}`.toLowerCase().includes(query);
+    });
+    for (const region of regions) {
+      addRow(
+        region,
+        `<div class="kind">${esc(region.kind).toUpperCase()}</div><div class="name">${esc(region.label)}</div><div class="host">${region.n} site${region.n === 1 ? "" : "s"}</div>`,
+        () => selectRadioCounty(region.id, { fly: true })
+      );
+    }
+  } else {
+    const rows = radioStatesHere().filter((row) => {
+      if (!query) return true;
+      return `${row.name} ${row.abbr} ${row.unit} ${row.regionKind}`.toLowerCase().includes(query);
+    });
+    for (const row of rows) {
+      addRow(
+        row,
+        `<div class="kind">${esc(row.unit).toUpperCase()}</div><div class="name">${esc(row.name)}${row.abbr ? " · " + esc(row.abbr) : ""}</div><div class="host">${row.nRegions} ${esc(pluralRegion(row.regionKind, row.nRegions))} · ${row.nSites} sites</div>`,
+        () => selectRadioState(row.id, { fly: true })
+      );
+    }
+    if (!rows.length && state.radioOverlay.length) {
+      const sites = state.radioOverlay
+        .filter((site) => {
+          if (!query) return true;
+          const hay = `${site.name} ${site.mode || ""} ${(site.mhz || []).join(" ")}`.toLowerCase();
+          return hay.includes(query);
+        })
+        .slice(0, 500);
+      for (const site of sites) {
+        addRow(
+          site,
+          `<div class="name">${esc(site.name)}</div><div class="host">${esc(site.mode || "HPDB")} · ${site.n || 0} freqs</div>`,
+          () => openRadio(site, { fly: true }),
+          site.id === state.radioOpenId
+        );
+      }
+    }
   }
   if (state.feedMode === "radio") {
-    document.getElementById("feed-title").textContent = `RADIO ${state.radioCount || state.radioPoints.length}`;
+    document.getElementById("feed-title").textContent = radioTitle();
   }
 }
 
