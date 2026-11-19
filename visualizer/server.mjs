@@ -18,6 +18,7 @@ import {
   mapPool,
   saveCache,
 } from "./lib/checker.mjs";
+import { cesiumIsLocal, offline, readyStatus, tileCachePath } from "./lib/datapack.mjs";
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(DIR, "public");
@@ -79,6 +80,19 @@ async function proxyEoxTile(z, y, x, res) {
   }
   const key = `${zi}/${yi}/${xi}`;
   let buf = eoxCache.get(key);
+  const disk = tileCachePath("eox", zi, yi, xi, "jpg");
+  if (!buf && fs.existsSync(disk)) {
+    try {
+      buf = fs.readFileSync(disk);
+      eoxCache.set(key, buf);
+    } catch {
+      buf = null;
+    }
+  }
+  if (!buf && offline()) {
+    send(res, 404, "tile missing", "text/plain");
+    return;
+  }
   if (!buf) {
     const url = `${EOX_UPSTREAM}/${zi}/${yi}/${xi}.jpg`;
     try {
@@ -96,6 +110,12 @@ async function proxyEoxTile(z, y, x, res) {
       buf = Buffer.from(await upstream.arrayBuffer());
       if (eoxCache.size >= EOX_CACHE_MAX) eoxCache.delete(eoxCache.keys().next().value);
       eoxCache.set(key, buf);
+      try {
+        fs.mkdirSync(path.dirname(disk), { recursive: true });
+        fs.writeFileSync(disk, buf);
+      } catch {
+        /* disk cache is optional */
+      }
     } catch {
       send(res, 502, "tile error", "text/plain");
       return;
@@ -250,6 +270,14 @@ function serveStatic(req, res) {
       send(res, 404, "Not found", "text/plain");
       return;
     }
+    if (file.endsWith("cesium.html") && cesiumIsLocal()) {
+      const html = data.toString("utf8").replaceAll(
+        "https://cesium.com/downloads/cesiumjs/releases/1.128/Build/Cesium/",
+        "/vendor/cesium/",
+      );
+      send(res, 200, html, "text/html; charset=utf-8");
+      return;
+    }
     send(res, 200, data, MIME[path.extname(file)] || "application/octet-stream");
   });
 }
@@ -276,6 +304,10 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && url.pathname === "/healthz") {
       send(res, 200, { ok: true, home: PUBLIC_HOME || "grid" });
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/ready") {
+      send(res, 200, readyStatus());
       return;
     }
     const eoxTile = url.pathname.match(EOX_TILE);
@@ -410,6 +442,7 @@ server.listen(PORT, HOST, () => {
   const local = HOST === "0.0.0.0" ? "127.0.0.1" : HOST;
   console.log(`Downtime visualizer  http://${local}:${PORT}`);
   if (PUBLIC_HOME === "cesium") console.log(`Public home  http://${local}:${PORT}/cesium.html`);
+  if (offline()) console.log("Offline data pack  " + readyStatus().pack);
   console.log(`${searches.reduce((n, s) => n + (s.group === "global" ? s.count : 0), 0)} catalog rows across searches`);
   if (weather) console.log(`Weather search: ${weather.count} places`);
 });

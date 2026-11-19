@@ -1,3 +1,5 @@
+import { offline, readDataset, writeDataset } from "./datapack.mjs";
+
 const UA = { "User-Agent": "downtime-checker/1.0 (globe visualizer)" };
 
 // Jonesboro hub — same origin the globes draw search arcs from.
@@ -490,6 +492,13 @@ export function snapshotFeeds() {
 }
 
 export function startFeeds() {
+  const packed = readDataset("feeds");
+  if (packed) {
+    for (const key of ["jamming", "aircraft", "ships", "conflicts"]) {
+      if (packed[key]) layers[key] = { ...emptyLayer(packed[key].source), ...packed[key] };
+    }
+  }
+  if (offline()) return;
   startAisStream();
   const run = (name, fn) => guard(name, fn);
   run("jamming", refreshJamming);
@@ -503,4 +512,11 @@ export function startFeeds() {
   setInterval(() => {
     if (process.env.AISSTREAM_API_KEY) flushAisStream();
   }, 4000);
+  setInterval(() => {
+    try {
+      writeDataset("feeds", { fetchedAt: Date.now(), ...snapshotFeeds() });
+    } catch {
+      /* optional */
+    }
+  }, 5 * 60 * 1000);
 }

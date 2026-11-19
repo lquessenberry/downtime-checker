@@ -89,6 +89,21 @@ Credits stay on the globe. Overlay pins do not hide behind terrain.
 
 Uniden BearTracker 885 radio sites load as a gold overlay from `MasterHpdb_*.gz`. If that file is already in `~/Downloads/BT885_radio_database` (or `BT885_HPDB` / `BT885_HPDB_DIR`), it is used as-is. Otherwise the server pulls the latest dump from the same FTP the official BT885 Update Manager uses (`ftp.uniden.com/BT885`), caches it under `~/.cache/downtime/hpdb` (or `/tmp/downtime-hpdb` on Fly), and derives the globe pins from C-Group/Site rows. Set `BT885_FTP=0` to disable the fetch. Click a site for agency name and sample frequencies. WebSDR pins still open the receiver.
 
+## Offline local clients
+
+The public globe stays live. A laptop or mesh node can run the same server from a data pack with no network.
+
+Overlays load pack → cache → network. `OFFLINE=1` stops at pack/cache. SAT tiles the proxy has already fetched stay on disk. Live AIR/AIS/JAM use the last `feeds.json` snapshot.
+
+```bash
+cd visualizer
+node lib/datapack.mjs snapshot
+node lib/datapack.mjs vendor-cesium
+OFFLINE=1 node server.mjs
+```
+
+`GET /api/ready` reports what is packed. `DATA_DIR` points the pack at another folder. See [visualizer/data/README.md](visualizer/data/README.md).
+
 Live scanner streams are scraped from Broadcastify state/county listen pages (plus radio-browser and OpenMHz when those APIs answer) and matched onto HPDB counties. Broadcastify `ctid` is the same county id as the Uniden database. Purple STREAM pins open the public listen page. The catalog caches for 12 hours under `~/.cache/downtime/hpdb-streams.json`.
 
 Cesium also pulls live overlays:

@@ -110,6 +110,7 @@ async function boot() {
   hookUi();
   connectEvents();
   tickClock();
+  showDataMode();
   Promise.allSettled([
     loadWebsdr(),
     loadRadio(),
@@ -123,6 +124,20 @@ async function boot() {
     else statusLive();
   });
   setInterval(pollLiveFeeds, 8000);
+}
+
+async function showDataMode() {
+  try {
+    const ready = await fetch("/api/ready").then((response) => response.json());
+    const el = document.getElementById("data-mode");
+    if (!el) return;
+    el.hidden = false;
+    el.textContent = ready.offline ? "OFFLINE" : "DATA";
+    el.classList.toggle("offline", Boolean(ready.offline));
+    el.title = ready.offline ? `Pack ${ready.pack}` : `Cache ${ready.cache}`;
+  } catch {
+    /* optional */
+  }
 }
 
 function imageryProvider(id) {

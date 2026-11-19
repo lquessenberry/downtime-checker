@@ -5,6 +5,7 @@ import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import { createGunzip } from "node:zlib";
 import { fetchLatestHpdb } from "./hpdb-ftp.mjs";
+import { offline, readDataset, writeDataset } from "./datapack.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DISPLAY_CAP = 4000;
@@ -56,6 +57,7 @@ export function findHpdbPath() {
 }
 
 function ftpEnabled() {
+  if (offline()) return false;
   const flag = String(process.env.BT885_FTP || "1").trim().toLowerCase();
   return flag !== "0" && flag !== "off" && flag !== "false";
 }
@@ -362,6 +364,8 @@ export async function loadRadioOverlay() {
     };
   }
   if (!file) {
+    const packed = readDataset("radio");
+    if (packed?.points?.length) return { ...packed, stale: true };
     return {
       version: 2,
       source: null,
@@ -376,6 +380,7 @@ export async function loadRadioOverlay() {
     try {
       const cached = JSON.parse(readFileSync(cache, "utf8"));
       if (cached.version === 2 && cached.sourceMtimeMs === srcStat.mtimeMs && Array.isArray(cached.points)) {
+        try { writeDataset("radio", cached); } catch { /* optional */ }
         return cached;
       }
     } catch {
@@ -395,6 +400,7 @@ export async function loadRadioOverlay() {
   };
   try {
     writeFileSync(cache, JSON.stringify(payload));
+    writeDataset("radio", payload);
   } catch {
     /* cache is optional */
   }

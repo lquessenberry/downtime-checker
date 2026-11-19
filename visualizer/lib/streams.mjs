@@ -1,9 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { loadDataset, offline, readDataset } from "./datapack.mjs";
 import { loadHpdbIndex } from "./hpdb.mjs";
 
-const CACHE = path.join(os.homedir(), ".cache/downtime/hpdb-streams.json");
 const MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const UA = "downtime-checker/1.0 (local globe; HPDB stream match)";
 const DELAY_MS = 250;
@@ -260,16 +257,6 @@ function matchFeed(feed, index) {
   return null;
 }
 
-function readCache() {
-  try {
-    const data = JSON.parse(readFileSync(CACHE, "utf8"));
-    if (!data || !Array.isArray(data.points)) return null;
-    return data;
-  } catch {
-    return null;
-  }
-}
-
 let inflight = null;
 
 export async function loadStreamOverlay() {
@@ -282,9 +269,17 @@ export async function loadStreamOverlay() {
 }
 
 async function buildStreamOverlay() {
-  const cached = readCache();
-  if (cached && Date.now() - Number(cached.fetchedAt) < MAX_AGE_MS) {
-    return { ...cached, stale: false };
+  return loadDataset("streams", {
+    maxAgeMs: MAX_AGE_MS,
+    fetchFresh: scrapeStreams,
+  });
+}
+
+async function scrapeStreams() {
+  if (offline()) {
+    const stored = readDataset("streams");
+    if (stored) return stored;
+    throw new Error("streams pack missing");
   }
   const index = await loadHpdbIndex();
   if (!index.countyGroups) index.countyGroups = {};
@@ -313,15 +308,5 @@ async function buildStreamOverlay() {
     errors: bcfy.errors,
     points,
   };
-  try {
-    mkdirSync(path.dirname(CACHE), { recursive: true });
-    writeFileSync(CACHE, JSON.stringify(payload));
-  } catch {
-    /* optional */
-  }
-  return { ...payload, stale: false };
-}
-
-export function streamCachePath() {
-  return CACHE;
+  return payload;
 }
