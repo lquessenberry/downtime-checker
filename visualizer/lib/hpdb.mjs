@@ -1,12 +1,15 @@
-import { createReadStream, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import { createGunzip } from "node:zlib";
+import { fetchLatestHpdb } from "./hpdb-ftp.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DISPLAY_CAP = 4000;
+const STALE_MS = Number(process.env.BT885_FTP_MAX_AGE_MS) || 7 * 24 * 60 * 60 * 1000;
+let ensuring = null;
 
 function parseStamp(name) {
   const m = name.match(/(\d{1,2})_(\d{1,2})_(\d{4})/);
@@ -23,6 +26,13 @@ function latestHpdbIn(dir) {
   return path.join(dir, files[files.length - 1]);
 }
 
+export function hpdbCacheDir() {
+  if (process.env.BT885_HPDB_DIR) return process.env.BT885_HPDB_DIR;
+  if (process.env.HPDB_CACHE) return process.env.HPDB_CACHE;
+  if (process.env.FLY_APP_NAME) return "/tmp/downtime-hpdb";
+  return path.join(os.homedir(), ".cache/downtime/hpdb");
+}
+
 export function findHpdbPath() {
   const explicit = process.env.BT885_HPDB;
   if (explicit && existsSync(explicit)) return explicit;
@@ -32,12 +42,60 @@ export function findHpdbPath() {
     path.join(HERE, "data"),
     path.join(HERE, "..", "data"),
     path.join(HERE, "..", "..", "data"),
+    hpdbCacheDir(),
   ].filter(Boolean);
+  const seen = new Set();
   for (const dir of dirs) {
+    const resolved = path.resolve(dir);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
     const found = latestHpdbIn(dir);
     if (found) return found;
   }
   return null;
+}
+
+function ftpEnabled() {
+  const flag = String(process.env.BT885_FTP || "1").trim().toLowerCase();
+  return flag !== "0" && flag !== "off" && flag !== "false";
+}
+
+function isFresh(file) {
+  try {
+    return Date.now() - statSync(file).mtimeMs < STALE_MS;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureHpdbOnce() {
+  const existing = findHpdbPath();
+  if (existing && isFresh(existing)) return existing;
+  if (!ftpEnabled()) return existing;
+  const dir = hpdbCacheDir();
+  mkdirSync(dir, { recursive: true });
+  try {
+    console.log("hpdb ftp: pulling latest MasterHpdb from ftp.uniden.com/BT885");
+    const downloaded = await fetchLatestHpdb(dir);
+    console.log(`hpdb ftp: ${downloaded}`);
+    return downloaded || existing;
+  } catch (err) {
+    if (existing) {
+      console.error("hpdb ftp:", err.message || err);
+      return existing;
+    }
+    throw err;
+  }
+}
+
+export function ensureHpdb() {
+  if (!ensuring) {
+    ensuring = ensureHpdbOnce().catch((err) => {
+      ensuring = null;
+      throw err;
+    });
+  }
+  return ensuring;
 }
 
 function latLonFromCols(cols) {
@@ -234,7 +292,20 @@ async function parseHpdbIndex(file) {
 }
 
 export async function loadHpdbIndex() {
-  const file = findHpdbPath();
+  let file;
+  try {
+    file = await ensureHpdb();
+  } catch (err) {
+    return {
+      version: 1,
+      source: null,
+      states: {},
+      counties: {},
+      countyGroups: {},
+      groups: [],
+      error: err.message || String(err),
+    };
+  }
   if (!file) {
     return {
       version: 1,
@@ -243,7 +314,7 @@ export async function loadHpdbIndex() {
       counties: {},
       countyGroups: {},
       groups: [],
-      error: "HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR to the folder that holds it.",
+      error: "HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR, or allow BT885_FTP to pull it from Uniden.",
     };
   }
   const cache = `${file}.hpdb-index.json`;
@@ -278,14 +349,25 @@ export async function loadHpdbIndex() {
 }
 
 export async function loadRadioOverlay() {
-  const file = findHpdbPath();
+  let file;
+  try {
+    file = await ensureHpdb();
+  } catch (err) {
+    return {
+      version: 2,
+      source: null,
+      count: 0,
+      points: [],
+      error: err.message || String(err),
+    };
+  }
   if (!file) {
     return {
       version: 2,
       source: null,
       count: 0,
       points: [],
-      error: "HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR to the folder that holds it.",
+      error: "HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR, or allow BT885_FTP to pull it from Uniden.",
     };
   }
   const cache = `${file}.radio-overlay.json`;

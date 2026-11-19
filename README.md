@@ -87,7 +87,7 @@ Basemaps are free public tiles, no API keys:
 
 Credits stay on the globe. Overlay pins do not hide behind terrain.
 
-Uniden BearTracker 885 radio sites load as a gold overlay from `MasterHpdb_*.gz`. Put that file in `~/Downloads/BT885_radio_database`, or set `BT885_HPDB` / `BT885_HPDB_DIR`. Click a site for agency name and sample frequencies. WebSDR pins still open the receiver.
+Uniden BearTracker 885 radio sites load as a gold overlay from `MasterHpdb_*.gz`. If that file is already in `~/Downloads/BT885_radio_database` (or `BT885_HPDB` / `BT885_HPDB_DIR`), it is used as-is. Otherwise the server pulls the latest dump from the same FTP the official BT885 Update Manager uses (`ftp.uniden.com/BT885`), caches it under `~/.cache/downtime/hpdb` (or `/tmp/downtime-hpdb` on Fly), and derives the globe pins from C-Group/Site rows. Set `BT885_FTP=0` to disable the fetch. Click a site for agency name and sample frequencies. WebSDR pins still open the receiver.
 
 Live scanner streams are scraped from Broadcastify state/county listen pages (plus radio-browser and OpenMHz when those APIs answer) and matched onto HPDB counties. Broadcastify `ctid` is the same county id as the Uniden database. Purple STREAM pins open the public listen page. The catalog caches for 12 hours under `~/.cache/downtime/hpdb-streams.json`.
 
