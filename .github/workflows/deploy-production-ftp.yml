@@ -1,0 +1,44 @@
+name: Deploy production FTP
+
+# Manual only. Default is a dry-run so a click does not overwrite globalstatus.app.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Dry-run only (list files, do not upload)
+        type: boolean
+        default: true
+      with_data:
+        description: Also upload globalstatus/data scan caches
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  ftp:
+    name: FTP push to globalstatus.app
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Push via FTP
+        env:
+          GLOBALSTATUS_FTP_HOST: ${{ secrets.GLOBALSTATUS_FTP_HOST }}
+          GLOBALSTATUS_FTP_USER: ${{ secrets.GLOBALSTATUS_FTP_USER }}
+          GLOBALSTATUS_FTP_PASS: ${{ secrets.GLOBALSTATUS_FTP_PASS }}
+          GLOBALSTATUS_FTP_PORT: ${{ secrets.GLOBALSTATUS_FTP_PORT }}
+          GLOBALSTATUS_FTP_PASV: ${{ vars.GLOBALSTATUS_FTP_PASV }}
+        run: |
+          set -euo pipefail
+          args=(push)
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          if [ "${{ inputs.with_data }}" = "true" ]; then
+            args+=(--with-data)
+          fi
+          python3 scripts/ftp_prod.py "${args[@]}"

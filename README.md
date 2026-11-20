@@ -131,6 +131,22 @@ python3 scripts/ftp_prod.py push
 python3 scripts/ftp_prod.py pull
 ```
 
+GitHub Actions on this fork (`lquessenberry/downtime-checker`) stores the globalstatus.app FTP login from Will's email as **environment secrets** on `production`. Run **Actions → Deploy production FTP** (`workflow_dispatch`). Leave **dry-run** on unless you mean to write the live site.
+
+| Name | Kind | From Will's email |
+| --- | --- | --- |
+| `GLOBALSTATUS_FTP_HOST` | secret | Host `107.180.116.144` |
+| `GLOBALSTATUS_FTP_PORT` | secret | Port `21` |
+| `GLOBALSTATUS_FTP_USER` | secret | Username `globalstatus@globalstatus.app` |
+| `GLOBALSTATUS_FTP_PASS` | secret | Password (never commit) |
+| `GLOBALSTATUS_FTP_PASV` | variable | Mode passive (`1`) |
+| `GLOBALSTATUS_FTP_PROTOCOL` | variable | Protocol `FTP` |
+| `GLOBALSTATUS_SITE_URL` | variable | `https://globalstatus.app` |
+| `GLOBALSTATUS_CPANEL_URL` | variable | Panel address (no password was in the email) |
+| `GLOBALSTATUS_CPANEL_USER` | variable | cPanel user |
+
+Do not store church FTP logins. Fork PRs cannot use these secrets on `willlccasey/downtime-checker`.
+
 Staging URL: https://downtime-globe.fly.dev — `/` is the Cesium globe, `/index.html` is the canvas grid, `/healthz` is the health check.
 
 Production URL: https://globalstatus.app — static files plus `router.php` for `/api`. The FTP login must show remote folder `/` and must not show a church site.

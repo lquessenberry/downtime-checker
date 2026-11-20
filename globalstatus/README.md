@@ -13,7 +13,7 @@ python3 scripts/ftp_prod.py push --dry-run
 python3 scripts/ftp_prod.py push
 ```
 
-Credentials: `~/.config/globalstatus/netrc` or `GLOBALSTATUS_FTP_PASS`. Copy the host/user/password from Will's `FTP Credentials.txt`. Do not commit that file.
+Credentials: `~/.config/globalstatus/netrc` or `GLOBALSTATUS_FTP_*` env vars. The same names are GitHub Actions secrets on the `production` environment of `lquessenberry/downtime-checker`. Do not commit the password file.
 
 Staging is Fly:
 

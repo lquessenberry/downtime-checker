@@ -2,7 +2,7 @@
 """Pull or push the globalstatus.app production tree over FTP.
 
 Credentials are never stored in the repo. Resolution order:
-  1. GLOBALSTATUS_FTP_HOST / GLOBALSTATUS_FTP_USER / GLOBALSTATUS_FTP_PASS
+  1. GLOBALSTATUS_FTP_HOST / USER / PASS / PORT / PASV
   2. ~/.config/globalstatus/netrc  (machine host login user password pass)
   3. GLOBALSTATUS_NETRC path
 
@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / "globalstatus"
 DEFAULT_HOST = "107.180.116.144"
 DEFAULT_USER = "globalstatus@globalstatus.app"
+DEFAULT_PORT = 21
 SKIP_NAMES = {".", "..", ".ftpquota"}
 SKIP_UPLOAD_PREFIXES = (".well-known/", "cgi-bin/")
 SKIP_UPLOAD_NAMES = {".ftpquota", "scan.lock", "mil.lock", "stop.flag"}
@@ -48,10 +49,11 @@ def load_netrc(path: Path) -> tuple[str | None, str | None, str | None]:
     return host, user, password
 
 
-def credentials() -> tuple[str, str, str]:
+def credentials() -> tuple[str, str, str, int]:
     host = os.environ.get("GLOBALSTATUS_FTP_HOST")
     user = os.environ.get("GLOBALSTATUS_FTP_USER")
     password = os.environ.get("GLOBALSTATUS_FTP_PASS")
+    port_raw = os.environ.get("GLOBALSTATUS_FTP_PORT")
     netrc = os.environ.get("GLOBALSTATUS_NETRC")
     paths = []
     if netrc:
@@ -66,19 +68,24 @@ def credentials() -> tuple[str, str, str]:
             break
     host = host or DEFAULT_HOST
     user = user or DEFAULT_USER
+    try:
+        port = int(port_raw) if port_raw else DEFAULT_PORT
+    except ValueError:
+        die(f"GLOBALSTATUS_FTP_PORT must be an integer, got {port_raw!r}")
     if not password:
         die(
             "Set GLOBALSTATUS_FTP_PASS or put a netrc at ~/.config/globalstatus/netrc\n"
             f"  machine {DEFAULT_HOST} login {DEFAULT_USER} password <from Will's FTP Credentials.txt>"
         )
-    return host, user, password
+    return host, user, password, port
 
 
-def connect(host: str, user: str, password: str) -> ftplib.FTP:
+def connect(host: str, user: str, password: str, port: int = DEFAULT_PORT) -> ftplib.FTP:
     ftp = ftplib.FTP()
-    ftp.connect(host, 21, timeout=TIMEOUT)
+    ftp.connect(host, port, timeout=TIMEOUT)
     ftp.login(user, password)
-    ftp.set_pasv(True)
+    pasv = os.environ.get("GLOBALSTATUS_FTP_PASV", "1").strip().lower()
+    ftp.set_pasv(pasv not in {"0", "false", "no", "off"})
     ftp.encoding = "latin-1"
     pwd = ftp.pwd()
     listing = []
@@ -92,7 +99,7 @@ def connect(host: str, user: str, password: str) -> ftplib.FTP:
         die("FTP folder looks like the church site. Stopped. Do not upload.")
     if pwd not in ("/", ""):
         print(f"warning: pwd is {pwd!r}, expected /", file=sys.stderr)
-    print(f"ftp {host} pwd={pwd or '/'}")
+    print(f"ftp {host}:{port} pwd={pwd or '/'}")
     return ftp
 
 
@@ -229,8 +236,8 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--with-data", action="store_true", help="also upload data/ scan caches")
     args = parser.parse_args()
-    host, user, password = credentials()
-    ftp = connect(host, user, password)
+    host, user, password, port = credentials()
+    ftp = connect(host, user, password, port)
     try:
         if args.command == "ls":
             ftp.retrlines("LIST")
