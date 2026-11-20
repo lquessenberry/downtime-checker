@@ -35,6 +35,9 @@ if ($path === '/api/outages' && $method === 'GET') {
 if ($path === '/api/mil' && $method === 'GET') {
     json_out(200, military_snapshot());
 }
+if ($path === '/api/mesh' && $method === 'GET') {
+    json_out(200, mesh_snapshot());
+}
 
 $files = array(
     '/api/catalog' => 'api/catalog.json',
@@ -1322,4 +1325,144 @@ function aircraft_detail($hex, $query)
         }
     }
     return $detail;
+}
+
+function mesh_snapshot()
+{
+    global $dataDir;
+    $lock = fopen($dataDir . '/mesh.lock', 'c');
+    if ($lock) {
+        flock($lock, LOCK_EX);
+    }
+    try {
+        return mesh_snapshot_locked();
+    } finally {
+        if ($lock) {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+}
+
+function mesh_degrees($value, $limit)
+{
+    if (!is_numeric($value)) {
+        return null;
+    }
+    $n = (float) $value;
+    if (abs($n) > $limit) {
+        $n = $n / 10000000.0;
+    }
+    if ($n < -$limit || $n > $limit) {
+        return null;
+    }
+    return round($n, 5);
+}
+
+function mesh_snapshot_locked()
+{
+    global $dataDir;
+    $cacheFile = $dataDir . '/mesh-cache.json';
+    $ttl = 90;
+    $cached = null;
+    if (is_file($cacheFile)) {
+        $cached = json_decode((string) file_get_contents($cacheFile), true);
+    }
+    if (is_array($cached) && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $ttl && !empty($cached['points'])) {
+        unset($cached['fetchedAt']);
+        $cached['stale'] = false;
+        return $cached;
+    }
+    $raw = null;
+    if (function_exists('curl_init')) {
+        $ch = curl_init('https://meshmap.net/nodes.json');
+        curl_setopt_array($ch, array(
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 25,
+            CURLOPT_HTTPHEADER => array(
+                'Accept: application/json',
+                'User-Agent: GlobalStatusApp/1.0 (https://globalstatus.app)',
+            ),
+        ));
+        $body = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        if ($body !== false && $code >= 200 && $code < 400) {
+            $decoded = json_decode((string) $body, true);
+            if (is_array($decoded)) {
+                $raw = $decoded;
+            }
+        }
+    }
+    if (!is_array($raw)) {
+        if (is_array($cached) && !empty($cached['points'])) {
+            unset($cached['fetchedAt']);
+            $cached['stale'] = true;
+            return $cached;
+        }
+        return array(
+            'source' => 'meshmap.net',
+            'sourceUrl' => 'https://meshmap.net/',
+            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+            'stale' => false,
+            'error' => 'MeshMap did not answer',
+            'count' => 0,
+            'points' => array(),
+        );
+    }
+    $points = array();
+    foreach ($raw as $id => $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $lat = mesh_degrees($node['latitude'] ?? null, 90);
+        $lon = mesh_degrees($node['longitude'] ?? null, 180);
+        if ($lat === null || $lon === null || ($lat == 0.0 && $lon == 0.0)) {
+            continue;
+        }
+        $name = trim((string) ($node['longName'] ?? ''));
+        $short = trim((string) ($node['shortName'] ?? ''));
+        if ($name === '') {
+            $name = $short !== '' ? $short : (string) $id;
+        }
+        $points[] = array(
+            'id' => (string) $id,
+            'name' => $name,
+            'short' => $short,
+            'hw' => (string) ($node['hwModel'] ?? ''),
+            'role' => (string) ($node['role'] ?? ''),
+            'lat' => $lat,
+            'lon' => $lon,
+        );
+    }
+    if (!$points) {
+        if (is_array($cached) && !empty($cached['points'])) {
+            unset($cached['fetchedAt']);
+            $cached['stale'] = true;
+            return $cached;
+        }
+        return array(
+            'source' => 'meshmap.net',
+            'sourceUrl' => 'https://meshmap.net/',
+            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+            'stale' => false,
+            'error' => 'MeshMap had no positions',
+            'count' => 0,
+            'points' => array(),
+        );
+    }
+    $built = array(
+        'source' => 'meshmap.net',
+        'sourceUrl' => 'https://meshmap.net/',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'stale' => false,
+        'count' => count($points),
+        'points' => $points,
+    );
+    $stored = $built;
+    $stored['fetchedAt'] = time();
+    file_put_contents($cacheFile, json_encode($stored), LOCK_EX);
+    return $built;
 }

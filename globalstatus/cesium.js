@@ -32,6 +32,7 @@ const state = {
     jamming: { source: null, points: [] },
     aircraft: { source: null, points: [] },
     ships: { source: null, points: [] },
+    mesh: { source: null, points: [] },
   },
   layers: {
     outages: false,
@@ -41,6 +42,7 @@ const state = {
     aircraft: false,
     ships: false,
     conflicts: false,
+    mesh: false,
   },
   openKind: "",
   openId: "",
@@ -332,17 +334,21 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
   viewer.scene.preRender.addEventListener(cullAircraftHorizon);
+  viewer.scene.preRender.addEventListener(keepFlatMapIntact);
   viewer.camera.moveEnd.addEventListener(() => {
     if (state.layers.ships) scheduleShips();
   });
   setInterval(() => {
     if (state.layers.ships) loadShips();
   }, 45000);
+  setInterval(() => {
+    if (state.layers.mesh) loadMesh();
+  }, 60000);
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
@@ -487,6 +493,9 @@ function hookUi() {
   document.getElementById("reset-mobile").addEventListener("click", resetMap);
   document.getElementById("close-view").addEventListener("click", () => setViewOpen(false));
   document.getElementById("open-view").addEventListener("click", () => setViewOpen(true));
+  document.getElementById("open-grid-results").addEventListener("click", () => setGridResultsOpen(true));
+  document.getElementById("close-grid-results").addEventListener("click", () => setGridResultsOpen(false));
+  hookInstall();
   document.getElementById("country").addEventListener("change", syncUsTests);
   document.getElementById("btn-country").addEventListener("click", () => {
     const country = document.getElementById("country").value;
@@ -547,7 +556,15 @@ function hookUi() {
     setPanel(open ? "" : "list");
   });
   document.getElementById("panel-backdrop").addEventListener("click", () => setPanel(""));
-  window.addEventListener("resize", () => tuneQuality(state.basemap || "natural"));
+  window.addEventListener("resize", () => {
+    tuneQuality(state.basemap || "natural");
+    if (!phoneLayout()) {
+      setGridResultsOpen(false);
+      const help = document.getElementById("install-help");
+      if (help) help.hidden = true;
+    } else syncGridResultsButton();
+    syncInstallButton();
+  });
   for (const button of document.querySelectorAll("[data-layer-toggle]")) {
     button.addEventListener("click", () => {
       const layer = button.dataset.layerToggle;
@@ -625,6 +642,7 @@ function connectEvents() {
       setStatus(`TASKING ${event.total} NODES · ${event.heading.toUpperCase()}`);
       renderFeed();
       updateHud();
+      syncGridResultsButton();
     }
     if (!state.scanLive) return;
     if (event.type === "result") {
@@ -635,6 +653,7 @@ function connectEvents() {
       upsertPoint(event.result);
       prependFeed(event.result);
       updateHud();
+      syncGridResultsButton();
     }
     if (event.type === "location") {
       state.results[event.result.index] = event.result;
@@ -648,12 +667,14 @@ function connectEvents() {
       document.getElementById("link-dot").className = event.down ? "pulse-dot hot" : "pulse-dot live";
       setStatus(`COMPLETE · ${event.up} UP · ${event.down} DOWN · ${(event.ms / 1000).toFixed(1)}s`);
       updateHud();
+      syncGridResultsButton();
     }
     if (event.type === "scan-stop") {
       state.running = false;
       document.getElementById("btn-stop").hidden = true;
       setStatus("SCAN ABORTED");
       updateHud();
+      syncGridResultsButton();
     }
     if (event.type === "error") setStatus(event.message);
   };
@@ -676,6 +697,7 @@ function applySnapshot(snap) {
   }
   renderFeed();
   updateHud();
+  syncGridResultsButton();
 }
 
 function clearPoints() {
@@ -806,6 +828,7 @@ function rowEl(result) {
 
 function focusResult(result) {
   showSelected(result);
+  if (phoneLayout()) setGridResultsOpen(false);
   const entity = state.points.get(result.index);
   if (!entity || !state.viewer) return;
   state.viewer.selectedEntity = entity;
@@ -830,7 +853,9 @@ function updateHud() {
 }
 
 function setStatus(text) {
-  document.getElementById("status-line").textContent = text;
+  const track = document.getElementById("status-track");
+  if (track) track.textContent = text;
+  else document.getElementById("status-line").textContent = text;
 }
 
 function tickClock() {
@@ -843,7 +868,9 @@ function setFeedMode(mode) {
   state.feedMode = allowed.includes(mode) ? mode : "outages";
   for (const name of allowed) {
     const pane = document.getElementById(`${name}-pane`);
-    if (pane) pane.hidden = state.feedMode !== name;
+    if (!pane) continue;
+    const heldOpen = name === "returns" && gridSheetOpen();
+    pane.hidden = state.feedMode !== name && !heldOpen;
   }
   for (const button of document.querySelectorAll("[data-feed]")) {
     button.classList.toggle("on", button.dataset.feed === state.feedMode);
@@ -918,7 +945,101 @@ function resetMap() {
   setShipFilter("underway", false);
   renderFeed();
   updateHud();
+  setGridResultsOpen(false);
   setStatus("MAP RESET · LAYERS OFF");
+}
+
+function gridSheetOpen() {
+  const panel = document.getElementById("grid-results");
+  return Boolean(panel && !panel.hidden);
+}
+
+function hasGridResults() {
+  return state.running || state.results.some(Boolean);
+}
+
+function placeReturnsPane(open) {
+  const pane = document.getElementById("returns-pane");
+  if (!pane) return;
+  if (open) {
+    document.getElementById("grid-results-body").append(pane);
+    pane.hidden = false;
+    return;
+  }
+  document.querySelector(".feed-col").append(pane);
+  pane.hidden = state.feedMode !== "returns";
+}
+
+function setGridResultsOpen(open) {
+  const panel = document.getElementById("grid-results");
+  const button = document.getElementById("open-grid-results");
+  if (!panel || !button) return;
+  if (!phoneLayout()) open = false;
+  if (open) {
+    placeReturnsPane(true);
+    panel.hidden = false;
+    button.hidden = true;
+    setPanel("");
+    return;
+  }
+  placeReturnsPane(false);
+  panel.hidden = true;
+  button.hidden = !(phoneLayout() && hasGridResults());
+}
+
+function syncGridResultsButton() {
+  if (gridSheetOpen()) return;
+  const button = document.getElementById("open-grid-results");
+  if (!button) return;
+  button.hidden = !(phoneLayout() && hasGridResults());
+}
+
+let installPrompt = null;
+
+function appIsInstalled() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function syncInstallButton() {
+  const button = document.getElementById("install-app");
+  if (!button) return;
+  button.hidden = !phoneLayout() || appIsInstalled();
+}
+
+function hookInstall() {
+  const button = document.getElementById("install-app");
+  const help = document.getElementById("install-help");
+  const close = document.getElementById("install-help-close");
+  if (!button) return;
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    installPrompt = event;
+    syncInstallButton();
+  });
+  window.addEventListener("appinstalled", () => {
+    installPrompt = null;
+    button.hidden = true;
+    if (help) help.hidden = true;
+  });
+  button.addEventListener("click", async () => {
+    if (!phoneLayout()) return;
+    if (installPrompt) {
+      try {
+        installPrompt.prompt();
+        await installPrompt.userChoice;
+        installPrompt = null;
+        return;
+      } catch (error) {
+        installPrompt = null;
+      }
+    }
+    if (help) help.hidden = false;
+  });
+  if (close && help) close.addEventListener("click", () => { help.hidden = true; });
+  if (phoneLayout() && "serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
+  syncInstallButton();
 }
 
 function setLayer(layer, on) {
@@ -944,12 +1065,44 @@ function setLayer(layer, on) {
     syncTrafficBars();
   }
   if (layer === "ships" && state.layers.ships) scheduleShips();
+  if (layer === "mesh" && state.layers.mesh) scheduleMesh();
   if (layer === "outages" && state.layers.outages && !state.outageMeta) {
     loadOutages().catch((error) => statusLive(error.message || String(error)));
   }
   if (layer === "hunger" && state.layers.hunger && !state.hungerMeta) {
     loadHunger().catch((error) => statusLive(error.message || String(error)));
   }
+  syncMobilePick(layer);
+}
+
+const LAYER_LABEL = {
+  outages: "POWER OUTAGES",
+  stream: "SCANNERS",
+  jamming: "JAMMED GPS SIGNALS",
+  aircraft: "LIVE AIR TRAFFIC",
+  ships: "MARITIME TRAFFIC",
+  conflicts: "CONFLICT TRACKER",
+  hunger: "WORLD HUNGER",
+  mesh: "MESH NODES",
+};
+
+function syncMobilePick(just) {
+  const line = document.getElementById("mobile-pick");
+  if (!line) return;
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh"];
+  const on = order.filter((key) => state.layers[key]);
+  if (just && state.layers[just]) {
+    const rest = on.filter((key) => key !== just);
+    on.length = 0;
+    on.push(just, ...rest);
+  }
+  if (!on.length) {
+    line.hidden = true;
+    line.textContent = "";
+    return;
+  }
+  line.hidden = false;
+  line.textContent = on.map((key) => LAYER_LABEL[key] || key).join(" · ");
 }
 
 function syncTrafficBars() {
@@ -1790,6 +1943,7 @@ const LIVE_STYLE = {
   jamming: { color: "#ff7a3a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "JAMMED GPS SIGNALS" },
   aircraft: { color: "#7ec8ff", outline: "#082033", size: () => 5, kind: "ADS-B" },
   ships: { color: "#3dffd0", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "MARITIME" },
+  mesh: { color: "#8fe04a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "MESH NODES" },
 };
 
 function aircraftOnGround(point) {
@@ -2132,7 +2286,7 @@ function publishShips(points) {
   placeLiveLayer("ships", points);
   setCount("ships", shipDrawList(points).draw.length);
   const credit = document.querySelector(".ship-credit");
-  if (credit) credit.innerHTML = shipCredit(points);
+  if (credit) credit.innerHTML = `<span class="ship-credit-track">${shipCredit(points)}</span>`;
   if (!state.running) statusLive();
 }
 
@@ -2162,6 +2316,32 @@ async function loadShips() {
   } catch (error) {
     if (token !== shipLoadToken) return;
     if (!state.live.ships.points.length) setStatus("MARITIME FEED UNAVAILABLE");
+  }
+}
+
+let meshTimer = 0;
+let meshToken = 0;
+
+function scheduleMesh() {
+  clearTimeout(meshTimer);
+  meshTimer = setTimeout(loadMesh, 400);
+}
+
+async function loadMesh() {
+  if (!state.layers.mesh) return;
+  const token = ++meshToken;
+  try {
+    const response = await fetch("/api/mesh");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Mesh Nodes failed");
+    if (token !== meshToken || !state.layers.mesh) return;
+    const points = Array.isArray(body.points) ? body.points : [];
+    state.live.mesh.points = points;
+    placeLiveLayer("mesh", points);
+    setCount("mesh", points.length);
+  } catch (error) {
+    if (token !== meshToken) return;
+    setCount("mesh", state.live.mesh.points.length || "—");
   }
 }
 
@@ -2236,6 +2416,23 @@ async function pollLiveFeeds() {
   statusLive();
 }
 
+function keepFlatMapIntact() {
+  const viewer = state.viewer;
+  if (!viewer || viewer.scene.mode !== Cesium.SceneMode.SCENE2D) return;
+  const z = viewer.camera.position.z;
+  const frustum = viewer.camera.frustum;
+  if (!(z > 1) || !frustum) return;
+  // Markers report a bounding sphere as wide as the Earth. On the flat
+  // map that splits drawing into horizontal strips. Android draws those
+  // strips out of line once you zoom in. One tight depth window keeps
+  // the map in a single strip. The ground sits at this camera height,
+  // and aircraft are only a few kilometers above it.
+  const near = Math.max(1, z - 80000);
+  const far = z + 200000;
+  if (frustum.near !== near) frustum.near = near;
+  if (frustum.far !== far) frustum.far = far;
+}
+
 function cullAircraftHorizon() {
   const viewer = state.viewer;
   if (!viewer) return;
@@ -2243,6 +2440,7 @@ function cullAircraftHorizon() {
     state.live.jamming.source,
     state.live.aircraft.source,
     state.live.ships.source,
+    state.live.mesh.source,
     state.outageSource,
     state.hungerSource,
   ];
@@ -2372,6 +2570,11 @@ function showLive(item) {
   let extra = "";
   if (item.url) extra = `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">CFR briefing</a>`;
   else if (item.pct != null) extra = `<br>${item.pct}% bad NACp · ${item.bad || 0} degraded`;
+  else if (item.layer === "mesh") {
+    const bits = [item.short, item.hw, item.role].filter(Boolean).map((part) => esc(part));
+    extra = bits.length ? `<br>${bits.join(" · ")}` : "";
+    extra += `<br><a href="https://meshmap.net/#${encodeURIComponent(item.id || "")}" target="_blank" rel="noreferrer">meshmap.net</a>`;
+  }
   else if (item.sog != null) extra = `<br>${esc(shipTypeLabel(item))} · ${esc(item.sog)} kn`;
   box.innerHTML = `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
 }

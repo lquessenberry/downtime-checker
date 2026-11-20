@@ -7,6 +7,12 @@
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#070b10" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Global Status" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <!-- Offline copy of https://downtime-globe.fly.dev/ saved 2026-11-18.
        Folder: ~/Desktop/quietearth
        Double-click "Global Status App" on the Desktop, or run: python3 serve.py
@@ -40,6 +46,7 @@
       <button type="button" id="open-list">LIST</button>
       <button type="button" id="reset-mobile">RESET MAP</button>
     </div>
+    <button type="button" id="install-app" class="install-app" hidden>INSTALL MOBILE APP</button>
   </header>
 
   <button type="button" id="panel-backdrop" class="panel-backdrop" hidden>Close</button>
@@ -62,6 +69,7 @@
       <button type="button" class="layer" data-layer-toggle="ships" aria-pressed="false"><span class="layer-name"><span class="swatch ais"></span> MARITIME TRAFFIC</span><span class="layer-meta"><em data-count="ships">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="conflicts" aria-pressed="false"><span class="layer-name"><span class="swatch war"></span> CONFLICT TRACKER</span><span class="layer-meta"><em data-count="conflicts">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="hunger" aria-pressed="false"><span class="layer-name"><span class="swatch hunger"></span> WORLD HUNGER</span><span class="layer-meta"><em data-count="hunger">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="mesh" aria-pressed="false"><span class="layer-name"><span class="swatch mesh"></span> MESH NODES</span><span class="layer-meta"><em data-count="mesh">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
     </div>
   </aside>
@@ -134,7 +142,7 @@
       <dl id="ac-facts"></dl>
     </aside>
     <div class="progress-wrap"><div class="progress" id="progress"></div></div>
-    <p class="ship-credit" hidden>Positions from <a href="https://openwaters.io/ais/#license" target="_blank" rel="noreferrer">Open Waters AIS</a></p>
+    <p class="ship-credit" hidden><span class="ship-credit-track">Positions from <a href="https://openwaters.io/ais/#license" target="_blank" rel="noreferrer">Open Waters AIS</a></span></p>
     <div class="view-settings" id="view-settings">
       <div class="view-head">
         <span>VIEW</span>
@@ -166,6 +174,7 @@
       </label>
     </div>
     <button type="button" id="open-view" class="view-reopen" hidden>VIEW</button>
+    <button type="button" id="open-grid-results" class="grid-results-open" hidden>VIEW GRID RESULTS</button>
   </main>
 
   <aside class="feed-col">
@@ -221,6 +230,7 @@
   </aside>
 
   <footer class="hud-bot">
+    <div id="mobile-pick" class="mobile-pick" hidden></div>
     <div class="legend">
       <button type="button" class="layer" data-layer-toggle="outages" aria-pressed="false"><span class="swatch outage"></span> POWER OUTAGES <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="stream" aria-pressed="false"><span class="swatch stream"></span> SCANNERS <span class="switch" aria-hidden="true"></span></button>
@@ -229,8 +239,9 @@
       <button type="button" class="layer" data-layer-toggle="ships" aria-pressed="false"><span class="swatch ais"></span> MARITIME TRAFFIC <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="conflicts" aria-pressed="false"><span class="swatch war"></span> CONFLICT TRACKER <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="hunger" aria-pressed="false"><span class="swatch hunger"></span> WORLD HUNGER <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="mesh" aria-pressed="false"><span class="swatch mesh"></span> MESH NODES <span class="switch" aria-hidden="true"></span></button>
     </div>
-    <div id="status-line">CESIUM READY · LOADING POWER OUTAGES, JAMMED GPS SIGNALS, AND CONFLICT TRACKER</div>
+    <div id="status-line"><span id="status-track">CESIUM READY · LOADING POWER OUTAGES, JAMMED GPS SIGNALS, AND CONFLICT TRACKER</span></div>
   </footer>
 
   <div id="sdr-listen" hidden>
@@ -246,6 +257,23 @@
     <div id="sdr-direct" class="sdr-direct" hidden>
       <p>This radio has to open from your browser so the station sees your connection. The secure map cannot draw it inside the page.</p>
       <a id="sdr-listen-now" class="sdr-listen-now" href="#" target="_blank" rel="noopener noreferrer">LISTEN</a>
+    </div>
+  </div>
+
+  <div id="grid-results" class="grid-results" hidden>
+    <div class="grid-results-bar">
+      <span>GRID RESULTS</span>
+      <button type="button" id="close-grid-results">CLOSE</button>
+    </div>
+    <div id="grid-results-body" class="grid-results-body"></div>
+  </div>
+
+  <div id="install-help" class="install-help" hidden>
+    <div class="install-help-card">
+      <strong>INSTALL MOBILE APP</strong>
+      <p>iPhone: tap Share, then Add to Home Screen.</p>
+      <p>Android: tap the browser menu, then Install app or Add to Home screen.</p>
+      <button type="button" id="install-help-close">CLOSE</button>
     </div>
   </div>
 

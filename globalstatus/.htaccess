@@ -10,7 +10,9 @@ Options -Indexes
   RewriteRule ^api(?:/|$) router.php [L,QSA]
 </IfModule>
 
-<FilesMatch "^(router\.php|index\.html|cesium\.(js|css))$">
+AddType application/manifest+json .webmanifest
+
+<FilesMatch "^(router\.php|index\.html|cesium\.(js|css)|sw\.js|manifest\.webmanifest)$">
   <IfModule mod_headers.c>
     Header set Cache-Control "no-store"
   </IfModule>
