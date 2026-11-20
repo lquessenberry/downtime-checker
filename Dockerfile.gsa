@@ -1,15 +1,23 @@
-FROM php:8.3-cli-bookworm
+FROM php:8.3-fpm-bookworm
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends libcurl4-openssl-dev \
+  && apt-get install -y --no-install-recommends nginx libcurl4-openssl-dev iputils-ping \
   && docker-php-ext-install curl \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && rm -f /etc/nginx/sites-enabled/default \
+  && { echo 'opcache.enable=1'; echo 'opcache.memory_consumption=64'; } \
+       > /usr/local/etc/php/conf.d/opcache-gsa.ini
 
 WORKDIR /app
 COPY globalstatus/ /app/
-COPY scripts/gsa_php_router.php /app/gsa_php_router.php
-RUN chmod -R a+rwX /app/data
+COPY nginx.gsa.conf /etc/nginx/conf.d/gsa.conf
+COPY scripts/gsa-php-fpm.conf /usr/local/etc/php-fpm.d/zz-gsa.conf
+COPY scripts/gsa-start.sh /usr/local/bin/gsa-start.sh
+RUN chmod -R a+rwX /app/data \
+  && chmod +x /usr/local/bin/gsa-start.sh \
+  && sed -i 's/^user /# user /' /etc/nginx/nginx.conf \
+  && sed -i 's/worker_processes .*/worker_processes auto;/' /etc/nginx/nginx.conf
 
 ENV PORT=8080
 EXPOSE 8080
-CMD ["php", "-S", "0.0.0.0:8080", "-t", "/app", "/app/gsa_php_router.php"]
+CMD ["/usr/local/bin/gsa-start.sh"]
