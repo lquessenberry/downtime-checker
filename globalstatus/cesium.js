@@ -70,6 +70,7 @@ const state = {
   trafficPane: "air",
   scanWanted: false,
   scanLive: false,
+  replayGen: 0,
 };
 
 const COLORS = {
@@ -145,7 +146,6 @@ async function boot() {
   renderSearches(catalog);
   fillCountries(catalog.countries);
   hookUi();
-  connectEvents();
   tickClock();
   Promise.allSettled([
     loadOutages(),
@@ -158,7 +158,9 @@ async function boot() {
     if (failed) statusLive(failed.reason?.message || String(failed.reason));
     else statusLive();
   });
-  setInterval(pollLiveFeeds, 8000);
+  setInterval(() => {
+    if (state.layers.aircraft || state.layers.jamming) pollLiveFeeds();
+  }, 180000);
   setInterval(() => {
     loadOutages().catch((error) => statusLive(error.message || String(error)));
   }, 180000);
@@ -526,7 +528,11 @@ function fillCountries(list) {
 
 function hookUi() {
   document.getElementById("btn-stop").addEventListener("click", () => {
-    fetch("/api/stop", { method: "POST" });
+    state.replayGen += 1;
+    state.running = false;
+    document.getElementById("btn-stop").hidden = true;
+    setStatus("SCAN ABORTED");
+    updateHud();
   });
   document.getElementById("btn-reset").addEventListener("click", resetMap);
   document.getElementById("reset-mobile").addEventListener("click", resetMap);
@@ -643,15 +649,82 @@ async function startScan(id, country) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, country: country || "" }),
   });
+  const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     state.scanWanted = false;
     state.scanLive = false;
-    const body = await response.json().catch(() => ({}));
     setStatus(body.error || "SCAN REFUSED");
+    return;
   }
+  if (body.pending || !body.state || !(body.state.results || []).some(Boolean)) {
+    setStatus(body.error || "GRID PASS NOT READY YET");
+    return;
+  }
+  replayScan(body.state);
+}
+
+function replayScan(snap) {
+  const results = (snap.results || []).filter(Boolean);
+  const gen = ++state.replayGen;
+  clearPoints();
+  state.results = [];
+  state.running = true;
+  state.scanLive = true;
+  state.total = results.length;
+  state.done = 0;
+  state.up = 0;
+  state.down = 0;
+  state.startedAt = Date.now();
+  state.heading = snap.heading || "GRID";
+  state.selected = null;
+  document.getElementById("heading").textContent = state.heading.toUpperCase();
+  document.getElementById("btn-stop").hidden = false;
+  if (state.scanSource) state.scanSource.show = true;
+  setFeedMode("returns");
+  document.getElementById("link-dot").className = "pulse-dot live";
+  document.getElementById("selected").hidden = true;
+  setStatus(`TASKING ${results.length} NODES · ${state.heading.toUpperCase()}`);
+  renderFeed();
+  updateHud();
+  syncGridResultsButton();
+  const n = results.length;
+  const span = Math.min(12000, Math.max(2800, n * 6));
+  const t0 = performance.now();
+  let i = 0;
+  function step() {
+    if (gen !== state.replayGen) return;
+    const elapsed = performance.now() - t0;
+    const target = Math.min(n, Math.max(i + 1, Math.floor((elapsed / span) * n)));
+    while (i < target) {
+      const result = results[i];
+      result.index = result.index ?? i;
+      state.results[result.index] = result;
+      upsertPoint(result);
+      if (result.status === "up") state.up += 1;
+      else state.down += 1;
+      i += 1;
+    }
+    state.done = i;
+    updateHud();
+    syncGridResultsButton();
+    if (i < n) {
+      requestAnimationFrame(step);
+      return;
+    }
+    state.running = false;
+    document.getElementById("btn-stop").hidden = true;
+    document.getElementById("link-dot").className = state.down ? "pulse-dot hot" : "pulse-dot live";
+    const ms = performance.now() - t0;
+    setStatus(`COMPLETE · ${state.up} UP · ${state.down} DOWN · ${(ms / 1000).toFixed(1)}s`);
+    renderFeed();
+    updateHud();
+    syncGridResultsButton();
+  }
+  requestAnimationFrame(step);
 }
 
 function connectEvents() {
+  // Kept for debugging a live runner pass. Lock & Scan replays scan-cache (#34).
   const stream = new EventSource("/api/events");
   stream.onmessage = (message) => {
     const event = JSON.parse(message.data);
@@ -1104,6 +1177,7 @@ function setLayer(layer, on) {
     syncTrafficBars();
   }
   if (layer === "ships" && state.layers.ships) scheduleShips();
+  if ((layer === "aircraft" || layer === "jamming") && state.layers[layer]) pollLiveFeeds();
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
   if (layer === "disease" && state.layers.disease) scheduleDisease();
   if (layer === "animal" && state.layers.animal) scheduleAnimal();

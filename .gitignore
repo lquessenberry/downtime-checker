@@ -18,6 +18,13 @@ visualizer/data/feeds.json
 .netrc
 globalstatus/data/*.lock
 globalstatus/data/stop.flag
+globalstatus/data/scan-cache.json
+globalstatus/data/poll-status.json
+globalstatus/data/feeds-cache.json
+globalstatus/data/aircraft-live.json
+globalstatus/data/adsb-step.json
+globalstatus/data/disease-cache.json
+globalstatus/data/animal-cache.json
 globalstatus/.ftpquota
 
 # Designation claims (#60): live jsonl stays local. SPLC exports must never be committed.
