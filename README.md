@@ -117,6 +117,10 @@ Wiki index: [wiki/Home.md](wiki/Home.md).
 
 `bash install.sh` adds Downtime UI and Downtime Cesium launchers in `Desktop/Pentesting` when that folder already exists, and in the application menu. Node.js is required for both globes.
 
+## Working an issue
+
+Pick a GitHub issue on this fork. The agent opens a branch from `feat/globalstatus-prod`, commits, and pushes. **Deploy to staging** publishes https://downtime-globe.fly.dev so you can see it live on Lee's Fly account. **Go live** is a separate FTP push to https://globalstatus.app (Action dry-run default). Prefer a PR over editing the live FTP tree while someone else is uploading. Tracker: [#2](https://github.com/lquessenberry/downtime-checker/issues/2).
+
 ## Staging (Fly.io) and production (globalstatus.app)
 
 **Staging** is the Node globe on Lee's Fly account. **Production** is the live FTP tree on GoDaddy, snapshot in [`globalstatus/`](globalstatus/).
