@@ -663,12 +663,16 @@ button:hover { border-color: #9fd4e2; }
 .swatch.war { background: #d65b29; }
 .swatch.hunger { background: #af4729; }
 .swatch.mesh { background: #8fe04a; }
+.swatch.disease { background: #ff4d6a; }
+.swatch.animal { background: #e2b340; }
 .layer[data-layer-toggle="conflicts"],
 .layer[data-layer-toggle="aircraft"],
 .layer[data-layer-toggle="jamming"],
 .layer[data-layer-toggle="ships"],
 .layer[data-layer-toggle="outages"],
-.layer[data-layer-toggle="hunger"] { letter-spacing: 0.04em; }
+.layer[data-layer-toggle="hunger"],
+.layer[data-layer-toggle="disease"],
+.layer[data-layer-toggle="animal"] { letter-spacing: 0.04em; }
 .legend .layer {
   display: inline-flex;
   align-items: center;
