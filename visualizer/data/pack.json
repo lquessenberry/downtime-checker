@@ -1,7 +1,7 @@
 {
   "name": "downtime-data",
   "version": 1,
-  "built": "2026-11-20T16:28:15.315Z",
+  "built": "2026-11-20T23:07:58.114Z",
   "datasets": [
     "websdr",
     "gpsjam",
