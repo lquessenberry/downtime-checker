@@ -147,7 +147,7 @@ GitHub Actions on this fork (`lquessenberry/downtime-checker`) stores the global
 
 Do not store church FTP logins. Fork PRs cannot use these secrets on `willlccasey/downtime-checker`.
 
-Static overlay JSON (WebSDR, gpsjam.org, CFR conflicts, Broadcastify streams, Uniden RADIO, host catalog) is refreshed by **Actions → Refresh static data**. Cron: overlays twice daily, streams daily, radio weekly. Live AIR/AIS/JAM/outages are not written to git. Source table: [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md).
+Static overlay JSON (WebSDR, gpsjam.org, CFR conflicts, Broadcastify streams, Uniden RADIO, host catalog) is refreshed by **Actions → Refresh static data**. Cron: overlays twice daily, streams daily, radio weekly. The fork default branch is `feat/globalstatus-prod` so those schedules run. Live AIR/AIS/JAM/outages are not written to git. Source table: [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md).
 
 ```bash
 node scripts/refresh_static_data.mjs overlays

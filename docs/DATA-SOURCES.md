@@ -33,8 +33,7 @@ node scripts/refresh_static_data.mjs all
 ```
 
 Actions: **Refresh static data** (`workflow_dispatch` + cron). Cron only fires from
-the repository **default branch**. Keep this workflow on fork `main`, or set the
-fork default to `feat/globalstatus-prod`.
+the repository **default branch**. The fork default is `feat/globalstatus-prod`.
 
 ## Live (do not cron into git)
 
