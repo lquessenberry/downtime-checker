@@ -46,6 +46,8 @@ the repository **default branch**. The fork default is `feat/globalstatus-prod`.
 | MIL | `https://api.adsb.lol/v2/mil` via `router.php` | PHP cache `globalstatus/data/mil-cache.json` | Same 500/day budget. |
 | Scan / geo | Catalog hosts + `https://ipwho.is/{ip}` | On CHECK GRID | `locations.json` is a local cache. Do not PR it. |
 | SAT tiles | EOX Sentinel-2 via `/tiles/eox/...` | On pan/zoom | Disk cache only. |
+| DISEASE OUTBREAK | [HealthMap](https://www.healthmap.org/en/) `GET https://www.healthmap.org/getAlerts.php` with `category[]=1` (New & Ongoing Outbreaks), `2` (Warnings), `29` (International Significance), `time_interval=1 week`. Boston Children's Hospital Computational Epidemiology Group. Same AJAX the public map uses. No published bulk API. Click credit: healthmap.org. Cache `globalstatus/data/disease-cache.json` 180s. | On layer on | News + official alerts, not case-line lists. Marker links on HealthMap are `javascript:b(alertId)`, so we credit the map, not a deep-link. |
+| ANIMAL DISEASE OUTBREAK | [GIDEON](https://app.gideononline.com/updates/outbreaks) public feed `GET https://app.gideononline.com/api/public/diseases/events?return=simple`, rows with `is_animal`. That JSON is what the public outbreaks page loads (~11k events, ~8.5k animal). The **licensed** REST API at [api-doc.gideononline.com](https://api-doc.gideononline.com/) needs an institutional key (`kristina@gideononline.com`). Cache `globalstatus/data/animal-cache.json` 600s. | On layer on | Historical + current; we keep GIDEON's `is_animal` filter. Official animal records also live at [WOAH WAHIS](https://wahis.woah.org/#/home) (no simple public JSON). |
 
 `feeds.json` is a last-known live snapshot. Do not schedule it; a 4-second boot
 sample hammers nothing useful and the file is large.
@@ -65,4 +67,6 @@ sample hammers nothing useful and the file is large.
 - FAO Hunger Map / SOFI: undernourishment prevalence.
 - EOX 2018–2025 mosaics are CC BY-NC-SA; ads need a commercial license or the 2016 CC BY mosaic.
 - Uniden HPDB is the public BT885 Update Manager dump.
+- HealthMap: credit Boston Children's Hospital / healthmap.org. Aggregates news, ProMED, WHO, etc.
+- GIDEON: credit gideononline.com. Public events feed is free to view; bulk licensed API is not. Do not scrape the paid app UI.
 - Do not use ADS-B Exchange as a bulk API. Do not store church FTP logins.
