@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Global Status App</title>
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <!-- Offline copy of https://downtime-globe.fly.dev/ saved 2026-11-18.
+       Folder: ~/Desktop/quietearth
+       Double-click "Global Status App" on the Desktop, or run: python3 serve.py
+       Then open http://127.0.0.1:4180/ and refresh after edits.
+       The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
+  <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
+  <link rel="stylesheet" href="/cesium.css" />
+  <script>
+    window.CESIUM_BASE_URL = "/vendor/cesium/";
+  </script>
+  <script src="/vendor/cesium/Cesium.js"></script>
+</head>
+<body>
+  <header class="hud-top">
+    <div class="brand">
+      <div class="pulse-dot" id="link-dot"></div>
+      <div>
+        <h1>Global Status App</h1>
+        <p class="tag">CESIUM GLOBE // POWER OUTAGES · SCANNERS · JAMMED GPS SIGNALS · ADS-B · CONFLICT TRACKER</p>
+      </div>
+    </div>
+    <div class="meters">
+      <div class="meter"><span>CHECKED</span><strong id="stat-done">0</strong><em id="stat-total">/ 0</em></div>
+      <div class="meter up"><span>ONLINE</span><strong id="stat-up">0</strong></div>
+      <div class="meter down"><span>OFFLINE</span><strong id="stat-down">0</strong></div>
+      <div class="meter"><span>UPTIME</span><strong id="stat-pct">—</strong></div>
+    </div>
+    <div class="clock" id="clock">00:00:00Z</div>
+    <div class="mobile-nav">
+      <button type="button" id="open-menu">MENU</button>
+      <button type="button" id="open-list">LIST</button>
+      <button type="button" id="reset-mobile">RESET MAP</button>
+    </div>
+  </header>
+
+  <button type="button" id="panel-backdrop" class="panel-backdrop" hidden>Close</button>
+
+  <aside class="rail">
+    <button type="button" class="drawer-close" id="close-menu">CLOSE</button>
+    <button type="button" id="btn-stop" hidden>ABORT</button>
+    <label class="country-pick">
+      <span>COUNTRY GRID STATUS</span>
+      <select id="country"></select>
+      <select id="us-test" hidden></select>
+      <button type="button" id="btn-country">LOCK &amp; SCAN</button>
+    </label>
+    <div class="live-overlays">
+      <div class="rail-head"><span>LAYERS</span></div>
+      <button type="button" class="layer" data-layer-toggle="outages" aria-pressed="false"><span class="layer-name"><span class="swatch outage"></span> POWER OUTAGES</span><span class="layer-meta"><em data-count="outages">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="stream" aria-pressed="false"><span class="layer-name"><span class="swatch stream"></span> SCANNERS</span><span class="layer-meta"><em data-count="stream">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="jamming" aria-pressed="false"><span class="layer-name"><span class="swatch jam"></span> JAMMED GPS SIGNALS</span><span class="layer-meta"><em data-count="jamming">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="aircraft" aria-pressed="false"><span class="layer-name"><span class="swatch air"></span> LIVE AIR TRAFFIC</span><span class="layer-meta"><em data-count="aircraft">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="ships" aria-pressed="false"><span class="layer-name"><span class="swatch ais"></span> MARITIME TRAFFIC</span><span class="layer-meta"><em data-count="ships">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="conflicts" aria-pressed="false"><span class="layer-name"><span class="swatch war"></span> CONFLICT TRACKER</span><span class="layer-meta"><em data-count="conflicts">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="hunger" aria-pressed="false"><span class="layer-name"><span class="swatch hunger"></span> WORLD HUNGER</span><span class="layer-meta"><em data-count="hunger">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
+    </div>
+  </aside>
+
+  <main class="stage">
+    <div id="cesium"></div>
+    <div class="stage-stack">
+      <div class="stage-meta">
+        <div id="heading">AWAITING TASKING</div>
+        <div id="hint">DRAG OR PINCH · SCROLL ZOOMS · MAP CONTROLS AT BOTTOM RIGHT</div>
+      </div>
+      <div class="traffic-switch" hidden role="group" aria-label="Which traffic filters">
+        <button type="button" class="on" data-traffic-pane="air" aria-pressed="true">AIR</button>
+        <button type="button" data-traffic-pane="ships" aria-pressed="false">MARITIME</button>
+      </div>
+      <div class="air-filters" role="group" aria-label="Aircraft traffic">
+        <button type="button" class="on" data-air-filter="all" aria-pressed="true">ALL TRAFFIC</button>
+        <button type="button" data-air-filter="mil" aria-pressed="false">MILITARY ONLY</button>
+        <button type="button" data-air-filter="airliner" aria-pressed="false">AIRLINERS</button>
+        <button type="button" data-air-filter="heli" aria-pressed="false">HELICOPTERS</button>
+        <button type="button" data-air-filter="ground" aria-pressed="false">GROUND</button>
+      </div>
+      <div class="ship-filters" role="group" aria-label="Maritime traffic">
+        <button type="button" data-ship-filter="all" aria-pressed="false">ALL TRAFFIC</button>
+        <button type="button" class="on" data-ship-filter="underway" aria-pressed="true">UNDERWAY</button>
+        <button type="button" data-ship-filter="stopped" aria-pressed="false">STOPPED</button>
+        <button type="button" data-ship-filter="fast" aria-pressed="false">FAST</button>
+        <button type="button" data-ship-filter="cargo" aria-pressed="false">CARGO</button>
+        <button type="button" data-ship-filter="tanker" aria-pressed="false">TANKER</button>
+        <button type="button" data-ship-filter="passenger" aria-pressed="false">PASSENGER</button>
+        <button type="button" data-ship-filter="fishing" aria-pressed="false">FISHING</button>
+      </div>
+      <aside id="outage-card" class="outage-card" hidden>
+        <button type="button" id="outage-close" aria-label="Close">×</button>
+        <h2 id="outage-title"></h2>
+        <p id="outage-body"></p>
+      </aside>
+      <aside id="hunger-card" class="outage-card" hidden>
+        <button type="button" id="hunger-close" aria-label="Close">×</button>
+        <h2 id="hunger-title"></h2>
+        <p id="hunger-body"></p>
+      </aside>
+      <aside id="conflict-card" class="conflict-card" hidden>
+      <div class="cc-photo-wrap">
+        <img id="cc-photo" alt="" hidden />
+        <button type="button" id="cc-close" aria-label="Close">×</button>
+      </div>
+      <h2 id="cc-title"></h2>
+      <dl class="cc-facts">
+        <div><dt>TYPE</dt><dd id="cc-type"></dd></div>
+        <div><dt>IMPACT ON U.S.</dt><dd id="cc-impact"></dd></div>
+        <div><dt>STATUS</dt><dd><span id="cc-status" class="cc-status"></span></dd></div>
+      </dl>
+      <p id="cc-desc"></p>
+      <a id="cc-more" class="cc-more" href="https://www.cfr.org/global-conflict-tracker" target="_blank" rel="noopener noreferrer">LEARN MORE</a>
+    </aside>
+    </div>
+    <div class="selected" id="selected" hidden></div>
+    <aside id="aircraft-card" class="aircraft-card" hidden>
+      <div class="ac-top">
+        <div>
+          <strong id="ac-flight"></strong>
+          <div class="ac-hex">Hex: <span id="ac-hex"></span></div>
+        </div>
+        <button type="button" id="ac-close" aria-label="Close">×</button>
+      </div>
+      <a id="ac-link" href="#" target="_blank" rel="noreferrer">adsb.lol</a>
+      <img id="ac-photo" alt="" hidden />
+      <p id="ac-credit" hidden></p>
+      <dl id="ac-facts"></dl>
+    </aside>
+    <div class="progress-wrap"><div class="progress" id="progress"></div></div>
+    <p class="ship-credit" hidden>Positions from <a href="https://openwaters.io/ais/#license" target="_blank" rel="noreferrer">Open Waters AIS</a></p>
+    <div class="view-settings" id="view-settings">
+      <div class="view-head">
+        <span>VIEW</span>
+        <button type="button" id="close-view">CLOSE</button>
+      </div>
+      <div class="mode-row" role="group" aria-label="Globe mode">
+        <button type="button" id="mode-3d" class="chip on" aria-pressed="true">3D</button>
+        <button type="button" id="mode-2d" class="chip" aria-pressed="false">2D</button>
+      </div>
+      <label>
+        <span>MAP</span>
+        <select id="basemap">
+          <option value="natural">Natural Earth II</option>
+          <option value="plain">Plain globe</option>
+          <option value="osm">OpenStreetMap</option>
+          <option value="streets" selected>Street map</option>
+          <option value="satellite">Aerial photo</option>
+          <option value="sentinel">Sentinel-2</option>
+          <option value="marble">Blue Marble</option>
+          <option value="night">Earth at night</option>
+        </select>
+      </label>
+      <label>
+        <span>TERRAIN</span>
+        <select id="terrain">
+          <option value="ellipsoid" selected>Simple (fastest)</option>
+          <option value="elevation">Elevation</option>
+        </select>
+      </label>
+    </div>
+    <button type="button" id="open-view" class="view-reopen" hidden>VIEW</button>
+  </main>
+
+  <aside class="feed-col">
+    <button type="button" class="drawer-close" id="close-list">CLOSE</button>
+    <div class="rail-head">
+      <span id="feed-title">POWER OUTAGES</span>
+      <div class="toggles" id="feed-mode">
+        <button type="button" class="chip on" data-feed="outages">OUTAGES</button>
+        <button type="button" class="chip" data-feed="stream">SCANNERS</button>
+        <button type="button" class="chip" data-feed="conflicts">TRACKER</button>
+        <button type="button" class="chip" data-feed="hunger">HUNGER</button>
+      </div>
+    </div>
+    <div id="outages-pane">
+      <p class="layer-credit" id="outage-credit">US pins are counties from utilities that report to DOE/ORNL ODIN, not every US outage. United Kingdom pins are unplanned outages from UK Power Networks, Northern Powergrid, and National Grid Electricity Distribution. SP Energy Networks, Electricity North West, Northern Ireland Electricity, and SSEN are not included. Canada pins are Hydro-Québec unplanned outages only. Australia, Ireland, New Zealand, and South Africa do not publish an open live location feed that can be pinned.</p>
+      <label class="sdr-filter-wrap">
+        <input id="outage-filter" type="search" placeholder="Place, region, or utility" autocomplete="off" />
+      </label>
+      <div class="feed" id="outage-list"></div>
+    </div>
+    <div id="stream-pane" hidden>
+      <p class="layer-credit">Live scanners from OpenMHz. A pin opens their player here.</p>
+      <label class="sdr-filter-wrap">
+        <input id="stream-filter" type="search" placeholder="System, city, or state" autocomplete="off" />
+      </label>
+      <div class="feed" id="stream-list"></div>
+    </div>
+    <div id="hunger-pane" hidden>
+      <p class="layer-credit" id="hunger-credit">Prevalence of undernourishment from the <a href="https://www.fao.org/interactive/hunger-map/en/" target="_blank" rel="noopener noreferrer">FAO Hunger Map</a>. Countries marked as no data are not pinned.</p>
+      <label class="sdr-filter-wrap">
+        <input id="hunger-filter" type="search" placeholder="Country or region" autocomplete="off" />
+      </label>
+      <div class="feed" id="hunger-list"></div>
+    </div>
+    <div id="conflicts-pane" hidden>
+      <p class="layer-credit" id="conflict-credit"></p>
+      <label class="sdr-filter-wrap">
+        <input id="conflict-filter" type="search" placeholder="Conflict, region, or status" autocomplete="off" />
+      </label>
+      <div class="feed" id="conflict-list"></div>
+    </div>
+    <div id="returns-pane" hidden>
+      <div class="rail-head sub">
+        <span>LIVE RETURNS</span>
+        <div class="toggles">
+          <button type="button" class="chip on" data-filter="all">ALL</button>
+          <button type="button" class="chip" data-filter="down">DOWN</button>
+          <button type="button" class="chip" data-filter="up">UP</button>
+        </div>
+      </div>
+      <div class="feed" id="feed"></div>
+    </div>
+  </aside>
+
+  <footer class="hud-bot">
+    <div class="legend">
+      <button type="button" class="layer" data-layer-toggle="outages" aria-pressed="false"><span class="swatch outage"></span> POWER OUTAGES <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="stream" aria-pressed="false"><span class="swatch stream"></span> SCANNERS <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="jamming" aria-pressed="false"><span class="swatch jam"></span> JAMMED GPS SIGNALS <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="aircraft" aria-pressed="false"><span class="swatch air"></span> LIVE AIR TRAFFIC <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="ships" aria-pressed="false"><span class="swatch ais"></span> MARITIME TRAFFIC <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="conflicts" aria-pressed="false"><span class="swatch war"></span> CONFLICT TRACKER <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="hunger" aria-pressed="false"><span class="swatch hunger"></span> WORLD HUNGER <span class="switch" aria-hidden="true"></span></button>
+    </div>
+    <div id="status-line">CESIUM READY · LOADING POWER OUTAGES, JAMMED GPS SIGNALS, AND CONFLICT TRACKER</div>
+  </footer>
+
+  <div id="sdr-listen" hidden>
+    <div class="sdr-bar">
+      <button type="button" id="sdr-back">BACK TO GLOBE</button>
+      <div class="sdr-heading">
+        <strong id="sdr-title"></strong>
+        <span id="sdr-meta"></span>
+      </div>
+      <a id="sdr-pop" href="#" target="_blank" rel="noopener noreferrer">OPEN IN WINDOW</a>
+    </div>
+    <iframe id="sdr-frame" title="Pinned page" referrerpolicy="no-referrer" allow="autoplay; fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-pointer-lock"></iframe>
+    <div id="sdr-direct" class="sdr-direct" hidden>
+      <p>This radio has to open from your browser so the station sees your connection. The secure map cannot draw it inside the page.</p>
+      <a id="sdr-listen-now" class="sdr-listen-now" href="#" target="_blank" rel="noopener noreferrer">LISTEN</a>
+    </div>
+  </div>
+
+  <script src="/cesium.js"></script>
+</body>
+</html>

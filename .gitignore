@@ -7,3 +7,9 @@ visualizer/data/*.json
 !visualizer/data/pack.json
 visualizer/data/hpdb/
 visualizer/data/tiles/
+.ftp-credentials
+.netrc
+globalstatus/data/*.lock
+globalstatus/data/stop.flag
+globalstatus/.ftpquota
+

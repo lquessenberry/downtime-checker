@@ -1,5 +1,6 @@
-# Public Cesium globe for downtime-checker.
-# Deploy from the repo root: fly deploy --ha=false
+# Staging Cesium globe (https://downtime-globe.fly.dev/).
+# Production is GoDaddy FTP → https://globalstatus.app (scripts/ftp_prod.py).
+# Staging deploy: scripts/deploy-staging-fly.sh   or   fly deploy --ha=false
 # App lives on the personal Fly org of lquessenberry@gmail.com.
 
 app = 'downtime-globe'

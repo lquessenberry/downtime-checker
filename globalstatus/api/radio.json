@@ -1,0 +1,6 @@
+{
+  "source": null,
+  "count": 0,
+  "points": [],
+  "error": "HPDB not found. Set BT885_HPDB to MasterHpdb_*.gz or BT885_HPDB_DIR to the folder that holds it."
+}

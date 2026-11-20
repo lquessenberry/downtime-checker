@@ -117,14 +117,22 @@ Wiki index: [wiki/Home.md](wiki/Home.md).
 
 `bash install.sh` adds Downtime UI and Downtime Cesium launchers in `Desktop/Pentesting` when that folder already exists, and in the application menu. Node.js is required for both globes.
 
-## Public app (Fly.io)
+## Staging (Fly.io) and production (globalstatus.app)
 
-The Cesium globe deploys as a public HTTPS app. The Node server already proxies overlays, so visitors do not hit adsb.lol or gpsjam.org directly.
+**Staging** is the Node globe on Lee's Fly account. **Production** is the live FTP tree on GoDaddy, snapshot in [`globalstatus/`](globalstatus/).
 
 ```bash
-fly deploy --ha=false
+# staging
+scripts/deploy-staging-fly.sh
+
+# production (needs ~/.config/globalstatus/netrc or GLOBALSTATUS_FTP_PASS)
+python3 scripts/ftp_prod.py push --dry-run
+python3 scripts/ftp_prod.py push
+python3 scripts/ftp_prod.py pull
 ```
 
-Live URL: https://downtime-globe.fly.dev — `/` is the Cesium globe, `/index.html` is the canvas grid, `/healthz` is the health check.
+Staging URL: https://downtime-globe.fly.dev — `/` is the Cesium globe, `/index.html` is the canvas grid, `/healthz` is the health check.
 
-The container binds `0.0.0.0:8080`. Catalog scans from the public host wait 15 seconds between runs. Uniden RADIO stays empty unless `BT885_HPDB` is mounted; STREAM pins that already have coordinates still load. Optional secrets: `ADSB_LOL_API_KEY`, `ADS_B_FEEDER_URL`, `AISSTREAM_API_KEY`. Do not bake keys into the image.
+Production URL: https://globalstatus.app — static files plus `router.php` for `/api`. The FTP login must show remote folder `/` and must not show a church site.
+
+The Fly container binds `0.0.0.0:8080`. Catalog scans from the public host wait 15 seconds between runs. Uniden RADIO stays empty unless `BT885_HPDB` is mounted; STREAM pins that already have coordinates still load. Optional secrets: `ADSB_LOL_API_KEY`, `ADS_B_FEEDER_URL`, `AISSTREAM_API_KEY`. Do not bake keys into the image. Do not commit FTP passwords.
