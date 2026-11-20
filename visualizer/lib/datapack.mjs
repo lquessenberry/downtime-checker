@@ -77,6 +77,11 @@ export function writeDataset(name, payload, { pack = false } = {}) {
   return dest;
 }
 
+function forceRefresh() {
+  const flag = String(process.env.DATA_FORCE || "").trim().toLowerCase();
+  return flag === "1" || flag === "true" || flag === "yes" || flag === "on";
+}
+
 export async function loadDataset(name, { maxAgeMs, fetchFresh }) {
   const stored = readDataset(name);
   if (offline()) {
@@ -84,7 +89,7 @@ export async function loadDataset(name, { maxAgeMs, fetchFresh }) {
     throw new Error(`${name} is not in the data pack. Run: node lib/datapack.mjs snapshot`);
   }
   const age = stored ? Date.now() - Number(stored.fetchedAt || 0) : Infinity;
-  if (stored && Number.isFinite(maxAgeMs) && age < maxAgeMs) {
+  if (!forceRefresh() && stored && Number.isFinite(maxAgeMs) && age < maxAgeMs) {
     return { ...stored, stale: false };
   }
   try {
@@ -143,40 +148,75 @@ function run(cmd, args, opts = {}) {
   });
 }
 
-async function snapshot() {
-  const { loadRadioOverlay } = await import("./hpdb.mjs");
-  const { loadStreamOverlay } = await import("./streams.mjs");
-  const { websdrCatalog } = await import("./websdr.mjs");
-  const { gpsjamCatalog } = await import("./gpsjam.mjs");
-  const { conflictCatalog } = await import("./conflicts.mjs");
-  const { snapshotFeeds, startFeeds } = await import("./feeds.mjs");
+const SNAPSHOT_DEFAULT = ["websdr", "gpsjam", "conflicts", "streams", "radio"];
+const SNAPSHOT_ALLOWED = new Set([...SNAPSHOT_DEFAULT, "feeds", "catalog"]);
+
+export async function snapshot(names) {
+  const wanted = (names && names.length ? names : SNAPSHOT_DEFAULT).filter((name) =>
+    SNAPSHOT_ALLOWED.has(name),
+  );
+  if (!wanted.length) {
+    console.error("usage: node lib/datapack.mjs snapshot [websdr gpsjam conflicts streams radio catalog feeds]");
+    process.exitCode = 1;
+    return;
+  }
+  if (!process.env.DATA_FORCE) process.env.DATA_FORCE = "1";
   mkdirSync(packDir(), { recursive: true });
-  startFeeds();
-  const jobs = [
-    ["radio", loadRadioOverlay()],
-    ["streams", loadStreamOverlay()],
-    ["websdr", websdrCatalog()],
-    ["gpsjam", gpsjamCatalog()],
-    ["conflicts", conflictCatalog()],
-  ];
-  for (const [name, job] of jobs) {
+  const loaders = {
+    radio: async () => (await import("./hpdb.mjs")).loadRadioOverlay(),
+    streams: async () => (await import("./streams.mjs")).loadStreamOverlay(),
+    websdr: async () => (await import("./websdr.mjs")).websdrCatalog(),
+    gpsjam: async () => (await import("./gpsjam.mjs")).gpsjamCatalog(),
+    conflicts: async () => (await import("./conflicts.mjs")).conflictCatalog(),
+    catalog: async () => {
+      const { catalog } = await import("./catalogs.mjs");
+      const { searches, countries } = catalog();
+      return { searches, countries, fetchedAt: Date.now(), source: "repo catalogs" };
+    },
+  };
+  let ok = 0;
+  for (const name of wanted) {
+    if (name === "feeds") continue;
     try {
-      const body = await job;
-      const dest = writeDataset(name, body, { pack: true });
-      console.log(`pack ${name}: ${dest}`);
+      const body = await loaders[name]();
+      if (name === "catalog") {
+        const dest = path.join(packDir(), "catalog.json");
+        writeFileSync(dest, `${JSON.stringify(body, null, 2)}\n`);
+        console.log(`pack ${name}: ${dest}`);
+      } else {
+        const dest = writeDataset(name, body, { pack: true });
+        console.log(`pack ${name}: ${dest}`);
+      }
+      ok += 1;
     } catch (err) {
       console.error(`pack ${name}:`, err.message || err);
     }
   }
-  await new Promise((resolve) => setTimeout(resolve, 4000));
-  const feeds = snapshotFeeds();
-  const dest = writeDataset("feeds", { fetchedAt: Date.now(), ...feeds }, { pack: true });
-  console.log(`pack feeds: ${dest}`);
+  if (wanted.includes("feeds")) {
+    const { snapshotFeeds, startFeeds } = await import("./feeds.mjs");
+    startFeeds();
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    const feeds = snapshotFeeds();
+    const dest = writeDataset("feeds", { fetchedAt: Date.now(), ...feeds }, { pack: true });
+    console.log(`pack feeds: ${dest}`);
+    ok += 1;
+  }
   writeFileSync(
     path.join(packDir(), "pack.json"),
-    `${JSON.stringify({ name: "downtime-data", version: 1, built: new Date().toISOString(), offline: true }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        name: "downtime-data",
+        version: 1,
+        built: new Date().toISOString(),
+        datasets: wanted,
+        offline: true,
+      },
+      null,
+      2,
+    )}\n`,
   );
-  console.log(`data pack ready at ${packDir()}`);
+  console.log(`data pack ready at ${packDir()} (${ok}/${wanted.length})`);
+  if (!ok) process.exitCode = 1;
 }
 
 async function vendorCesium() {
@@ -197,9 +237,10 @@ async function vendorCesium() {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const cmd = process.argv[2] || "status";
+  const args = process.argv.slice(2);
+  const cmd = args[0] || "status";
   if (cmd === "status") console.log(JSON.stringify(readyStatus(), null, 2));
-  else if (cmd === "snapshot") await snapshot();
+  else if (cmd === "snapshot") await snapshot(args.slice(1));
   else if (cmd === "vendor-cesium") await vendorCesium();
   else {
     console.error("usage: node lib/datapack.mjs [status|snapshot|vendor-cesium]");

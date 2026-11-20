@@ -147,6 +147,14 @@ GitHub Actions on this fork (`lquessenberry/downtime-checker`) stores the global
 
 Do not store church FTP logins. Fork PRs cannot use these secrets on `willlccasey/downtime-checker`.
 
+Static overlay JSON (WebSDR, gpsjam.org, CFR conflicts, Broadcastify streams, Uniden RADIO, host catalog) is refreshed by **Actions → Refresh static data**. Cron: overlays twice daily, streams daily, radio weekly. Live AIR/AIS/JAM/outages are not written to git. Source table: [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md).
+
+```bash
+node scripts/refresh_static_data.mjs overlays
+node scripts/refresh_static_data.mjs streams
+node scripts/refresh_static_data.mjs radio
+```
+
 Staging URL: https://downtime-globe.fly.dev — `/` is the Cesium globe, `/index.html` is the canvas grid, `/healthz` is the health check.
 
 Production URL: https://globalstatus.app — static files plus `router.php` for `/api`. The FTP login must show remote folder `/` and must not show a church site.

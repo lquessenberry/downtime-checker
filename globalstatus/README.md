@@ -15,6 +15,8 @@ python3 scripts/ftp_prod.py push
 
 Credentials: `~/.config/globalstatus/netrc` or `GLOBALSTATUS_FTP_*` env vars. The same names are GitHub Actions secrets on the `production` environment of `lquessenberry/downtime-checker`. Do not commit the password file.
 
+`api/*.json` overlays are refreshed by `node scripts/refresh_static_data.mjs` and the **Refresh static data** Action. See [docs/DATA-SOURCES.md](../docs/DATA-SOURCES.md).
+
 Staging is Fly:
 
 ```bash

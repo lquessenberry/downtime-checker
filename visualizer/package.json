@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.mjs",
     "data": "node lib/datapack.mjs snapshot",
+    "data:overlays": "node lib/datapack.mjs snapshot websdr gpsjam conflicts catalog",
     "data:status": "node lib/datapack.mjs status",
     "vendor:cesium": "node lib/datapack.mjs vendor-cesium"
   }

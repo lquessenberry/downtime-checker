@@ -1,5 +1,12 @@
 {
   "name": "downtime-data",
   "version": 1,
-  "note": "Run `node lib/datapack.mjs snapshot` while online, then `OFFLINE=1 node server.mjs` on a local client."
+  "built": "2026-11-20T16:23:13.811Z",
+  "datasets": [
+    "websdr",
+    "gpsjam",
+    "conflicts",
+    "catalog"
+  ],
+  "offline": true
 }

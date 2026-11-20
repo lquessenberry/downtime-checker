@@ -115,6 +115,13 @@ export function conflictsFromHtml(html) {
     const types = labelOf(item.conflict_types);
     const region = labelOf(item.region);
     const description = plain(item.description).slice(0, 420);
+    const image = typeof item.image === "string" ? item.image : String(item.image?.url || "").trim();
+    const imageAlt = plain(item.image?.alt || item.image?.title || "");
+    const countries = [];
+    for (const uid of item.map_uids || []) {
+      const match = String(uid).match(/^admin0:([a-z]{2,3})$/i);
+      if (match) countries.push(match[1].toUpperCase());
+    }
     conflicts.push({
       id: `cfr-${item.id || slug}`,
       kind: "conflict",
@@ -128,6 +135,9 @@ export function conflictsFromHtml(html) {
       types,
       description,
       url: `https://www.cfr.org/global-conflict-tracker/conflict/${slug}`,
+      image,
+      imageAlt,
+      countries,
       meta: [status, region, types, impact ? `U.S. impact ${impact}` : ""].filter(Boolean).join(" · "),
     });
   }
