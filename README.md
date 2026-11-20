@@ -119,7 +119,9 @@ Wiki index: [wiki/Home.md](wiki/Home.md).
 
 ## Working an issue
 
-Pick a GitHub issue on this fork. The agent opens a branch from `feat/globalstatus-prod`, commits, and pushes. **Deploy to staging** publishes https://downtime-globe.fly.dev so you can see it live on Lee's Fly account. **Go live** is a separate FTP push to https://globalstatus.app (Action dry-run default). Prefer a PR over editing the live FTP tree while someone else is uploading. Tracker: [#2](https://github.com/lquessenberry/downtime-checker/issues/2).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Feature work is a **GitHub PR on this fork** into `feat/globalstatus-prod`. Do not STOR day-to-day edits to FTP.
+
+Pick an issue. The agent (or Will) opens a branch, commits, and opens a PR. **Deploy to staging** publishes https://downtime-globe.fly.dev. **Go live** is a separate FTP push to https://globalstatus.app (Action dry-run default). Tracker: [#2](https://github.com/lquessenberry/downtime-checker/issues/2).
 
 ## Staging (Fly.io) and production (globalstatus.app)
 
