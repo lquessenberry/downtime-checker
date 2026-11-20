@@ -1,8 +1,6 @@
 .git
 .github
 docs
-globalstatus
-scripts
 locations.json
 node_modules
 **/node_modules

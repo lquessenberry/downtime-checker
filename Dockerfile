@@ -5,7 +5,8 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY . .
+COPY visualizer ./visualizer
+COPY *.txt ./
 
 ENV HOST=0.0.0.0 \
     PORT=8080 \
