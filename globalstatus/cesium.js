@@ -33,6 +33,8 @@ const state = {
     aircraft: { source: null, points: [] },
     ships: { source: null, points: [] },
     mesh: { source: null, points: [] },
+    disease: { source: null, points: [] },
+    animal: { source: null, points: [] },
   },
   layers: {
     outages: false,
@@ -43,6 +45,8 @@ const state = {
     ships: false,
     conflicts: false,
     mesh: false,
+    disease: false,
+    animal: false,
   },
   openKind: "",
   openId: "",
@@ -334,7 +338,7 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships", "mesh"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
@@ -349,6 +353,12 @@ async function startGlobe() {
   setInterval(() => {
     if (state.layers.mesh) loadMesh();
   }, 60000);
+  setInterval(() => {
+    if (state.layers.disease) loadDisease();
+  }, 180000);
+  setInterval(() => {
+    if (state.layers.animal) loadAnimal();
+  }, 600000);
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
@@ -1066,6 +1076,8 @@ function setLayer(layer, on) {
   }
   if (layer === "ships" && state.layers.ships) scheduleShips();
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
+  if (layer === "disease" && state.layers.disease) scheduleDisease();
+  if (layer === "animal" && state.layers.animal) scheduleAnimal();
   if (layer === "outages" && state.layers.outages && !state.outageMeta) {
     loadOutages().catch((error) => statusLive(error.message || String(error)));
   }
@@ -1084,12 +1096,14 @@ const LAYER_LABEL = {
   conflicts: "CONFLICT TRACKER",
   hunger: "WORLD HUNGER",
   mesh: "MESH NODES",
+  disease: "DISEASE OUTBREAK",
+  animal: "ANIMAL DISEASE OUTBREAK",
 };
 
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -1944,6 +1958,8 @@ const LIVE_STYLE = {
   aircraft: { color: "#7ec8ff", outline: "#082033", size: () => 5, kind: "ADS-B" },
   ships: { color: "#3dffd0", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "MARITIME" },
   mesh: { color: "#8fe04a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "MESH NODES" },
+  disease: { color: "#ff4d6a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DISEASE OUTBREAK" },
+  animal: { color: "#e2b340", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ANIMAL DISEASE OUTBREAK" },
 };
 
 function aircraftOnGround(point) {
@@ -2345,6 +2361,62 @@ async function loadMesh() {
   }
 }
 
+let diseaseTimer = 0;
+let diseaseToken = 0;
+
+function scheduleDisease() {
+  clearTimeout(diseaseTimer);
+  diseaseTimer = setTimeout(loadDisease, 400);
+}
+
+async function loadDisease() {
+  if (!state.layers.disease) return;
+  const token = ++diseaseToken;
+  try {
+    const response = await fetch("/api/disease");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Disease Outbreak failed");
+    if (token !== diseaseToken || !state.layers.disease) return;
+    const points = Array.isArray(body.points) ? body.points : [];
+    state.live.disease.points = points;
+    placeLiveLayer("disease", points);
+    setCount("disease", points.length);
+    if (!state.running) statusLive();
+  } catch (error) {
+    if (token !== diseaseToken) return;
+    setCount("disease", state.live.disease.points.length || "—");
+    if (!state.running) statusLive(error.message || String(error));
+  }
+}
+
+let animalTimer = 0;
+let animalToken = 0;
+
+function scheduleAnimal() {
+  clearTimeout(animalTimer);
+  animalTimer = setTimeout(loadAnimal, 400);
+}
+
+async function loadAnimal() {
+  if (!state.layers.animal) return;
+  const token = ++animalToken;
+  try {
+    const response = await fetch("/api/animal");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Animal Disease Outbreak failed");
+    if (token !== animalToken || !state.layers.animal) return;
+    const points = Array.isArray(body.points) ? body.points : [];
+    state.live.animal.points = points;
+    placeLiveLayer("animal", points);
+    setCount("animal", points.length);
+    if (!state.running) statusLive();
+  } catch (error) {
+    if (token !== animalToken) return;
+    setCount("animal", state.live.animal.points.length || "—");
+    if (!state.running) statusLive(error.message || String(error));
+  }
+}
+
 function shipVisibleCount(points) {
   let count = 0;
   for (const point of points || []) {
@@ -2441,6 +2513,8 @@ function cullAircraftHorizon() {
     state.live.aircraft.source,
     state.live.ships.source,
     state.live.mesh.source,
+    state.live.disease.source,
+    state.live.animal.source,
     state.outageSource,
     state.hungerSource,
   ];
@@ -2575,6 +2649,16 @@ function showLive(item) {
     extra = bits.length ? `<br>${bits.join(" · ")}` : "";
     extra += `<br><a href="https://meshmap.net/#${encodeURIComponent(item.id || "")}" target="_blank" rel="noreferrer">meshmap.net</a>`;
   }
+  else if (item.layer === "disease") {
+    const bits = [item.place, item.date, item.summary].filter(Boolean).map((part) => esc(part));
+    extra = bits.length ? `<br>${bits.join("<br>")}` : "";
+    extra += `<br><a href="https://www.healthmap.org/en/" target="_blank" rel="noreferrer">healthmap.org</a>`;
+  }
+  else if (item.layer === "animal") {
+    const bits = [item.place, item.when, item.note].filter(Boolean).map((part) => esc(part));
+    extra = bits.length ? `<br>${bits.join("<br>")}` : "";
+    extra += `<br><a href="https://app.gideononline.com/updates/outbreaks" target="_blank" rel="noreferrer">gideononline.com</a>`;
+  }
   else if (item.sog != null) extra = `<br>${esc(shipTypeLabel(item))} · ${esc(item.sog)} kn`;
   box.innerHTML = `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
 }
@@ -2699,6 +2783,12 @@ function statusLive(error) {
     air,
     ships,
     war,
+    state.live.disease.points.length
+      ? `DISEASE OUTBREAK ${state.live.disease.points.length}`
+      : "DISEASE OUTBREAK",
+    state.live.animal.points.length
+      ? `ANIMAL DISEASE OUTBREAK ${state.live.animal.points.length}`
+      : "ANIMAL DISEASE OUTBREAK",
   ];
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
