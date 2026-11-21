@@ -20,3 +20,4 @@ globalstatus/data/*.lock
 globalstatus/data/stop.flag
 globalstatus/.ftpquota
 
+/rust/target/
