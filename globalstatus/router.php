@@ -54,6 +54,7 @@ $files = array(
     '/api/radio' => 'api/radio.json',
     '/api/streams' => 'api/streams.json',
     '/api/feeds' => 'api/feeds.json',
+    '/api/amfm' => 'api/amfm.json',
 );
 if (isset($files[$path]) && $method === 'GET') {
     $file = $root . '/' . $files[$path];
