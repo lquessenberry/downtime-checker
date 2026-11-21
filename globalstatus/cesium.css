@@ -357,8 +357,7 @@ button:hover { border-color: #9fd4e2; }
 #hint { color: var(--dim); font-size: 10px; line-height: 1.2; margin-top: 1px; letter-spacing: 0.01em; }
 .traffic-switch,
 .air-filters,
-.ship-filters,
-.amfm-filters {
+.ship-filters {
   display: none;
   flex-wrap: wrap;
   gap: 6px;
@@ -366,12 +365,10 @@ button:hover { border-color: #9fd4e2; }
 }
 .traffic-switch:not([hidden]),
 .air-filters.is-open,
-.ship-filters.is-open,
-.amfm-filters.is-open { display: flex; }
+.ship-filters.is-open { display: flex; }
 .traffic-switch button,
 .air-filters button,
-.ship-filters button,
-.amfm-filters button {
+.ship-filters button {
   min-height: 36px;
   padding: 6px 10px;
   font-size: 13px;
@@ -380,8 +377,7 @@ button:hover { border-color: #9fd4e2; }
 }
 .traffic-switch button.on,
 .air-filters button.on,
-.ship-filters button.on,
-.amfm-filters button.on {
+.ship-filters button.on {
   border-color: #9fd4e2;
   background: #163044;
   color: #fff;
@@ -759,8 +755,7 @@ button:hover { border-color: #9fd4e2; }
   #cc-title { font-size: 15px; }
   .traffic-switch button,
   .air-filters button,
-  .ship-filters button,
-  .amfm-filters button { min-height: 44px; font-size: 14px; }
+  .ship-filters button { min-height: 44px; font-size: 14px; }
   .ship-credit {
     left: 8px;
     right: 96px;

@@ -57,7 +57,6 @@ const state = {
   aircraftFeed: [],
   militaryPoints: null,
   shipFilter: "underway",
-  amfmFilter: "all",
   amfmReady: false,
   trafficPane: "air",
   scanWanted: false,
@@ -602,9 +601,6 @@ function hookUi() {
   for (const button of document.querySelectorAll("[data-ship-filter]")) {
     button.addEventListener("click", () => setShipFilter(button.dataset.shipFilter, true));
   }
-  for (const button of document.querySelectorAll("[data-amfm-filter]")) {
-    button.addEventListener("click", () => setAmfmFilter(button.dataset.amfmFilter));
-  }
   for (const button of document.querySelectorAll("[data-traffic-pane]")) {
     button.addEventListener("click", () => {
       state.trafficPane = button.dataset.trafficPane === "ships" ? "ships" : "air";
@@ -1086,7 +1082,6 @@ function setLayer(layer, on) {
   if (layer === "disease" && state.layers.disease) scheduleDisease();
   if (layer === "animal" && state.layers.animal) scheduleAnimal();
   if (layer === "amfm") {
-    syncAmfmBar();
     if (state.layers.amfm) {
       loadAmfm().catch((error) => statusLive(error.message || String(error)));
     } else {
@@ -2569,11 +2564,8 @@ function cullAircraftHorizon() {
   }
 }
 
-function amfmStations(point, filter) {
-  const pick = filter || state.amfmFilter || "all";
-  const stations = Array.isArray(point && point.stations) ? point.stations : [];
-  if (pick === "all") return stations;
-  return stations.filter((station) => station.band === pick || station.band === "both");
+function amfmStations(point) {
+  return Array.isArray(point && point.stations) ? point.stations : [];
 }
 
 function amfmVisibleCount(points) {
@@ -2582,32 +2574,10 @@ function amfmVisibleCount(points) {
   return count;
 }
 
-function syncAmfmBar() {
-  const bar = document.querySelector(".amfm-filters");
-  if (bar) bar.classList.toggle("is-open", Boolean(state.layers.amfm));
-}
-
 function publishAmfm() {
   const points = state.live.amfm.points || [];
   setCount("amfm", amfmVisibleCount(points));
   placeLiveLayer("amfm", points);
-  const selected = state.viewer && state.viewer.selectedEntity;
-  if (selected && selected._live && selected._live.layer === "amfm" && !amfmStations(selected._live).length) {
-    state.viewer.selectedEntity = undefined;
-    const box = document.getElementById("selected");
-    if (box) box.hidden = true;
-  }
-}
-
-function setAmfmFilter(filter) {
-  state.amfmFilter = filter === "am" || filter === "fm" ? filter : "all";
-  for (const button of document.querySelectorAll("[data-amfm-filter]")) {
-    const on = button.dataset.amfmFilter === state.amfmFilter;
-    button.classList.toggle("on", on);
-    button.setAttribute("aria-pressed", on ? "true" : "false");
-  }
-  if (state.amfmReady) publishAmfm();
-  statusLive();
 }
 
 let amfmLoading = null;
