@@ -1,13 +1,1 @@
-[package]
-name = "downtime-native"
-edition.workspace = true
-version.workspace = true
-publish.workspace = true
-description = "Async ICMP and TCP checks, catalog loading, and ipwho.is lookups"
-
-[dependencies]
-downtime-core = { path = "../downtime-core" }
-tokio = { version = "1.42", features = ["rt-multi-thread", "macros", "time", "net", "process", "io-util", "sync"] }
-serde_json = "1.0"
-rustls = { version = "0.23.20", default-features = false, features = ["ring", "std", "tls12"] }
-webpki-roots = "0.26.7"
+$file:/workspace/gs-release/rust/crates/downtime-native/Cargo.toml
