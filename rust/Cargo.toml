@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/downtime-core",
+    "crates/downtime-native",
+    "crates/downtime-cli",
+    "crates/downtime-server",
+    "crates/downtime-wasm",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+publish = false
