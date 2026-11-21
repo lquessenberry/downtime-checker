@@ -39,7 +39,7 @@ jobs:
               echo "::error::Archive has absolute, parent or .github paths"; exit 1
             fi
             tar -xzf "$RUNNER_TEMP/drop.tar.gz" --no-same-owner
-            tar -tzf "$RUNNER_TEMP/drop.tar.gz" | grep -v '/$' | xargs -r git add --
+            { tar -tzf "$RUNNER_TEMP/drop.tar.gz" | grep -v '/$' || true; } | xargs -r git add --
             if [ -f "$n.chmod" ]; then
               while read -r mode path; do
                 [ -n "$path" ] && git update-index --chmod="$mode" -- "$path"
@@ -49,6 +49,6 @@ jobs:
           done
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Add brand icons, store images and screenshots (asset drop)." \
+          git commit -m "Unpack asset drop: $(basename -a "${drops[@]}" | sed 's/.tar.gz.b64$//' | paste -sd, -)." \
             -m "Unpacked from .github/asset-drop by the Asset drop workflow; sha256 verified."
           git push origin "HEAD:${GITHUB_REF_NAME}"
