@@ -72,6 +72,7 @@
       <button type="button" class="layer" data-layer-toggle="mesh" aria-pressed="false"><span class="layer-name"><span class="swatch mesh"></span> MESH NODES</span><span class="layer-meta"><em data-count="mesh">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="layer-name"><span class="swatch disease"></span> DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="disease">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="layer-name"><span class="swatch animal"></span> ANIMAL DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="animal">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="layer-name"><span class="swatch amfm"></span> AM FM TOWERS</span><span class="layer-meta"><em data-count="amfm">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
     </div>
   </aside>
@@ -93,6 +94,11 @@
         <button type="button" data-air-filter="airliner" aria-pressed="false">AIRLINERS</button>
         <button type="button" data-air-filter="heli" aria-pressed="false">HELICOPTERS</button>
         <button type="button" data-air-filter="ground" aria-pressed="false">GROUND</button>
+      </div>
+      <div class="amfm-filters" role="group" aria-label="AM and FM stations">
+        <button type="button" data-amfm-filter="am" aria-pressed="false">AM STATIONS</button>
+        <button type="button" data-amfm-filter="fm" aria-pressed="false">FM STATIONS</button>
+        <button type="button" class="on" data-amfm-filter="all" aria-pressed="true">AM AND FM</button>
       </div>
       <div class="ship-filters" role="group" aria-label="Maritime traffic">
         <button type="button" data-ship-filter="all" aria-pressed="false">ALL TRAFFIC</button>
@@ -244,6 +250,7 @@
       <button type="button" class="layer" data-layer-toggle="mesh" aria-pressed="false"><span class="swatch mesh"></span> MESH NODES <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="swatch disease"></span> DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="swatch animal"></span> ANIMAL DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="swatch amfm"></span> AM FM TOWERS <span class="switch" aria-hidden="true"></span></button>
     </div>
     <div id="status-line"><span id="status-track">CESIUM READY · LOADING POWER OUTAGES, JAMMED GPS SIGNALS, AND CONFLICT TRACKER</span></div>
   </footer>

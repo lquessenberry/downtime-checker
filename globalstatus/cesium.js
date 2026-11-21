@@ -35,6 +35,7 @@ const state = {
     mesh: { source: null, points: [] },
     disease: { source: null, points: [] },
     animal: { source: null, points: [] },
+    amfm: { source: null, points: [] },
   },
   layers: {
     outages: false,
@@ -47,6 +48,7 @@ const state = {
     mesh: false,
     disease: false,
     animal: false,
+    amfm: false,
   },
   openKind: "",
   openId: "",
@@ -55,6 +57,8 @@ const state = {
   aircraftFeed: [],
   militaryPoints: null,
   shipFilter: "underway",
+  amfmFilter: "all",
+  amfmReady: false,
   trafficPane: "air",
   scanWanted: false,
   scanLive: false,
@@ -338,7 +342,7 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
@@ -597,6 +601,9 @@ function hookUi() {
   }
   for (const button of document.querySelectorAll("[data-ship-filter]")) {
     button.addEventListener("click", () => setShipFilter(button.dataset.shipFilter, true));
+  }
+  for (const button of document.querySelectorAll("[data-amfm-filter]")) {
+    button.addEventListener("click", () => setAmfmFilter(button.dataset.amfmFilter));
   }
   for (const button of document.querySelectorAll("[data-traffic-pane]")) {
     button.addEventListener("click", () => {
@@ -1078,6 +1085,19 @@ function setLayer(layer, on) {
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
   if (layer === "disease" && state.layers.disease) scheduleDisease();
   if (layer === "animal" && state.layers.animal) scheduleAnimal();
+  if (layer === "amfm") {
+    syncAmfmBar();
+    if (state.layers.amfm) {
+      loadAmfm().catch((error) => statusLive(error.message || String(error)));
+    } else {
+      const selected = state.viewer && state.viewer.selectedEntity;
+      if (selected && selected._live && selected._live.layer === "amfm") {
+        state.viewer.selectedEntity = undefined;
+        const box = document.getElementById("selected");
+        if (box) box.hidden = true;
+      }
+    }
+  }
   if (layer === "outages" && state.layers.outages && !state.outageMeta) {
     loadOutages().catch((error) => statusLive(error.message || String(error)));
   }
@@ -1098,12 +1118,13 @@ const LAYER_LABEL = {
   mesh: "MESH NODES",
   disease: "DISEASE OUTBREAK",
   animal: "ANIMAL DISEASE OUTBREAK",
+  amfm: "AM FM TOWERS",
 };
 
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -1960,6 +1981,7 @@ const LIVE_STYLE = {
   mesh: { color: "#8fe04a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "MESH NODES" },
   disease: { color: "#ff4d6a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DISEASE OUTBREAK" },
   animal: { color: "#e2b340", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ANIMAL DISEASE OUTBREAK" },
+  amfm: { color: "#7aa2ff", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "AM FM TOWERS" },
 };
 
 function aircraftOnGround(point) {
@@ -2515,6 +2537,7 @@ function cullAircraftHorizon() {
     state.live.mesh.source,
     state.live.disease.source,
     state.live.animal.source,
+    state.live.amfm.source,
     state.outageSource,
     state.hungerSource,
   ];
@@ -2546,6 +2569,80 @@ function cullAircraftHorizon() {
   }
 }
 
+function amfmStations(point, filter) {
+  const pick = filter || state.amfmFilter || "all";
+  const stations = Array.isArray(point && point.stations) ? point.stations : [];
+  if (pick === "all") return stations;
+  return stations.filter((station) => station.band === pick || station.band === "both");
+}
+
+function amfmVisibleCount(points) {
+  let count = 0;
+  for (const point of points || []) count += amfmStations(point).length;
+  return count;
+}
+
+function syncAmfmBar() {
+  const bar = document.querySelector(".amfm-filters");
+  if (bar) bar.classList.toggle("is-open", Boolean(state.layers.amfm));
+}
+
+function publishAmfm() {
+  const points = state.live.amfm.points || [];
+  setCount("amfm", amfmVisibleCount(points));
+  placeLiveLayer("amfm", points);
+  const selected = state.viewer && state.viewer.selectedEntity;
+  if (selected && selected._live && selected._live.layer === "amfm" && !amfmStations(selected._live).length) {
+    state.viewer.selectedEntity = undefined;
+    const box = document.getElementById("selected");
+    if (box) box.hidden = true;
+  }
+}
+
+function setAmfmFilter(filter) {
+  state.amfmFilter = filter === "am" || filter === "fm" ? filter : "all";
+  for (const button of document.querySelectorAll("[data-amfm-filter]")) {
+    const on = button.dataset.amfmFilter === state.amfmFilter;
+    button.classList.toggle("on", on);
+    button.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+  if (state.amfmReady) publishAmfm();
+  statusLive();
+}
+
+let amfmLoading = null;
+
+async function loadAmfm() {
+  if (state.amfmReady) {
+    publishAmfm();
+    return;
+  }
+  if (amfmLoading) return amfmLoading;
+  amfmLoading = (async () => {
+    const response = await fetch("/api/amfm");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "AM FM towers failed");
+    const places = Array.isArray(body.places) ? body.places : [];
+    state.live.amfm.points = places
+      .filter((place) => place.lat != null && place.lon != null)
+      .map((place) => ({
+        name: place.city || place.name || "",
+        country: place.country || "",
+        lat: Number(place.lat),
+        lon: Number(place.lon),
+        stations: Array.isArray(place.stations) ? place.stations : [],
+      }));
+    state.amfmReady = true;
+    publishAmfm();
+    statusLive();
+  })();
+  try {
+    await amfmLoading;
+  } finally {
+    amfmLoading = null;
+  }
+}
+
 function placeLiveLayer(key, points) {
   const layer = state.live[key];
   if (!layer?.source) return;
@@ -2557,6 +2654,7 @@ function placeLiveLayer(key, points) {
     if (point.lat == null || point.lon == null) continue;
     if (key === "aircraft" && !aircraftMatches(point)) continue;
     if (key === "ships" && !shipMatches(point)) continue;
+    if (key === "amfm" && !amfmStations(point).length) continue;
     const height = key === "aircraft" ? Number(point.altM) || 0 : 0;
     const entityOptions = {
       name: point.name,
@@ -2658,6 +2756,13 @@ function showLive(item) {
     const bits = [item.place, item.when, item.note].filter(Boolean).map((part) => esc(part));
     extra = bits.length ? `<br>${bits.join("<br>")}` : "";
     extra += `<br><a href="https://app.gideononline.com/updates/outbreaks" target="_blank" rel="noreferrer">gideononline.com</a>`;
+  }
+  else if (item.layer === "amfm") {
+    const names = amfmStations(item).map((station) => esc(station.name));
+    const shown = names.slice(0, 12);
+    extra = item.country ? `<br>${esc(item.country)}` : "";
+    if (shown.length) extra += `<br>${shown.join("<br>")}`;
+    if (names.length > shown.length) extra += `<br>and ${names.length - shown.length} more`;
   }
   else if (item.sog != null) extra = `<br>${esc(shipTypeLabel(item))} · ${esc(item.sog)} kn`;
   box.innerHTML = `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
@@ -2789,6 +2894,9 @@ function statusLive(error) {
     state.live.animal.points.length
       ? `ANIMAL DISEASE OUTBREAK ${state.live.animal.points.length}`
       : "ANIMAL DISEASE OUTBREAK",
+    state.amfmReady
+      ? `AM FM TOWERS ${amfmVisibleCount(state.live.amfm.points)}`
+      : "AM FM TOWERS",
   ];
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
