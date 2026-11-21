@@ -1,1 +1,59 @@
-$file:/workspace/gs-release/fdroid/app.globalstatus.yml
+# DRAFT fdroiddata recipe for Global Status. Copy to metadata/app.globalstatus.yml
+# in a fork of https://gitlab.com/fdroid/fdroiddata and open a merge request.
+# Not submitted yet.
+Categories:
+  - Internet
+  - Navigation
+License: MIT OR Apache-2.0
+AuthorName: Lee Quessenberry and Will Casey
+WebSite: https://globalstatus.app
+SourceCode: https://github.com/lquessenberry/downtime-checker
+IssueTracker: https://github.com/lquessenberry/downtime-checker/issues
+Changelog: https://github.com/lquessenberry/downtime-checker/releases
+
+AutoName: Global Status
+
+RepoType: git
+Repo: https://github.com/lquessenberry/downtime-checker.git
+
+# No AntiFeatures for 0.1.0: the Android build has no network code and asks
+# for no permissions. Expect NonFreeNet once live layers call third-party
+# services (e.g. ipwho.is, adsb.lol, AIS feeds) in later versions.
+
+Builds:
+  # versionName/versionCode are what cargo-apk writes for crate version 0.1.0
+  # (versionCode = 2^24 + major*65536 + minor*256 + patch).
+  - versionName: 0.1.0
+    versionCode: 16777472
+    commit: v0.1.0-alpha.1
+    subdir: rust
+    sudo:
+      - apt-get update
+      - apt-get install -y zip
+    output: target/release/apk/GlobalStatus.apk
+    srclibs:
+      - rustup@1.28.2
+    rm:
+      - globalstatus/vendor
+      - visualizer
+    build:
+      - $$rustup$$/rustup-init.sh -y --profile minimal --default-toolchain stable
+        --target aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - source $HOME/.cargo/env
+      - rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+      - cargo install cargo-apk --version 0.10.0 --locked
+      # cargo-apk insists on a keystore for release builds. Sign with a
+      # throwaway key, then strip the signature so F-Droid signs the APK.
+      - keytool -genkeypair -keystore /tmp/throwaway.keystore -storepass android -keypass
+        android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 1 -dname "CN=throwaway"
+      - export ANDROID_NDK_ROOT=$$NDK$$
+      - CARGO_APK_RELEASE_KEYSTORE=/tmp/throwaway.keystore CARGO_APK_RELEASE_KEYSTORE_PASSWORD=android
+        cargo apk build -p downtime-globe-native --lib --release
+      - zip -d target/release/apk/GlobalStatus.apk 'META-INF/*'
+    ndk: r27c
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+.*$
+UpdateCheckData: rust/crates/globe-native/Cargo.toml|android-version-code = (\d+)|rust/Cargo.toml|\nversion = "(.+)"
+CurrentVersion: 0.1.0
+CurrentVersionCode: 16777472

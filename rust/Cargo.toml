@@ -1,1 +1,24 @@
-$file:/workspace/gs-release/rust/Cargo.toml
+[workspace]
+# Resolver 3 (Cargo 1.84+) picks dependency versions that match `rust-version`.
+resolver = "3"
+members = [
+    "crates/downtime-core",
+    "crates/downtime-native",
+    "crates/downtime-cli",
+    "crates/downtime-server",
+    "crates/downtime-wasm",
+    "crates/globe-native",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+publish = false
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+authors = ["Lee Quessenberry", "Will Casey", "Global Status contributors"]
+repository = "https://github.com/lquessenberry/downtime-checker"
+homepage = "https://globalstatus.app"
+
+[profile.release]
+strip = "symbols"

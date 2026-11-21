@@ -1,1 +1,316 @@
-$file:/workspace/gs-release/.github/workflows/release.yml
+name: Release
+
+# Builds unsigned alpha binaries for Linux, Windows, macOS and Android and
+# publishes them as a GitHub (pre-)release with SHA256SUMS.
+#
+# Triggers:
+#   - pushing a tag v*  (e.g. git tag v0.1.0-alpha.2 && git push origin v0.1.0-alpha.2)
+#   - changing .github/release-tag on rust/native-core (one line, e.g. v0.1.0-alpha.2):
+#     the tag is created on that commit when the release is published. Useful when
+#     pushing through the GitHub API, which cannot push tags.
+#   - Actions -> Release -> Run workflow with a tag name (once this file is on the
+#     default branch; GitHub only offers workflow_dispatch from there).
+#
+# Signing hooks (roadmap M4-4 / M4-8): every signing step is skipped unless its
+# repository secrets exist. No keys live in this repo.
+#   macOS:   APPLE_DEVELOPER_ID_P12_B64, APPLE_DEVELOPER_ID_P12_PASSWORD,
+#            APPLE_NOTARY_API_KEY_B64, APPLE_NOTARY_API_KEY_ID, APPLE_NOTARY_ISSUER_ID
+#   Windows: WINDOWS_CODESIGN_PFX_B64, WINDOWS_CODESIGN_PFX_PASSWORD
+#   Android: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD
+#   Linux:   RELEASE_GPG_KEY_B64 (detached signature over SHA256SUMS)
+#
+# The private nuclear-effects simulator is never part of a release: the guard
+# job fails if its files appear in the tree, and no build enables `nuke-sim`.
+
+on:
+  push:
+    tags: ["v*"]
+    branches: ["rust/native-core"]
+    paths: [".github/release-tag"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create, e.g. v0.1.0-alpha.1"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  guard:
+    name: Guard (tag, private code, secrets)
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve and check tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then TAG="${GITHUB_REF_NAME}"
+          elif [ -n "${INPUT_TAG:-}" ]; then TAG="$INPUT_TAG"
+          else TAG="$(tr -d ' \r\n' < .github/release-tag)"; fi
+          echo "Tag: $TAG"
+          if [ "${GITHUB_REF_TYPE}" != "tag" ] && git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "::error::Tag $TAG already exists. Put a new tag in .github/release-tag."; exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "::error::Tag must look like v1.2.3 or v1.2.3-alpha.1"; exit 1; }
+      - name: Private nuke simulator must not be in the tree
+        run: |
+          if git ls-files | grep -iE '(^|/)(nuke-calculator/|radius calculator)|/src/nuke'; then
+            echo "::error::Nuclear-effects simulator files are in the tree. They stay private until their authors approve."
+            exit 1
+          fi
+          if grep -Rn -e '--features[^#]*nuke-sim' -e '--all-features' .github/workflows/ | grep -v '^.github/workflows/release.yml'; then
+            echo "::error::A workflow enables the nuke-sim feature."
+            exit 1
+          fi
+      - name: Secret scan (gitleaks)
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz | tar xz gitleaks
+          ./gitleaks dir . --redact --no-banner -c .gitleaks.toml
+
+  linux:
+    name: Linux x86_64
+    needs: guard
+    runs-on: ubuntu-22.04
+    env:
+      TAG: ${{ needs.guard.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Build
+        working-directory: rust
+        run: |
+          cargo test --workspace --locked
+          cargo build --release --locked -p downtime-globe-native -p downtime-cli -p downtime-server
+      - name: Package tar.gz
+        run: |
+          set -euo pipefail
+          V="${TAG#v}"; N="globalstatus-$V-linux-x86_64"
+          mkdir -p "dist/$N"
+          cp rust/target/release/{downtime-globe,downtime,downtime-server} "dist/$N/"
+          cp *.txt locations.json LICENSE-MIT LICENSE-APACHE README.md "dist/$N/"
+          cp packaging/linux/app.globalstatus.desktop "dist/$N/"
+          cp packaging/icons/globalstatus-256.png "dist/$N/app.globalstatus.png"
+          tar -C dist -czf "dist/$N.tar.gz" "$N"
+          echo "NAME=$N" >> "$GITHUB_ENV"
+      - name: Package AppImage
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          V="${TAG#v}"; A=dist/AppDir
+          mkdir -p $A/usr/bin $A/usr/share/globalstatus $A/usr/share/applications $A/usr/share/metainfo $A/usr/share/icons/hicolor/256x256/apps
+          cp rust/target/release/downtime-globe $A/usr/bin/
+          cp *.txt locations.json $A/usr/share/globalstatus/
+          cp packaging/linux/app.globalstatus.desktop $A/ && cp packaging/linux/app.globalstatus.desktop $A/usr/share/applications/
+          cp packaging/linux/app.globalstatus.metainfo.xml $A/usr/share/metainfo/
+          cp packaging/icons/globalstatus-256.png $A/app.globalstatus.png
+          cp packaging/icons/globalstatus-256.png $A/usr/share/icons/hicolor/256x256/apps/app.globalstatus.png
+          printf '#!/bin/sh\nHERE="$(dirname "$(readlink -f "$0")")"\nexec "$HERE/usr/bin/downtime-globe" --root "$HERE/usr/share/globalstatus" "$@"\n' > $A/AppRun
+          chmod +x $A/AppRun
+          curl -sSLo appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool --no-appstream $A "dist/globalstatus-$V-linux-x86_64.AppImage"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.tar.gz
+            dist/*.AppImage
+          if-no-files-found: error
+
+  windows:
+    name: Windows x86_64
+    needs: guard
+    runs-on: windows-latest
+    env:
+      TAG: ${{ needs.guard.outputs.tag }}
+      WINDOWS_CODESIGN_PFX_B64: ${{ secrets.WINDOWS_CODESIGN_PFX_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Build
+        working-directory: rust
+        run: cargo build --release --locked -p downtime-globe-native -p downtime-cli -p downtime-server
+      - name: Sign (hook, M4-4)
+        if: env.WINDOWS_CODESIGN_PFX_B64 != ''
+        shell: pwsh
+        run: Write-Host "Windows code signing is not wired up yet (M4-4). Binaries stay unsigned."
+      - name: Package zip
+        shell: pwsh
+        run: |
+          $V = $env:TAG.Substring(1); $N = "globalstatus-$V-windows-x86_64"
+          New-Item -ItemType Directory -Force "dist/$N" | Out-Null
+          Copy-Item rust/target/release/downtime-globe.exe, rust/target/release/downtime.exe, rust/target/release/downtime-server.exe "dist/$N/"
+          Copy-Item *.txt, locations.json, LICENSE-MIT, LICENSE-APACHE, README.md, packaging/icons/globalstatus.ico "dist/$N/"
+          Compress-Archive -Path "dist/$N" -DestinationPath "dist/$N.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS universal
+    needs: guard
+    runs-on: macos-14
+    env:
+      TAG: ${{ needs.guard.outputs.tag }}
+      APPLE_DEVELOPER_ID_P12_B64: ${{ secrets.APPLE_DEVELOPER_ID_P12_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Build both architectures
+        working-directory: rust
+        run: |
+          for t in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --locked --target $t -p downtime-globe-native -p downtime-cli -p downtime-server
+          done
+      - name: Universal binaries and app bundle
+        run: |
+          set -euo pipefail
+          V="${TAG#v}"; N="globalstatus-$V-macos-universal"
+          mkdir -p "dist/$N/bin"
+          for b in downtime-globe downtime downtime-server; do
+            lipo -create -output "dist/$N/bin/$b" rust/target/aarch64-apple-darwin/release/$b rust/target/x86_64-apple-darwin/release/$b
+          done
+          APP="dist/$N/Global Status.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp "dist/$N/bin/downtime-globe" "$APP/Contents/MacOS/"
+          cp packaging/icons/GlobalStatus.icns "$APP/Contents/Resources/"
+          # The catalogs are compiled into downtime-globe, so the bundle needs no data folder.
+          sed "s/__VERSION__/${V}/g" packaging/macos/Info.plist > "$APP/Contents/Info.plist"
+          cp *.txt locations.json LICENSE-MIT LICENSE-APACHE README.md "dist/$N/"
+          # Ad-hoc signature only (no identity), so Apple Silicon will run it after the Gatekeeper prompt.
+          codesign --force --deep --sign - "$APP"
+          echo "N=$N" >> "$GITHUB_ENV"
+      - name: Sign and notarize (hook, M4-4)
+        if: env.APPLE_DEVELOPER_ID_P12_B64 != ''
+        run: echo "Developer ID signing and notarization are not wired up yet (M4-4). The app stays ad-hoc signed."
+      - name: Zip and DMG
+        run: |
+          set -euo pipefail
+          (cd dist && ditto -c -k --keepParent "$N" "$N.zip")
+          hdiutil create -volname "Global Status" -srcfolder "dist/$N/Global Status.app" -ov -format UDZO "dist/$N.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            dist/*.zip
+            dist/*.dmg
+          if-no-files-found: error
+
+  android:
+    name: Android APK
+    needs: guard
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.guard.outputs.tag }}
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Install cargo-apk
+        run: cargo install cargo-apk --version 0.10.0 --locked
+      - name: Keystore
+        run: |
+          set -euo pipefail
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            # Release key from secrets (M4-8). Key alias must match cargo-apk's default or be set in Cargo.toml.
+            echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "CARGO_APK_RELEASE_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "CARGO_APK_RELEASE_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "APK_SUFFIX=" >> "$GITHUB_ENV"
+          else
+            # No release key yet: sign with a throwaway debug key generated on this runner
+            # and discarded with it. Installs for testing; Android will refuse to update it
+            # in place with a build signed by a different key.
+            keytool -genkeypair -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -keypass android \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 365 -dname "CN=Android Debug,O=Android,C=US"
+            echo "CARGO_APK_RELEASE_KEYSTORE=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+            echo "CARGO_APK_RELEASE_KEYSTORE_PASSWORD=android" >> "$GITHUB_ENV"
+            echo "APK_SUFFIX=-debugsigned" >> "$GITHUB_ENV"
+          fi
+      - name: Build APK
+        working-directory: rust
+        run: |
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_LATEST_HOME"
+          cargo apk build -p downtime-globe-native --lib --release
+      - name: Collect
+        run: |
+          V="${TAG#v}"; mkdir -p dist
+          cp rust/target/release/apk/GlobalStatus.apk "dist/globalstatus-$V-android-universal${APK_SUFFIX}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*.apk
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [guard, linux, windows, macos, android]
+    if: ${{ !cancelled() && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.guard.outputs.tag }}
+      RELEASE_GPG_KEY_B64: ${{ secrets.RELEASE_GPG_KEY_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: SHA256SUMS
+        run: |
+          cd artifacts && sha256sum * | tee SHA256SUMS
+      - name: Sign SHA256SUMS (hook)
+        if: env.RELEASE_GPG_KEY_B64 != ''
+        run: echo "GPG signing of SHA256SUMS is not wired up yet."
+      - name: Release notes
+        run: |
+          if [ -f "docs/release-notes/$TAG.md" ]; then cp "docs/release-notes/$TAG.md" notes.md
+          else printf 'Global Status %s\n\nUnsigned build. See README for details.\n' "$TAG" > notes.md; fi
+          if [ "${{ needs.android.result }}" != "success" ]; then
+            printf '\n> The Android APK did not build for this tag, so it is not attached.\n' >> notes.md
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Global Status ${{ env.TAG }}
+          body_path: notes.md
+          prerelease: ${{ contains(env.TAG, '-') }}
+          files: artifacts/*
+          fail_on_unmatched_files: true

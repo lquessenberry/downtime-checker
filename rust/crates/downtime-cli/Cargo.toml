@@ -1,1 +1,20 @@
-$file:/workspace/gs-release/rust/crates/downtime-cli/Cargo.toml
+[package]
+name = "downtime-cli"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Native downtime checker CLI"
+
+[[bin]]
+name = "downtime"
+path = "src/main.rs"
+
+[dependencies]
+downtime-core = { path = "../downtime-core" }
+downtime-native = { path = "../downtime-native" }
+tokio = { version = "1.42", features = ["rt-multi-thread", "macros", "time", "sync"] }
+serde_json = "1.0"

@@ -1,1 +1,19 @@
-$file:/workspace/gs-release/packaging/linux/app.globalstatus.metainfo.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.globalstatus</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <name>Global Status</name>
+  <summary>Outages, conflicts, hazards and humanitarian crises on one live globe</summary>
+  <description>
+    <p>Global Status is a free and open-source world-status globe. This native alpha draws a 3D globe with capital pins and the reachability catalogs shared with the globalstatus.app web version.</p>
+  </description>
+  <launchable type="desktop-id">app.globalstatus.desktop</launchable>
+  <url type="homepage">https://globalstatus.app</url>
+  <url type="vcs-browser">https://github.com/lquessenberry/downtime-checker</url>
+  <developer id="app.globalstatus"><name>Lee Quessenberry and Will Casey</name></developer>
+  <releases>
+    <release version="0.1.0-alpha.1" date="2026-11-21" type="development"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

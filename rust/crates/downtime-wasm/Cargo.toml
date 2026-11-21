@@ -1,1 +1,19 @@
-$file:/workspace/gs-release/rust/crates/downtime-wasm/Cargo.toml
+[package]
+name = "downtime-wasm"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Browser-side catalog parsing and result aggregation"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dependencies]
+downtime-core = { path = "../downtime-core" }
+serde_json = "1.0"
+wasm-bindgen = "0.2.100"

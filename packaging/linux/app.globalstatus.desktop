@@ -1,1 +1,10 @@
-$file:/workspace/gs-release/packaging/linux/app.globalstatus.desktop
+[Desktop Entry]
+Type=Application
+Name=Global Status
+GenericName=World status globe
+Comment=Outages, conflicts, hazards and humanitarian crises on one live globe
+Exec=downtime-globe
+Icon=app.globalstatus
+Terminal=false
+Categories=Network;Monitor;Geography;Education;
+Keywords=outage;status;globe;map;emergency;conflict;
