@@ -117,6 +117,10 @@ Wiki index: [wiki/Home.md](wiki/Home.md).
 
 `bash install.sh` adds Downtime UI and Downtime Cesium launchers in `Desktop/Pentesting` when that folder already exists, and in the application menu. Node.js is required for both globes.
 
+## Rust native apps (work in progress)
+
+The Cesium web app stays the web target. Native Android, Linux, macOS and Windows apps are being built in Rust under [`rust/`](rust/): a shared core (catalogs, probes, feeds), the `downtime` CLI, an SSE server, and a wgpu + egui globe (`cargo run -p downtime-globe-native`). Crate layout and phases: [docs/rust-native.md](docs/rust-native.md).
+
 ## Working an issue
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Feature work is a **GitHub PR on this fork** into `feat/globalstatus-prod`. Do not STOR day-to-day edits to FTP.
