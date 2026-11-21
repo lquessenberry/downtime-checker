@@ -105,17 +105,17 @@
         <button type="button" data-ship-filter="passenger" aria-pressed="false">PASSENGER</button>
         <button type="button" data-ship-filter="fishing" aria-pressed="false">FISHING</button>
       </div>
-      <aside id="outage-card" class="outage-card" hidden>
+      <aside id="outage-card" class="outage-card" data-map-popup hidden>
         <button type="button" id="outage-close" aria-label="Close">×</button>
         <h2 id="outage-title"></h2>
         <p id="outage-body"></p>
       </aside>
-      <aside id="hunger-card" class="outage-card" hidden>
+      <aside id="hunger-card" class="outage-card" data-map-popup hidden>
         <button type="button" id="hunger-close" aria-label="Close">×</button>
         <h2 id="hunger-title"></h2>
         <p id="hunger-body"></p>
       </aside>
-      <aside id="conflict-card" class="conflict-card" hidden>
+      <aside id="conflict-card" class="conflict-card" data-map-popup hidden>
       <div class="cc-photo-wrap">
         <img id="cc-photo" alt="" hidden />
         <button type="button" id="cc-close" aria-label="Close">×</button>
@@ -130,8 +130,8 @@
       <a id="cc-more" class="cc-more" href="https://www.cfr.org/global-conflict-tracker" target="_blank" rel="noopener noreferrer">LEARN MORE</a>
     </aside>
     </div>
-    <div class="selected" id="selected" hidden></div>
-    <aside id="aircraft-card" class="aircraft-card" hidden>
+    <div class="selected" id="selected" data-map-popup hidden></div>
+    <aside id="aircraft-card" class="aircraft-card" data-map-popup hidden>
       <div class="ac-top">
         <div>
           <strong id="ac-flight"></strong>
@@ -250,7 +250,7 @@
     <div id="status-line"><span id="status-track">CESIUM READY · LOADING POWER OUTAGES, JAMMED GPS SIGNALS, AND CONFLICT TRACKER</span></div>
   </footer>
 
-  <div id="sdr-listen" hidden>
+  <div id="sdr-listen" data-map-popup hidden>
     <div class="sdr-bar">
       <button type="button" id="sdr-back">BACK TO GLOBE</button>
       <div class="sdr-heading">

@@ -367,8 +367,20 @@ async function startGlobe() {
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
   });
   ensureOrigin();
+  // A second handler, so Cesium can still select a pin. Empty ground is not a pin.
+  // Cesium then inserts a temporary imagery entity; that is not a layer pin either.
+  const popupClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  popupClicks.setInputAction((click) => {
+    if (pickedMapPin(click.position)) return;
+    closeMapPopups();
+    if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   viewer.selectedEntityChanged.addEventListener((entity) => {
-    if (!entity) return;
+    if (!entity || !isMapPin(entity)) {
+      closeMapPopups();
+      if (entity && viewer.selectedEntity === entity) viewer.selectedEntity = undefined;
+      return;
+    }
     if (entity._outage) {
       openOutage(entity._outage, { fly: false });
       return;
@@ -2700,6 +2712,42 @@ function closeAircraft() {
   aircraftRequest += 1;
   const card = document.getElementById("aircraft-card");
   if (card) card.hidden = true;
+}
+
+function pickedMapPin(position) {
+  const viewer = state.viewer;
+  if (!viewer) return false;
+  const picked = viewer.scene.pick(position);
+  if (!Cesium.defined(picked)) return false;
+  const id = picked.id ?? (picked.primitive && picked.primitive.id);
+  return id instanceof Cesium.Entity;
+}
+
+function isMapPin(entity) {
+  const viewer = state.viewer;
+  if (!entity || !viewer) return false;
+  if (entity._outage || entity._hunger || entity._pin || entity._stream || entity._live || entity._resultIndex != null) return true;
+  const sources = viewer.dataSources;
+  for (let i = 0; i < sources.length; i += 1) {
+    if (sources.get(i).entities.contains(entity)) return true;
+  }
+  return viewer.entities.contains(entity);
+}
+
+// Pin cards use [data-map-popup]. A later layer closes on empty ground the same way
+// when its card has that attribute, or when it reuses one of the close functions below.
+function closeMapPopups() {
+  const open = Array.from(document.querySelectorAll("[data-map-popup]")).some((popup) => !popup.hidden);
+  if (!open && !state.selected && !state.openKind && !state.streamOpenId) return;
+  state.streamOpenId = "";
+  closeAircraft();
+  closeConflict();
+  hideOutageCard();
+  closePin();
+  state.selected = null;
+  const box = document.getElementById("selected");
+  if (box) box.hidden = true;
+  for (const popup of document.querySelectorAll("[data-map-popup]")) popup.hidden = true;
 }
 
 function showLive(item) {
