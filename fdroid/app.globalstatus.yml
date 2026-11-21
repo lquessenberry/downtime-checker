@@ -25,7 +25,7 @@ Builds:
   # (versionCode = 2^24 + major*65536 + minor*256 + patch).
   - versionName: 0.1.0
     versionCode: 16777472
-    commit: v0.1.0-alpha.1
+    commit: v0.1.0-alpha.2
     subdir: rust
     sudo:
       - apt-get update

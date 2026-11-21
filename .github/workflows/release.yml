@@ -171,7 +171,7 @@ jobs:
   macos:
     name: macOS universal
     needs: guard
-    runs-on: macos-14
+    runs-on: macos-latest
     env:
       TAG: ${{ needs.guard.outputs.tag }}
       APPLE_DEVELOPER_ID_P12_B64: ${{ secrets.APPLE_DEVELOPER_ID_P12_B64 }}

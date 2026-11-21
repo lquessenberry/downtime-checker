@@ -4,7 +4,7 @@
 
 1. Bump `version` in `rust/Cargo.toml` (`[workspace.package]`) when the Android build should get a new versionCode, and update `# android-version-code` in `rust/crates/globe-native/Cargo.toml` (versionCode = 2^24 + major*65536 + minor*256 + patch).
 2. Add `docs/release-notes/vX.Y.Z[-pre].md` and, for Android, `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
-3. Push a tag `vX.Y.Z[-pre]`, or run **Actions → Release → Run workflow** with the tag name (the tag is created on that branch's head).
+3. Push a tag `vX.Y.Z[-pre]`, or put the new tag on one line in `.github/release-tag` and push that to `rust/native-core` (works through the GitHub API, which cannot push tags; the tag is created on that commit). Once this workflow is on the default branch, **Actions → Release → Run workflow** also works.
 
 `.github/workflows/release.yml` then:
 
