@@ -1,1 +1,36 @@
-$file:/workspace/gs-release/.gitignore
+__pycache__/
+*.pyc
+added-places.txt
+node_modules/
+visualizer/public/vendor/cesium/
+visualizer/data/*.json
+!visualizer/data/pack.json
+!visualizer/data/catalog.json
+!visualizer/data/websdr.json
+!visualizer/data/gpsjam.json
+!visualizer/data/conflicts.json
+!visualizer/data/streams.json
+!visualizer/data/radio.json
+visualizer/data/hpdb/
+visualizer/data/tiles/
+visualizer/data/feeds.json
+.ftp-credentials
+.netrc
+globalstatus/data/*.lock
+globalstatus/data/stop.flag
+globalstatus/.ftpquota
+
+/rust/target/
+
+# Private until its authors say it is ready: never commit the nuclear-effects
+# calculator/simulator sources or their test data.
+nuke-calculator/
+**/nuke-calculator/
+Radius calculator.html
+rust/crates/*/src/nuke*
+# Signing material is never committed (CI secrets only).
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.mobileprovision

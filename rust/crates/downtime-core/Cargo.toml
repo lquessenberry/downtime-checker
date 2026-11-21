@@ -1,1 +1,18 @@
-$file:/workspace/gs-release/rust/crates/downtime-core/Cargo.toml
+[package]
+name = "downtime-core"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Catalog parsing, reachability decisions, and data-layer hooks"
+
+[features]
+# Hosted builds. Turn this off for no_std + alloc (embedded later).
+default = ["std"]
+std = []
+
+[dependencies]
+libm = "0.2"

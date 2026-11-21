@@ -1,1 +1,23 @@
-$file:/workspace/gs-release/rust/crates/downtime-server/Cargo.toml
+[package]
+name = "downtime-server"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "SSE server with the same routes as visualizer/server.mjs"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "downtime-server"
+path = "src/main.rs"
+
+[dependencies]
+downtime-core = { path = "../downtime-core" }
+downtime-native = { path = "../downtime-native" }
+tokio = { version = "1.42", features = ["rt-multi-thread", "macros", "time", "net", "io-util", "sync", "fs"] }
+serde_json = "1.0"

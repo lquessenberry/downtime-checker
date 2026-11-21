@@ -1,1 +1,9 @@
-$file:/workspace/gs-release/fastlane/metadata/android/en-US/full_description.txt
+<p>Global Status is a free and open-source world-status globe. It is the native companion to the <a href="https://globalstatus.app">globalstatus.app</a> web globe, built in Rust with wgpu and egui.</p>
+
+<p><b>This is an early alpha.</b> Today it draws a 3D globe with capital pins and the country and category catalogs (governments, banks and exchanges, transportation, utilities, communications, medical, education and more) shared with the web version. You can drag to rotate, pinch or scroll to zoom and tap a pin to see its name.</p>
+
+<p>Planned for later releases: live reachability checks, outages, aircraft and ships, weather and hazard layers, humanitarian and conflict data, offline emergency maps, and optional third-party add-ons. The free open-source app stays the full product; add-ons are always optional.</p>
+
+<p>Privacy: no account, no ads, no tracking. Anything the app stores stays on your device.</p>
+
+<p>License: MIT OR Apache-2.0. Data sources keep their own licenses and are credited in the app and in the source repository.</p>

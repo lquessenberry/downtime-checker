@@ -1,1 +1,54 @@
-$file:/workspace/gs-release/.github/workflows/asset-drop.yml
+name: Asset drop
+
+# The GitHub API connector used for some pushes can only send text files and
+# cannot set the executable bit. To land binary files (icons, store images,
+# screenshots), commit them as .github/asset-drop/<name>.tar.gz.b64 plus a
+# matching <name>.sha256 (sha256 of the decoded .tar.gz). This workflow
+# unpacks the archive at the repo root, applies .github/asset-drop/<name>.chmod
+# (lines of "+x path"), removes the drop files and commits the result to the
+# same branch. Nothing else is changed; workflow files are never touched.
+
+on:
+  push:
+    branches: ["rust/native-core"]
+    paths: [".github/asset-drop/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: asset-drop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack, verify and commit
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          drops=(.github/asset-drop/*.tar.gz.b64)
+          if [ ${#drops[@]} -eq 0 ]; then echo "Nothing to unpack."; exit 0; fi
+          for b in "${drops[@]}"; do
+            n="${b%.tar.gz.b64}"
+            base64 -d "$b" > "$RUNNER_TEMP/drop.tar.gz"
+            echo "$(cat "$n.sha256")  $RUNNER_TEMP/drop.tar.gz" | sha256sum -c -
+            if tar -tzf "$RUNNER_TEMP/drop.tar.gz" | grep -E '(^/|\.\./|^\.github/)'; then
+              echo "::error::Archive has absolute, parent or .github paths"; exit 1
+            fi
+            tar -xzf "$RUNNER_TEMP/drop.tar.gz" --no-same-owner
+            tar -tzf "$RUNNER_TEMP/drop.tar.gz" | grep -v '/$' | xargs -r git add --
+            if [ -f "$n.chmod" ]; then
+              while read -r mode path; do
+                [ -n "$path" ] && git update-index --chmod="$mode" -- "$path"
+              done < "$n.chmod"
+            fi
+            git rm -q -f -- "$b" "$n.sha256" $( [ -f "$n.chmod" ] && echo "$n.chmod" )
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Add brand icons, store images and screenshots (asset drop)." \
+            -m "Unpacked from .github/asset-drop by the Asset drop workflow; sha256 verified."
+          git push origin "HEAD:${GITHUB_REF_NAME}"

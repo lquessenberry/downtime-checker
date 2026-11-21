@@ -1,1 +1,77 @@
-$file:/workspace/gs-release/rust/crates/globe-native/Cargo.toml
+[package]
+name = "downtime-globe-native"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Native Downtime globe: wgpu sphere + egui chrome, linked to downtime-core"
+
+[lib]
+name = "downtime_globe_native"
+path = "src/lib.rs"
+# cdylib for the Android APK (android_main); rlib for the desktop binary.
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "downtime-globe"
+path = "src/main.rs"
+
+[features]
+default = []
+# Reserved gate for the nuclear-effects simulator. The simulator source is NOT
+# in this repository; it stays private until its authors say it is ready.
+# Release workflows never enable this feature.
+nuke-sim = []
+
+[dependencies]
+downtime-core = { path = "../downtime-core" }
+eframe = { version = "0.32", default-features = false, features = ["wgpu", "default_fonts"] }
+# Same wgpu as eframe 0.32; listed directly so its default GPU backends
+# (Vulkan, Metal, DX12, GLES, WGSL) are compiled in.
+wgpu = "25"
+bytemuck = { version = "1", features = ["derive"] }
+glam = "0.30"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+downtime-native = { path = "../downtime-native" }
+
+[target.'cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))'.dependencies]
+eframe = { version = "0.32", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+eframe = { version = "0.32", default-features = false, features = ["wgpu", "default_fonts", "android-native-activity"] }
+winit = { version = "0.30.13", default-features = false, features = ["android-native-activity", "rwh_06"] }
+
+[dev-dependencies]
+downtime-native = { path = "../downtime-native" }
+
+# cargo apk build -p downtime-globe-native --lib --release
+[package.metadata.android]
+package = "app.globalstatus"
+apk_name = "GlobalStatus"
+# versionName/versionCode come from the crate version (0.1.0 -> 16777472).
+# Bump the workspace version for every Android release, and keep this line in
+# step for F-Droid's update checker:
+# android-version-code = 16777472
+resources = "../../../packaging/android/res"
+build_targets = ["aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android"]
+
+[package.metadata.android.sdk]
+min_sdk_version = 24
+target_sdk_version = 34
+
+[package.metadata.android.application]
+label = "Global Status"
+icon = "@mipmap/ic_launcher"
+theme = "@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen"
+
+[package.metadata.android.application.activity]
+label = "Global Status"
+config_changes = "orientation|screenSize|screenLayout|keyboardHidden"
+
+# No permissions yet: the alpha has no network code. Live layers will add
+# android.permission.INTERNET.

@@ -1,1 +1,7 @@
-$file:/workspace/gs-release/.gitleaks.toml
+# Secret scan config used by the release workflow (gitleaks).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Vendored CesiumJS ships Cesium's own public default ion token; it is not ours."
+paths = ['''globalstatus/vendor/cesium/''']

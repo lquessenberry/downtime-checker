@@ -1,1 +1,1 @@
-$file:/workspace/gs-release/fastlane/metadata/android/en-US/changelogs/16777472.txt
+First public alpha: native wgpu globe with capital pins and the shared country and category catalogs built in.
