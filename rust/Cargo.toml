@@ -1,14 +1,17 @@
 [workspace]
-resolver = "2"
+# Resolver 3 (Cargo 1.84+) picks dependency versions that match `rust-version`.
+resolver = "3"
 members = [
     "crates/downtime-core",
     "crates/downtime-native",
     "crates/downtime-cli",
     "crates/downtime-server",
     "crates/downtime-wasm",
+    "crates/globe-native",
 ]
 
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
 publish = false
+rust-version = "1.85"
