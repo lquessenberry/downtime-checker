@@ -66,6 +66,8 @@ cargo run -p downtime-server -- --root ..
 
 Workspace targets Rust 1.85+ (`eframe` 0.32 / `wgpu` 25). Bump both together.
 
+Between phases: `scripts/gsa-cycle/sigmap.sh` (WASM + Rust + Cesium). Wiki: `docs/architecture/WIKI.md`.
+
 ## Phases
 
 | Phase | Scope | Status |

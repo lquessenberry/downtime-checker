@@ -1,0 +1,25 @@
+# SigMap ignore. Index is local .context/. Wiki is docs/architecture/WIKI.md.
+
+.context/
+.git/
+**/target/
+**/node_modules/
+globalstatus/vendor/
+visualizer/public/vendor/
+globalstatus/data/
+visualizer/data/
+data/map-assets/
+*.jsonl
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.wasm
+*.map
+.env
+.env.*
+*.pem
+*.key
+*.keystore
+nuke-calculator/

@@ -21,6 +21,9 @@ globalstatus/data/stop.flag
 globalstatus/.ftpquota
 
 /rust/target/
+.context/
+.github/context-*.md
+.github/copilot-instructions.md
 data/map-assets/*
 !data/map-assets/README.md
 
