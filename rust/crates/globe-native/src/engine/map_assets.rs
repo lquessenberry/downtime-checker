@@ -27,6 +27,11 @@ pub enum AssetKind {
     VectorArchive,
     Texture,
     Portal,
+    Orbital,
+    Celestial,
+    Bathymetry,
+    Geophysical,
+    Boundaries,
 }
 
 pub const CATALOG: &[MapAsset] = &[
@@ -151,6 +156,125 @@ pub const CATALOG: &[MapAsset] = &[
         xyz: None,
         credit: "ambientCG (CC0)",
     },
+    MapAsset {
+        id: "celestrak-tle",
+        title: "CelesTrak TLE / OMM",
+        kind: AssetKind::Orbital,
+        license: "CelesTrak terms (free catalog)",
+        homepage: "https://celestrak.org/NORAD/elements/",
+        xyz: None,
+        credit: "CelesTrak",
+    },
+    MapAsset {
+        id: "space-track",
+        title: "Space-Track.org USSF catalog",
+        kind: AssetKind::Orbital,
+        license: "free account; not bulk-redistributable",
+        homepage: "https://www.space-track.org/",
+        xyz: None,
+        credit: "18 SDS / Space-Track",
+    },
+    MapAsset {
+        id: "jpl-horizons",
+        title: "NASA JPL Horizons / SPICE",
+        kind: AssetKind::Orbital,
+        license: "public domain (NASA/JPL)",
+        homepage: "https://ssd.jpl.nasa.gov/horizons/",
+        xyz: None,
+        credit: "NASA JPL",
+    },
+    MapAsset {
+        id: "hipparcos",
+        title: "Hipparcos / Yale Bright Star (VizieR)",
+        kind: AssetKind::Celestial,
+        license: "public catalogs (ESA / Yale)",
+        homepage: "https://vizier.cds.unistra.fr/",
+        xyz: None,
+        credit: "ESA Hipparcos · Yale BSC · CDS",
+    },
+    MapAsset {
+        id: "black-marble",
+        title: "NASA Black Marble night lights",
+        kind: AssetKind::Satellite,
+        license: "public domain (NASA)",
+        homepage: "https://blackmarble.gsfc.nasa.gov/",
+        xyz: Some(
+            "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/{date}/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png",
+        ),
+        credit: "NASA Black Marble / GIBS",
+    },
+    MapAsset {
+        id: "gebco",
+        title: "GEBCO bathymetry",
+        kind: AssetKind::Bathymetry,
+        license: "GEBCO (attribution)",
+        homepage: "https://www.gebco.net/",
+        xyz: None,
+        credit: "GEBCO",
+    },
+    MapAsset {
+        id: "gmrt",
+        title: "GMRT multibeam topography",
+        kind: AssetKind::Bathymetry,
+        license: "GMRT data use terms",
+        homepage: "https://www.gmrt.org/",
+        xyz: None,
+        credit: "GMRT / LDEO",
+    },
+    MapAsset {
+        id: "wmm",
+        title: "NOAA World Magnetic Model",
+        kind: AssetKind::Geophysical,
+        license: "US government public domain",
+        homepage: "https://www.ncei.noaa.gov/products/world-magnetic-model",
+        xyz: None,
+        credit: "NOAA NCEI WMM",
+    },
+    MapAsset {
+        id: "egm2008",
+        title: "EGM2008 geoid (NGA / PROJ)",
+        kind: AssetKind::Geophysical,
+        license: "NGA public",
+        homepage: "https://earth-info.nga.mil/",
+        xyz: None,
+        credit: "NGA EGM2008",
+    },
+    MapAsset {
+        id: "usgs-earthquakes",
+        title: "USGS earthquake / volcano archives",
+        kind: AssetKind::Geophysical,
+        license: "US government public domain",
+        homepage: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php",
+        xyz: None,
+        credit: "USGS",
+    },
+    MapAsset {
+        id: "ne-timezones",
+        title: "Natural Earth timezones",
+        kind: AssetKind::Boundaries,
+        license: "public domain",
+        homepage: "https://www.naturalearthdata.com/downloads/10m-cultural-vectors/timezones/",
+        xyz: None,
+        credit: "Natural Earth",
+    },
+    MapAsset {
+        id: "whosonfirst-tz",
+        title: "Who's On First timezone boundaries",
+        kind: AssetKind::Boundaries,
+        license: "CC0 / CC-BY (per file)",
+        homepage: "https://github.com/whosonfirst-data/whosonfirst-data-timezone",
+        xyz: None,
+        credit: "Who's On First",
+    },
+    MapAsset {
+        id: "geoboundaries",
+        title: "geoBoundaries ADM0–ADM4",
+        kind: AssetKind::Boundaries,
+        license: "CC BY 4.0",
+        homepage: "https://www.geoboundaries.org/",
+        xyz: None,
+        credit: "geoBoundaries",
+    },
 ];
 
 pub fn asset(id: &str) -> Option<&'static MapAsset> {
@@ -179,7 +303,8 @@ pub fn xyz_for_basemap(basemap: Basemap, z: u8, x: u32, y: u32) -> Option<String
         Basemap::Osm | Basemap::Streets => "osm",
         Basemap::Sentinel => "nasa-modis",
         Basemap::OpenTopo => "opentopo",
-        Basemap::Night | Basemap::Plain => return None,
+        Basemap::Night => "black-marble",
+        Basemap::Plain => return None,
     };
     Some(xyz_url(asset(id)?.xyz?, z, x, y, None))
 }
@@ -214,6 +339,11 @@ mod tests {
         assert!(asset("naturalearth").is_some());
         assert!(asset("openfreemap").is_some());
         assert!(asset("protomaps").is_some());
+        assert!(asset("celestrak-tle").is_some());
+        assert!(asset("gebco").is_some());
+        assert!(asset("wmm").is_some());
+        assert!(asset("geoboundaries").is_some());
+        assert!(asset("black-marble").is_some());
     }
 
     #[test]

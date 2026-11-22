@@ -44,6 +44,30 @@ Poly Haven HDRIs, Kenney terrain, OpenGameArt height, NASA SVS stills, Cesium io
 **Batch 5 — offline desktop/mobile**  
 QGIS + QuickMapServices (OSM/GIBS), Marble, `pmtiles` CLI, `tippecanoe`, ATAK with local MBTiles (no TAK server license).
 
+## Batch 2 — orbital, bathymetry, borders, factoids
+
+| Category | Source | Use |
+| --- | --- | --- |
+| Orbits | CelesTrak TLE/OMM | Offline tracks via `sgp4` crate later. Do not vendor Space-Track dumps. |
+| Orbits | JPL Horizons / SPICE | Terminator, Moon, planets (`anise` / kernels in `data/map-assets/`) |
+| Sky | Hipparcos / Yale BSC (VizieR) | Tiny star table for skybox |
+| Night | NASA Black Marble GIBS | `Basemap::Night` XYZ |
+| Bathymetry | GEBCO, GMRT | Ocean trenches; not in git |
+| Mag / geoid | WMM `.COF`, EGM2008 | Spherical harmonics + orthometric height |
+| Quakes | USGS GeoJSON feeds | Tectonic overlay |
+| Borders | Natural Earth TZ, Who's On First, geoBoundaries | Point-in-polygon local time |
+| Grids | Maidenhead (in `geo_facts.rs`), later `h3o` / S2 | No download |
+
+Factoids in `engine/geo_facts.rs`: WGS84 bulge, Kármán vs ISS on a 10 cm globe, GEO Clarke belt, GPS MEO, Null Island, antipodes, SAA bbox.
+
+Space-Track needs a free account and is **not** bulk-redistributable. CelesTrak is the default TLE source.
+
+## Rust crates (not all added yet)
+
+Tile/raster: `pmtiles`, `geotiff`, `flatgeobuf`, `geoparquet`.  
+Geodesy: `proj4rs`, `geographiclib-rs`, `h3o`.  
+Orbits: `sgp4`, `anise`, `vsop87`. Add a crate only when a cycle draws that layer.
+
 Open a new PR per batch. Each PR only adds registry rows + a fetch script target. Never a multi-GB blob.
 
 ## Paid hosts (RUCKUS fail)

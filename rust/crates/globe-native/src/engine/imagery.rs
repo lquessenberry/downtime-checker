@@ -34,7 +34,7 @@ impl Basemap {
             Basemap::OpenTopo => "OpenTopoMap",
             Basemap::Satellite => "NASA GIBS Blue Marble tiles",
             Basemap::Sentinel => "NASA GIBS MODIS",
-            Basemap::Night => "Night (plain dark)",
+            Basemap::Night => "NASA Black Marble",
             Basemap::Plain => "Plain ellipsoid",
         }
     }
@@ -56,7 +56,8 @@ impl ImageryLayer {
             Basemap::Osm | Basemap::Streets => "© OpenStreetMap contributors",
             Basemap::OpenTopo => "OpenTopoMap (CC-BY-SA) · OSM · SRTM",
             Basemap::Sentinel => "NASA GIBS / Worldview",
-            Basemap::Night | Basemap::Plain => "ellipsoid",
+            Basemap::Night => "NASA Black Marble / GIBS",
+            Basemap::Plain => "ellipsoid",
         };
         Self { basemap, credit }
     }
