@@ -1,6 +1,9 @@
 .git
 .github
 docs
+rust/target
+**/target
+data/map-assets
 locations.json
 node_modules
 **/node_modules
