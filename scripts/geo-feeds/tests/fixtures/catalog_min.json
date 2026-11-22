@@ -1,0 +1,50 @@
+[
+  {
+    "id": "usgs-eq-all-day",
+    "name": "USGS earthquakes past day",
+    "provider": "USGS",
+    "endpoint": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
+    "docs": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php",
+    "format": "GeoJSON",
+    "auth": "none",
+    "link_only": false,
+    "licence": "US Government work (public domain)",
+    "attribution": "USGS. US Government work; attribution appreciated.",
+    "commercial_use": "yes",
+    "cadence": "near real-time (minutes)",
+    "category": "hazards",
+    "sample_lat": 35.2,
+    "sample_lon": -89.5
+  },
+  {
+    "id": "waqi-bounds",
+    "name": "WAQI bounds",
+    "provider": "World Air Quality Index",
+    "endpoint": "https://api.waqi.info/map/bounds/?latlng=33,-95,37,-89",
+    "docs": "https://aqicn.org/api/",
+    "format": "JSON",
+    "auth": "free key",
+    "link_only": false,
+    "licence": "WAQI terms",
+    "attribution": "World Air Quality Index Project",
+    "commercial_use": "yes, with attribution",
+    "cadence": "hourly",
+    "category": "air",
+    "verified": "needs key, docs verified"
+  },
+  {
+    "id": "nsopw",
+    "name": "NSOPW",
+    "provider": "NSOPW",
+    "endpoint": "https://www.nsopw.gov/",
+    "docs": "https://www.nsopw.gov/",
+    "format": "HTML",
+    "auth": "link-only",
+    "link_only": true,
+    "licence": "",
+    "attribution": "NSOPW",
+    "commercial_use": "no",
+    "cadence": "as issued",
+    "category": "registries-linkout"
+  }
+]
