@@ -34,7 +34,7 @@ Exceed Cesium (the reason we left it):
 | `downtime-core` | Catalog parsing, ping → TCP 443 → TCP 80, geo, grouping, `DataLayer` registry. `no_std` + `alloc`. |
 | `downtime-native` | tokio DNS/TCP probes, ICMP via `ping`, ipwho.is, catalog files on disk. |
 | `downtime-cli` | `downtime` binary, same menus as `downtime.py`. |
-| `downtime-server` | SSE `/api/*` compatible with the Node visualizer. Becomes the one-user poller. |
+| `downtime-server` | SSE `/api/*` compatible with the Node visualizer. Becomes the one-user poller. Tokio multi-thread; this is the PHP replacement (not Rapira). |
 | `downtime-wasm` | Browser catalog parsing (wasm-bindgen). Bridge until the globe itself is wasm. |
 | `globe-native` | `downtime-globe`: eframe/egui + wgpu Earth, NASA Blue Marble, capital pins, search counts. |
 
@@ -51,7 +51,7 @@ Exceed Cesium (the reason we left it):
 
 Cesium → Rust map: [CESIUM_MAP.md](CESIUM_MAP.md) and the inventory in [globe-plan/RUST_PLAN.md](globe-plan/RUST_PLAN.md). CLI: `python3 scripts/globe-re/globe_plan.py`. Apache-2.0 Cesium `Source/` only. Mapbox GL JS is refused. A `Core/` port is a derivative work; `NOTICE-CESIUM` stays at the repo root (Apache-2.0 §4(d)). Binary RE adapters are unimplemented.
 
-Releases: [RELEASING.md](RELEASING.md).
+Releases: [RELEASING.md](RELEASING.md). PHP→Rust lanes and the speed map: [RUST-ARSENAL.md](RUST-ARSENAL.md).
 
 ## Run
 

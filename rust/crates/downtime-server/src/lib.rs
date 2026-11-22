@@ -1,5 +1,8 @@
 //! HTTP and server-sent events for the globe HUD.
 //!
+//! Tokio multi-thread is the product HTTP layer (lane 3 in `docs/RUST-ARSENAL.md`).
+//! Rapira/Pasir are not dependencies. php-rust is not the runtime.
+//!
 //! The JSON event names match `visualizer/server.mjs`: `hello`, `scan-start`,
 //! `result`, `locating`, `location`, `scan-done`, `scan-stop`, and `error`.
 
