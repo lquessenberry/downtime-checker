@@ -8,16 +8,16 @@
 //! The same code runs on Linux, macOS and Windows (`main.rs`) and on Android
 //! (`android_main` below, built as a `cdylib` with cargo-apk).
 //!
-//! The nuclear-effects simulator is not part of this crate. It stays private
-//! until its authors say it is ready, and would only ever be compiled with the
-//! non-default `nuke-sim` feature, which release builds never enable.
+//! First-party blast rings live in `downtime-core::blast` (cube-root scaling).
+//! That is not the private nuke-sim crate. Release builds still do not enable
+//! the empty `nuke-sim` cargo feature.
 
 mod engine;
 mod globe_math;
 pub mod pins;
 mod render;
 
-use downtime_core::{builtin_layers, LayerKind};
+use downtime_core::{blast_card, blast_defcon, blast_rings, builtin_layers, BlastShot, LayerKind, KT_PRESETS};
 use eframe::egui;
 use glam::Vec3;
 
@@ -70,6 +70,10 @@ struct GlobeApp {
     show_pins: bool,
     show_grid: bool,
     selected: Option<usize>,
+    nuke_on: bool,
+    yield_idx: usize,
+    airburst: bool,
+    shots: Vec<BlastShot>,
 }
 
 impl GlobeApp {
@@ -80,6 +84,10 @@ impl GlobeApp {
             show_pins: true,
             show_grid: false,
             selected: None,
+            nuke_on: false,
+            yield_idx: 0,
+            airburst: true,
+            shots: Vec::new(),
         }
     }
 
@@ -92,6 +100,27 @@ impl GlobeApp {
             ui.label("Earth: NASA Blue Marble (public domain)");
             ui.checkbox(&mut self.show_pins, format!("Capital pins ({})", self.data.pins.len()));
             ui.checkbox(&mut self.show_grid, "Graticule");
+            ui.separator();
+            ui.heading("NUCLEAR");
+            ui.label(egui::RichText::new(format!("DEFCON {}", blast_defcon(&self.shots))).strong());
+            ui.checkbox(&mut self.nuke_on, "Arm (one thumb)");
+            ui.add(egui::Slider::new(&mut self.yield_idx, 0..=KT_PRESETS.len() - 1).text("yield step"));
+            ui.label(format!("{:.0} kt", KT_PRESETS[self.yield_idx.min(KT_PRESETS.len() - 1)]));
+            ui.checkbox(&mut self.airburst, "Airburst");
+            if ui.add_sized([ui.available_width(), 44.0], egui::Button::new("FIRE")).clicked() && self.nuke_on {
+                self.shots.push(BlastShot {
+                    lat: f64::from(self.camera.lat),
+                    lon: f64::from(self.camera.lon),
+                    yield_kt: KT_PRESETS[self.yield_idx.min(KT_PRESETS.len() - 1)],
+                    airburst: self.airburst,
+                });
+            }
+            if ui.button("Clear shots").clicked() {
+                self.shots.clear();
+            }
+            if let Some(shot) = self.shots.last() {
+                ui.label(blast_card(*shot));
+            }
             ui.separator();
             ui.label("Layers (Cesium parity)");
             egui::ScrollArea::vertical().id_salt("layer-stubs").max_height(160.0).show(ui, |ui| {
@@ -141,10 +170,11 @@ impl GlobeApp {
             GlobeCallback { view_proj, sun, grid: if self.show_grid { 1.0 } else { 0.0 } },
         ));
 
+        let painter = ui.painter_at(rect);
+        self.paint_blast_rings(&painter, rect, view_proj);
         if !self.show_pins {
             return;
         }
-        let painter = ui.painter_at(rect);
         let hover = response.hover_pos();
         let mut hovered: Option<(usize, egui::Pos2)> = None;
         for (i, pin) in self.data.pins.iter().enumerate() {
@@ -165,6 +195,40 @@ impl GlobeApp {
             painter.text(pos + egui::vec2(8.0, -8.0), egui::Align2::LEFT_BOTTOM, &pin.label, egui::FontId::proportional(14.0), egui::Color32::WHITE);
             if response.clicked() {
                 self.selected = Some(i);
+            }
+        }
+    }
+
+    fn paint_blast_rings(&self, painter: &egui::Painter, rect: egui::Rect, view_proj: glam::Mat4) {
+        const EARTH_M: f64 = 6_371_000.0;
+        for shot in &self.shots {
+            let r = blast_rings(shot.yield_kt, shot.airburst);
+            let radii = [r.fireball_m, r.heavy_m, r.medium_m, r.light_m, r.thermal_m];
+            let colors = [
+                egui::Color32::from_rgb(255, 220, 80),
+                egui::Color32::from_rgb(220, 40, 30),
+                egui::Color32::from_rgb(230, 120, 40),
+                egui::Color32::from_rgb(80, 180, 90),
+                egui::Color32::from_rgb(255, 160, 60),
+            ];
+            for (meters, color) in radii.into_iter().zip(colors) {
+                let ang = (meters / EARTH_M).to_degrees();
+                let mut pts = Vec::new();
+                for i in 0..48 {
+                    let t = (i as f64) * std::f64::consts::TAU / 48.0;
+                    let lat = shot.lat + ang * t.cos();
+                    let lon = shot.lon + ang * t.sin() / lat.to_radians().cos().max(0.2);
+                    let p = globe_math::lat_lon_to_unit(lat, lon);
+                    if !self.camera.sees(p) {
+                        continue;
+                    }
+                    if let Some([x, y]) = project(view_proj, p, [rect.width(), rect.height()]) {
+                        pts.push(rect.min + egui::vec2(x, y));
+                    }
+                }
+                if pts.len() > 2 {
+                    painter.add(egui::Shape::closed_line(pts, egui::Stroke::new(1.5, color)));
+                }
             }
         }
     }

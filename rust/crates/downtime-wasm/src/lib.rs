@@ -14,13 +14,53 @@
 use std::collections::BTreeMap;
 
 use downtime_core::{
-    builtin_layers, classify, load_catalog, places_for, summarize, LayerKind, Loaded, Method,
-    Place, Report, Status,
+    blast_card, blast_defcon, blast_rings, builtin_layers, classify, load_catalog, places_for,
+    summarize, BlastShot, LayerKind, Loaded, Method, Place, Report, Status, KT_PRESETS,
 };
 use serde_json::{json, Value};
 use wasm_bindgen::prelude::*;
 
-/// What this build can and cannot do. Safe to show in a console or an about box.
+/// First-party blast rings. `airburst` is 1 for air, 0 for ground.
+#[wasm_bindgen]
+pub fn blast_rings_json(yield_kt: f64, airburst: u8) -> String {
+    let r = blast_rings(yield_kt, airburst != 0);
+    serde_json::to_string(&json!({
+        "yieldKt": r.yield_kt,
+        "airburst": r.airburst,
+        "fireballM": r.fireball_m,
+        "heavyM": r.heavy_m,
+        "mediumM": r.medium_m,
+        "lightM": r.light_m,
+        "thermalM": r.thermal_m,
+        "falloutM": r.fallout_m,
+        "presets": KT_PRESETS,
+    }))
+    .unwrap_or_else(|_| "{}".to_string())
+}
+
+#[wasm_bindgen]
+pub fn blast_card_text(lat: f64, lon: f64, yield_kt: f64, airburst: u8) -> String {
+    blast_card(BlastShot {
+        lat,
+        lon,
+        yield_kt,
+        airburst: airburst != 0,
+    })
+}
+
+#[wasm_bindgen]
+pub fn blast_defcon_level(count: u32, max_kt: f64) -> u8 {
+    let shots: Vec<BlastShot> = (0..count)
+        .map(|_| BlastShot {
+            lat: 0.0,
+            lon: 0.0,
+            yield_kt: max_kt,
+            airburst: true,
+        })
+        .collect();
+    blast_defcon(&shots)
+}
+
 #[wasm_bindgen]
 pub fn runtime_note() -> String {
     "WebAssembly parses the catalog files and aggregates UP/DOWN results. \

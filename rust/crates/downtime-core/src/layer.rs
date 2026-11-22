@@ -111,6 +111,18 @@ const LAYERS: &[LayerInfo] = &[
         summary: "FCC / packed station list from the web globe.",
     },
     LayerInfo {
+        id: "nuclear",
+        title: "Nuclear",
+        kind: LayerKind::Active,
+        summary: "First-party cube-root blast rings on the globe. One-thumb yield, tap to fire.",
+    },
+    LayerInfo {
+        id: "streets3d",
+        title: "Streets 3D",
+        kind: LayerKind::Stub,
+        summary: "OSM Buildings GeoJSON when the camera is low. CC BY-SA.",
+    },
+    LayerInfo {
         id: "grid",
         title: "Country grid",
         kind: LayerKind::Stub,
@@ -205,7 +217,8 @@ mod tests {
     #[test]
     fn stubs_collect_nothing_and_reachability_keeps_the_verdict() {
         let layers = layer_registry();
-        assert_eq!(layers.len(), LAYERS.len());
+        let stubs = LAYERS.iter().filter(|info| info.kind == LayerKind::Stub).count();
+        assert_eq!(layers.len(), 1 + stubs);
         assert_eq!(layers[0].info().kind, LayerKind::Active);
         assert!(layers
             .iter()

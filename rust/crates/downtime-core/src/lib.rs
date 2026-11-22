@@ -12,6 +12,7 @@
 
 extern crate alloc;
 
+mod blast;
 mod catalog;
 mod check;
 mod geo;
@@ -19,6 +20,7 @@ mod group;
 mod layer;
 mod model;
 
+pub use blast::{card as blast_card, defcon as blast_defcon, rings as blast_rings, Shot as BlastShot, BlastRings, KT_PRESETS};
 pub use catalog::{
     catalog_host, load_catalog, normalize_address, places_for, searches, valid_address,
     CATALOG_FILES,

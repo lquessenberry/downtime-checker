@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use downtime_core::{
-    first_public_ipv4, is_public_ipv4, locate, places_for, Loaded, LocateMode, Place, Report,
-    Status, LOOKUP_WORKERS,
+    blast_card, blast_rings, first_public_ipv4, is_public_ipv4, locate, places_for, BlastShot,
+    Loaded, LocateMode, Place, Report, Status, KT_PRESETS, LOOKUP_WORKERS,
 };
 use downtime_native::{
     cache_record, check_all, load_catalog_dir, lookup_ipwho, read_cache, record_value, write_cache,
@@ -114,6 +114,15 @@ async fn handle(mut socket: TcpStream, app: Arc<App>) -> std::io::Result<()> {
         ("POST", "/api/stop") => {
             stop(&app);
             write_json(&mut socket, 200, r#"{"ok":true}"#).await
+        }
+        ("GET", "/api/blast") => write_json(&mut socket, 200, &blast_json(&request.query)).await,
+        ("GET", "/healthz") => {
+            write_json(
+                &mut socket,
+                200,
+                r#"{"ok":true,"runtime":"rust","threads":"tokio-multi-thread"}"#,
+            )
+            .await
         }
         ("GET", "/favicon.ico") => {
             write_response(&mut socket, 204, "No Content", "image/x-icon", b"", "").await
@@ -700,6 +709,7 @@ fn decode_path(path: &str) -> String {
 struct Request {
     method: String,
     path: String,
+    query: String,
     body: Vec<u8>,
 }
 
@@ -732,7 +742,9 @@ async fn read_request(socket: &mut TcpStream) -> std::io::Result<Request> {
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let raw_path = parts.next().unwrap_or("/");
-    let path = raw_path.split('?').next().unwrap_or("/").to_string();
+    let mut split = raw_path.splitn(2, '?');
+    let path = split.next().unwrap_or("/").to_string();
+    let query = split.next().unwrap_or("").to_string();
     let mut content_length = 0usize;
     for line in lines {
         if let Some((name, value)) = line.split_once(':') {
@@ -755,7 +767,47 @@ async fn read_request(socket: &mut TcpStream) -> std::io::Result<Request> {
         body.extend_from_slice(&tmp[..read]);
     }
     body.truncate(content_length);
-    Ok(Request { method, path, body })
+    Ok(Request {
+        method,
+        path,
+        query,
+        body,
+    })
+}
+
+fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
+    query.split('&').find_map(|pair| {
+        let (name, value) = pair.split_once('=')?;
+        (name == key).then_some(value)
+    })
+}
+
+fn blast_json(query: &str) -> String {
+    let kt: f64 = query_param(query, "kt")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(15.0);
+    let air = query_param(query, "air").map(|v| v != "0").unwrap_or(true);
+    let lat: f64 = query_param(query, "lat")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0.0);
+    let lon: f64 = query_param(query, "lon")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0.0);
+    let r = blast_rings(kt, air);
+    json!({
+        "runtime": "rust",
+        "yieldKt": r.yield_kt,
+        "airburst": r.airburst,
+        "fireballM": r.fireball_m,
+        "heavyM": r.heavy_m,
+        "mediumM": r.medium_m,
+        "lightM": r.light_m,
+        "thermalM": r.thermal_m,
+        "falloutM": r.fallout_m,
+        "presets": KT_PRESETS,
+        "card": blast_card(BlastShot { lat, lon, yield_kt: kt, airburst: air }),
+    })
+    .to_string()
 }
 
 async fn write_json(socket: &mut TcpStream, status: u16, body: &str) -> std::io::Result<()> {
@@ -878,5 +930,18 @@ mod tests {
         .await;
         assert!(events.contains("text/event-stream"), "{events}");
         assert!(events.contains("\"type\":\"hello\""));
+        let blast = http(
+            addr,
+            "GET /api/blast?kt=15&air=1 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        assert!(blast.contains("\"runtime\":\"rust\""), "{blast}");
+        assert!(blast.contains("lightM"), "{blast}");
+        let health = http(
+            addr,
+            "GET /healthz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        assert!(health.contains("tokio-multi-thread"), "{health}");
     }
 }

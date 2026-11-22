@@ -18,6 +18,8 @@ use tokio::net::TcpListener;
 #[tokio::main]
 async fn main() {
     let mut root = None;
+    let mut static_dir = None;
+    let mut bind = env::var("GSA_BIND").unwrap_or_else(|_| "127.0.0.1".into());
     let mut port = env::var("PORT")
         .ok()
         .and_then(|value| value.parse().ok())
@@ -31,6 +33,8 @@ async fn main() {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--root" => root = args.next().map(PathBuf::from),
+            "--static" | "--globe" => static_dir = args.next().map(PathBuf::from),
+            "--bind" => bind = args.next().unwrap_or_else(|| "127.0.0.1".into()),
             "--port" => {
                 port = args
                     .next()
@@ -52,9 +56,10 @@ async fn main() {
             "--no-lookup" => lookup = false,
             "-h" | "--help" => {
                 println!(
-                    "downtime-server [--root DIR] [--port N] [--workers N] [--no-lookup]\n\n\
-                     Serves the globe in visualizer/public and the same /api routes as server.mjs.\n\
-                     PORT and WORKERS environment variables are also read."
+                    "downtime-server [--root DIR] [--static DIR] [--bind ADDR] [--port N] [--workers N] [--no-lookup]\n\n\
+                     Tokio multi-thread server. Serves /api/blast from downtime-core.\n\
+                     Default static dir is globalstatus/ when present, else visualizer/public.\n\
+                     PORT, WORKERS, and GSA_BIND are also read."
                 );
                 return;
             }
@@ -72,7 +77,11 @@ async fn main() {
                 exit(1);
             }),
     };
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let ip: std::net::IpAddr = bind.parse().unwrap_or_else(|_| {
+        eprintln!("--bind needs an IP");
+        exit(1);
+    });
+    let addr = SocketAddr::from((ip, port));
     let listener = match TcpListener::bind(addr).await {
         Ok(listener) => listener,
         Err(err) => {
@@ -81,9 +90,18 @@ async fn main() {
         }
     };
     let bound = listener.local_addr().unwrap_or(addr);
+    let globe = root.join("globalstatus");
+    let visualizer = root.join("visualizer").join("public");
+    let static_dir = static_dir.unwrap_or_else(|| {
+        if globe.join("index.html").is_file() {
+            globe
+        } else {
+            visualizer
+        }
+    });
     let config = ServerConfig {
         root: root.clone(),
-        static_dir: root.join("visualizer").join("public"),
+        static_dir: static_dir.clone(),
         workers,
         lookup,
     };
@@ -100,7 +118,9 @@ async fn main() {
                 .iter()
                 .find(|search| search.id == "weather")
                 .map(|search| search.count);
-            println!("Downtime visualizer (Rust)  http://{bound}");
+            println!("Global Status (Rust, tokio multi-thread)  http://{bound}");
+            println!("static {}", static_dir.display());
+            println!("{workers} scan workers");
             println!("{rows} catalog rows across searches");
             if let Some(count) = weather {
                 println!("Weather search: {count} places");
