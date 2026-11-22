@@ -10,7 +10,7 @@ RUCKUS fails a cycle that adds a required paid token.
 | --- | --- | --- | --- |
 | Blast rings, DEFCON HUD | NUKEMAP, NukeSim | `downtime-core::blast` cube-root (Glasstone-scale) | 7, 9, 10, 16 |
 | Globe engine | Cesium ion, Mapbox GL JS v2+ | Vendored Cesium Apache-2.0 `Source/` now; wgpu `globe-native` is the product | 10, 18 |
-| Terrain | Esri Terrain3D, Cesium World Terrain | Mapzen/Nextzen Terrarium, SRTM, Copernicus DEM, NASA | 11, 16 |
+| Terrain | Esri Terrain3D, Cesium World Terrain | Mapzen Terrarium / SRTM (`engine/map_assets.rs`) | 11, 16 |
 | Streets / 3D buildings | Cesium OSM Buildings (ion), Google Photorealistic | OSM tiles + OSM Buildings GeoJSON (CC BY-SA) | 12, 18 |
 | Satellite / streets 2D | Esri World Imagery / Street Map, EOX 2018–2025 CC BY-NC-SA | OSM, NASA Blue Marble / GIBS, EOX **2016 CC BY**, Natural Earth | 14 |
 | AIR | ADS-B Exchange bulk, paid adsb.lol key | adsb.lol unkeyed + cache; own 1090 feeder (`adsb.im`) | 13, 18 |

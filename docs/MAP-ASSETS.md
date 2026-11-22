@@ -1,0 +1,51 @@
+# Free map assets for the Rust globe
+
+No Mapbox, Cesium ion, Esri, or Maxar. Registry: `rust/crates/globe-native/src/engine/map_assets.rs`. Bytes go in `data/map-assets/` (gitignored). Do not commit planet PMTiles, Landsat scenes, or LiDAR.
+
+Fetch:
+
+```bash
+scripts/globe-assets/fetch.sh --ne110
+```
+
+Native HUD: Basemap combo (Blue Marble / OSM / OpenTopo / GIBS) and Terrain (ellipsoid / Terrarium). The sphere still draws compiled Blue Marble until the XYZ sampler lands; the combo records the free source we will sample.
+
+## Batch 1 (this PR)
+
+| Category | Source | License | How we use it |
+| --- | --- | --- | --- |
+| GPS / topo | OpenStreetMap raster | ODbL | Default streets XYZ |
+| GPS / topo | OpenTopoMap | CC BY-SA + OSM + SRTM | Contour/hillshade XYZ |
+| GPS / topo | Organic Maps, OsmAnd | open source apps | Not vendored; same OSM data |
+| GPS / topo | USGS National Map, TopoView, PCL UT Austin | US / library public | Portal only; US Topo GeoPDF on demand |
+| DEM | Mapzen Terrarium on AWS | Open Data | Height PNG, cycle 11 |
+| DEM | OpenDEM, SRTM, NASADEM, ALOS, ETOPO1, MERIT | various open | Directory; Terrarium is the runtime |
+| Sat | NASA GIBS Blue Marble + MODIS | public domain | XYZ / WMTS |
+| Sat | USGS EarthExplorer, Earthdata, Landsat Collection 2 | US gov | Portal; no bulk in git |
+| Sat | Copernicus Data Space | Copernicus open | Sentinel portal; EOX 2016 CC BY if we need a mosaic |
+| Vector | OpenFreeMap, Protomaps PMTiles, OpenMapTiles, VersaTiles, Geofabrik | ODbL | Offline packs (cycle 18 / #16) |
+| Vector | Natural Earth 110m / 50m / 10m | public domain | Coastlines (cycle 29) |
+| PBR | Poly Haven, ambientCG, Texture Ninja, 3DTexel | CC0 | Ground albedo later; not required to spin the globe |
+| Portals | GIS Geography, Free GIS Data, Blue Marble Geo directory | indexes | Bookmark file in this doc |
+
+Organic Maps and OsmAnd are **viewers**, not tile hosts. We do not ship their APKs. We use the same OSM extracts they do (Geofabrik / OpenFreeMap).
+
+## Next batches toward 100
+
+**Batch 2 — nautical / aviation (free charts)**  
+NOAA ENC + RNC, OpenSeaMap, FAA VFR sectional (US gov), OpenAIP, OurAirports, OpenRailwayMap.
+
+**Batch 3 — country LiDAR / high-res DEM**  
+USGS 3DEP, NOAA Digital Coast, OpenTopography, UK Environment Agency LiDAR, LINZ, NRCan HRDEM, EUCOP DEM.
+
+**Batch 4 — more CC0 PBR / 3D**  
+Poly Haven HDRIs, Kenney terrain, OpenGameArt height, NASA SVS stills, Cesium ion **rejected**.
+
+**Batch 5 — offline desktop/mobile**  
+QGIS + QuickMapServices (OSM/GIBS), Marble, `pmtiles` CLI, `tippecanoe`, ATAK with local MBTiles (no TAK server license).
+
+Open a new PR per batch. Each PR only adds registry rows + a fetch script target. Never a multi-GB blob.
+
+## Paid hosts (RUCKUS fail)
+
+`mapbox.com`, `cesium.com` ion, `arcgisonline.com`, Google Photorealistic 3D Tiles, Maxar. `paid_host()` in `map_assets.rs` flags them.

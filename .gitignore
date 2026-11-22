@@ -21,6 +21,8 @@ globalstatus/data/stop.flag
 globalstatus/.ftpquota
 
 /rust/target/
+data/map-assets/*
+!data/map-assets/README.md
 
 # Private until its authors say it is ready: never commit the nuclear-effects
 # calculator/simulator sources or their test data.
