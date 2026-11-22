@@ -79,7 +79,7 @@ Globe: `GET /api/designations`, `GET /api/violence`. Layers default off.
 
 Shared schema is `claims.jsonl` (#59): `claimant`, `basis`, `asserted_date`, `status`, `geometry` or `location.county_fips`, `class` in `designation` | `violence` | `zone`. Filter with `--filter`. CFR theaters ingest as `class=zone`; CONFLICT TRACKER remains the zone renderer. `GET /api/claims` is the class index.
 
-Do not cron designation dumps into git. Source addresses stay on the claim. NUKEMAP is a new-tab link to https://nuclearsecrecy.com/nukemap/ (#39).
+Do not cron designation dumps into git. Source addresses stay on the claim. NUCLEAR is a first-party cube-root blast layer on the globe (#39). Math lives in `downtime-core` and `globalstatus/blast.js`. The multithreaded server is `downtime-server` (tokio). PHP is legacy.
 
 ## Credit / license reminders
 

@@ -120,7 +120,7 @@ def main() -> int:
     ruckus = [
         "- SPLC jsonl stays gitignored",
         "- Nominatim 1.05s when used",
-        "- NUKEMAP is a new-tab link",
+        "- NUCLEAR is first-party cube-root rings on the globe",
         "- no auto-merge of feat/globalstatus-prod",
         f"- reviewer tests: {'happy' if ok else 'blocked'}",
     ]

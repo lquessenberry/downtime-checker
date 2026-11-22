@@ -53,9 +53,13 @@ jobs:
           else
             echo "designations tests not on this branch; php/js still run"
           fi
-          php -l globalstatus/router.php
-          if [ -f globalstatus/poll-runner.php ]; then php -l globalstatus/poll-runner.php; fi
+          node --check globalstatus/blast.js
           node --check globalstatus/cesium.js
+          python3 -m unittest scripts/blast/test_blast.py
+          if [ -f rust/Cargo.toml ]; then
+            cargo test -p downtime-core --manifest-path rust/Cargo.toml -- blast
+          fi
+          if [ -f globalstatus/router.php ]; then php -l globalstatus/router.php; fi
 
       - name: Comment GLOBALSTATUS / RUCKUS
         if: ${{ vars.GSA_CYCLE_ISSUE != '' }}
