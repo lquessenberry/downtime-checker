@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {"generated": 0, "title": "USGS test", "count": 2},
+  "features": [
+    {
+      "type": "Feature",
+      "id": "us7000test1",
+      "properties": {
+        "mag": 5.2,
+        "place": "10 km NE of Testville",
+        "time": 1730000000000,
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000test1",
+        "title": "M 5.2 - 10 km NE of Testville"
+      },
+      "geometry": {"type": "Point", "coordinates": [-89.5, 35.2, 10.0]}
+    },
+    {
+      "type": "Feature",
+      "id": "us7000test2",
+      "properties": {
+        "mag": 3.1,
+        "place": "Pacific Ocean",
+        "time": 1730001000000,
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000test2",
+        "title": "M 3.1 - Pacific Ocean"
+      },
+      "geometry": {"type": "Point", "coordinates": [-150.1, 55.4, 30.0]}
+    }
+  ]
+}
