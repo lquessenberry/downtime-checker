@@ -17,6 +17,9 @@ mod globe_math;
 pub mod pins;
 mod render;
 
+use crate::engine::geo_facts::{
+    height_on_globe_m, maidenhead, ISS_ALTITUDE_M, NULL_ISLAND,
+};
 use crate::engine::{Basemap, ImageryLayer, TerrainKind};
 use downtime_core::{blast_card, blast_defcon, blast_rings, builtin_layers, BlastShot, LayerKind, KT_PRESETS};
 use eframe::egui;
@@ -154,6 +157,18 @@ impl GlobeApp {
             });
             ui.separator();
             ui.label("Camera");
+            if ui.button("Null Island").clicked() {
+                self.camera.lat = NULL_ISLAND[0] as f32;
+                self.camera.lon = NULL_ISLAND[1] as f32;
+            }
+            ui.label(format!(
+                "Maidenhead {}",
+                maidenhead(f64::from(self.camera.lat), f64::from(self.camera.lon), 6).unwrap_or_default()
+            ));
+            ui.label(format!(
+                "ISS on 10 cm globe {:.1} mm",
+                height_on_globe_m(ISS_ALTITUDE_M, 0.10) * 1000.0
+            ));
             ui.add(egui::Slider::new(&mut self.camera.lat, -85.0..=85.0).text("lat"));
             ui.add(egui::Slider::new(&mut self.camera.lon, -180.0..=180.0).text("lon"));
             ui.add(egui::Slider::new(&mut self.camera.distance, 1.15..=12.0).text("distance"));

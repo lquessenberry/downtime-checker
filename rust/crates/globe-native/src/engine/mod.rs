@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 pub mod cartographic;
 pub mod ellipsoid;
+pub mod geo_facts;
 pub mod imagery;
 pub mod map_assets;
 pub mod primitives;
@@ -42,6 +43,9 @@ mod smoke {
         let _ = Basemap::OpenTopo;
         let _ = xyz_for_basemap(Basemap::Osm, 0, 0, 0);
         assert!(!CATALOG.is_empty());
+        assert!(CATALOG.iter().any(|a| a.id == "celestrak-tle"));
+        assert!(CATALOG.iter().any(|a| a.id == "gebco"));
+        let _ = crate::engine::geo_facts::ISS_ALTITUDE_M;
         let _ = WGS84_RADII_M;
     }
 }
