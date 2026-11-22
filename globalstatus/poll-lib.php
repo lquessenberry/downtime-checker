@@ -179,3 +179,303 @@ function gsa_filter_scan_state($snap, $id, $country)
         'results' => $results,
     );
 }
+
+// Aircraft hex detail: HTTP visitors only read cache. The runner fetches
+// upstream at most once every AIRCRAFT_DETAIL_TTL seconds per source.
+
+define('GSA_AIRCRAFT_DETAIL_TTL', 300);
+define('GSA_AIRCRAFT_DETAIL_SOURCES', 'adsb.lol,planespotters.net,adsb.im');
+
+function gsa_aircraft_detail_dir()
+{
+    global $dataDir;
+    $dir = $dataDir . '/aircraft-detail';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    return $dir;
+}
+
+function gsa_aircraft_detail_cache_file($hex)
+{
+    return gsa_aircraft_detail_dir() . '/' . $hex . '.json';
+}
+
+function gsa_aircraft_detail_queue_file()
+{
+    global $dataDir;
+    return $dataDir . '/aircraft-detail-queue.json';
+}
+
+function gsa_aircraft_detail_rate_file()
+{
+    global $dataDir;
+    return $dataDir . '/aircraft-detail-rate.json';
+}
+
+function gsa_aircraft_detail_envelope($hex, $overrides = array())
+{
+    $base = array(
+        'hex' => $hex,
+        'live' => null,
+        'photo' => null,
+        'route' => null,
+        'typeInfo' => null,
+        'stale' => true,
+        'queued' => false,
+        'error' => null,
+        'source' => 'runner-cache',
+        'fetchedAt' => null,
+        'sourcesFetchedAt' => array(),
+    );
+    return array_merge($base, $overrides);
+}
+
+function gsa_aircraft_detail_read($hex)
+{
+    $file = gsa_aircraft_detail_cache_file($hex);
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+function gsa_aircraft_detail_write($hex, $payload)
+{
+    $payload['hex'] = $hex;
+    $payload['fetchedAt'] = (int) ($payload['fetchedAt'] ?? time());
+    $payload['source'] = 'runner-cache';
+    file_put_contents(gsa_aircraft_detail_cache_file($hex), json_encode($payload), LOCK_EX);
+    return $payload;
+}
+
+function gsa_aircraft_detail_enqueue($hex, $query = array())
+{
+    $hex = strtolower($hex);
+    $file = gsa_aircraft_detail_queue_file();
+    $queue = array('hexes' => array());
+    if (is_file($file)) {
+        $decoded = json_decode((string) file_get_contents($file), true);
+        if (is_array($decoded) && isset($decoded['hexes']) && is_array($decoded['hexes'])) {
+            $queue = $decoded;
+        }
+    }
+    $prev = $queue['hexes'][$hex] ?? array();
+    $hints = is_array($prev) ? $prev : array();
+    $hints['hex'] = $hex;
+    $hints['queuedAt'] = $hints['queuedAt'] ?? time();
+    foreach (array('callsign', 'type', 'lat', 'lon') as $key) {
+        if (isset($query[$key]) && $query[$key] !== '' && $query[$key] !== null) {
+            $hints[$key] = $query[$key];
+        }
+    }
+    $queue['hexes'][$hex] = $hints;
+    file_put_contents($file, json_encode($queue), LOCK_EX);
+    return $hints;
+}
+
+function gsa_aircraft_detail_dequeue($hex)
+{
+    $file = gsa_aircraft_detail_queue_file();
+    if (!is_file($file)) {
+        return;
+    }
+    $decoded = json_decode((string) file_get_contents($file), true);
+    if (!is_array($decoded) || !isset($decoded['hexes'][$hex])) {
+        return;
+    }
+    unset($decoded['hexes'][$hex]);
+    file_put_contents($file, json_encode($decoded), LOCK_EX);
+}
+
+function gsa_aircraft_detail_queue_read()
+{
+    $file = gsa_aircraft_detail_queue_file();
+    if (!is_file($file)) {
+        return array();
+    }
+    $decoded = json_decode((string) file_get_contents($file), true);
+    if (!is_array($decoded) || !isset($decoded['hexes']) || !is_array($decoded['hexes'])) {
+        return array();
+    }
+    return $decoded['hexes'];
+}
+
+function gsa_aircraft_source_due($rates, $source, $now, $interval = GSA_AIRCRAFT_DETAIL_TTL)
+{
+    $last = (int) ($rates[$source] ?? 0);
+    return ($now - $last) >= $interval;
+}
+
+function gsa_aircraft_detail_plan($queue, $rates, $now, $interval = GSA_AIRCRAFT_DETAIL_TTL, $cachedByHex = array())
+{
+    $sources = explode(',', GSA_AIRCRAFT_DETAIL_SOURCES);
+    $plan = array();
+    $used = array();
+    // Oldest queued hex first.
+    $items = array_values($queue);
+    usort($items, function ($a, $b) {
+        return ((int) ($a['queuedAt'] ?? 0)) <=> ((int) ($b['queuedAt'] ?? 0));
+    });
+    foreach ($sources as $source) {
+        if (!gsa_aircraft_source_due($rates, $source, $now, $interval)) {
+            continue;
+        }
+        foreach ($items as $item) {
+            $hex = strtolower((string) ($item['hex'] ?? ''));
+            if ($hex === '' || isset($used[$source])) {
+                continue;
+            }
+            $cached = $cachedByHex[$hex] ?? null;
+            $srcAt = is_array($cached) ? (int) (($cached['sourcesFetchedAt'][$source] ?? 0)) : 0;
+            if ($srcAt && ($now - $srcAt) < $interval) {
+                continue;
+            }
+            $plan[] = array('hex' => $hex, 'source' => $source, 'hints' => $item);
+            $used[$source] = $hex;
+        }
+    }
+    return $plan;
+}
+
+function gsa_aircraft_parse_adsb($live)
+{
+    if (is_array($live) && !empty($live['ac'][0]) && is_array($live['ac'][0])) {
+        return $live['ac'][0];
+    }
+    return null;
+}
+
+function gsa_aircraft_parse_photos($photos)
+{
+    if (!is_array($photos) || empty($photos['photos'][0]) || !is_array($photos['photos'][0])) {
+        return null;
+    }
+    $photo = $photos['photos'][0];
+    $thumb = $photo['thumbnail_large'] ?? ($photo['thumbnail'] ?? array());
+    $src = is_array($thumb) ? (string) ($thumb['src'] ?? '') : '';
+    if (strpos($src, 'https://') !== 0) {
+        return null;
+    }
+    return array(
+        'src' => $src,
+        'link' => $photo['link'] ?? '',
+        'photographer' => $photo['photographer'] ?? '',
+    );
+}
+
+function gsa_aircraft_parse_routes($routes)
+{
+    if (!is_array($routes) || !isset($routes[0]) || !is_array($routes[0]) || ($routes[0]['plausible'] ?? true) === false) {
+        return null;
+    }
+    $route = $routes[0];
+    $iata = (string) ($route['_airport_codes_iata'] ?? '');
+    $icao = (string) ($route['airport_codes'] ?? '');
+    if (strtolower($iata) === 'unknown') {
+        $iata = '';
+    }
+    if (strtolower($icao) === 'unknown') {
+        $icao = '';
+    }
+    if ($iata === '' && $icao === '') {
+        return null;
+    }
+    return array(
+        'iata' => $iata,
+        'icao' => $icao,
+        'airline' => $route['airline_code'] ?? '',
+    );
+}
+
+function gsa_aircraft_detail_typeinfo($typeCode)
+{
+    $typeCode = strtoupper(trim((string) $typeCode));
+    if ($typeCode === '') {
+        return null;
+    }
+    global $root;
+    $path = ($root ?: dirname(__DIR__) . '/globalstatus') . '/api/icao_aircraft_types.json';
+    if (!is_file($path)) {
+        return null;
+    }
+    $types = json_decode((string) @file_get_contents($path), true);
+    if (!is_array($types) || !isset($types[$typeCode]) || !is_array($types[$typeCode])) {
+        return null;
+    }
+    return array(
+        'desc' => $types[$typeCode]['desc'] ?? '',
+        'wtc' => $types[$typeCode]['wtc'] ?? '',
+    );
+}
+
+function gsa_aircraft_detail_serve($hex, $query = array(), $ttl = GSA_AIRCRAFT_DETAIL_TTL)
+{
+    $hex = strtolower($hex);
+    $cached = gsa_aircraft_detail_read($hex);
+    $now = time();
+    $stale = true;
+    if (is_array($cached)) {
+        $fetched = (int) ($cached['fetchedAt'] ?? 0);
+        $stale = !$fetched || ($now - $fetched) >= $ttl;
+        $cached['stale'] = $stale;
+        $cached['ageSec'] = $fetched ? max(0, $now - $fetched) : null;
+        $cached['queued'] = $stale;
+        if (empty($cached['typeInfo'])) {
+            $typeCode = '';
+            if (is_array($cached['live'] ?? null)) {
+                $typeCode = (string) ($cached['live']['t'] ?? '');
+            }
+            if ($typeCode === '' && isset($query['type'])) {
+                $typeCode = (string) $query['type'];
+            }
+            $info = gsa_aircraft_detail_typeinfo($typeCode);
+            if ($info) {
+                $cached['typeInfo'] = $info;
+            }
+        }
+    }
+    if (!is_array($cached) || $stale) {
+        gsa_aircraft_detail_enqueue($hex, $query);
+    }
+    if (is_array($cached)) {
+        return $cached;
+    }
+    return gsa_aircraft_detail_envelope($hex, array(
+        'queued' => true,
+        'stale' => true,
+        'error' => 'Awaiting poller',
+        'typeInfo' => gsa_aircraft_detail_typeinfo($query['type'] ?? ''),
+    ));
+}
+
+function gsa_aircraft_detail_apply_source($cached, $source, $parsed, $now)
+{
+    if (!is_array($cached)) {
+        $cached = gsa_aircraft_detail_envelope('');
+    }
+    if (!isset($cached['sourcesFetchedAt']) || !is_array($cached['sourcesFetchedAt'])) {
+        $cached['sourcesFetchedAt'] = array();
+    }
+    $cached['sourcesFetchedAt'][$source] = $now;
+    $cached['fetchedAt'] = $now;
+    $cached['stale'] = false;
+    $cached['queued'] = false;
+    if ($source === 'adsb.lol') {
+        $cached['live'] = $parsed;
+    } elseif ($source === 'planespotters.net') {
+        $cached['photo'] = $parsed;
+    } elseif ($source === 'adsb.im') {
+        $cached['route'] = $parsed;
+    }
+    $missing = array();
+    if (empty($cached['live'])) {
+        $missing[] = 'adsb.lol';
+    }
+    if (empty($cached['photo'])) {
+        $missing[] = 'planespotters.net';
+    }
+    $cached['error'] = null;
+    return $cached;
+}

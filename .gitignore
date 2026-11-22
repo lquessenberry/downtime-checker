@@ -22,6 +22,9 @@ globalstatus/data/scan-cache.json
 globalstatus/data/poll-status.json
 globalstatus/data/feeds-cache.json
 globalstatus/data/aircraft-live.json
+globalstatus/data/aircraft-detail/
+globalstatus/data/aircraft-detail-queue.json
+globalstatus/data/aircraft-detail-rate.json
 globalstatus/data/adsb-step.json
 globalstatus/data/disease-cache.json
 globalstatus/data/animal-cache.json
