@@ -387,7 +387,7 @@ async function startGlobe() {
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   bindNukeHud();
   viewer.camera.moveEnd.addEventListener(() => {
-    if (state.layers.streets3d) loadStreets3d().catch(() => {});
+    if (state.layers.streets3d) scheduleStreets3d();
   });
   viewer.selectedEntityChanged.addEventListener((entity) => {
     if (!entity || !isMapPin(entity)) {
@@ -3140,9 +3140,32 @@ function placeNukeAt(position) {
   state.nuke.shots.push(shot);
   drawNukeShot(shot);
   syncNukeHud();
-  fetch(`/api/blast?kt=${shot.yieldKt}&air=${shot.airburst ? 1 : 0}&lat=${shot.lat}&lon=${shot.lon}`).catch(() => {});
+  pingBlastApi(shot);
   statusLive();
   return true;
+}
+
+// Rings are computed in the browser (blast.js). The Rust server's /api/blast is
+// only a parity check, so it is probed once and never sent the tap location.
+// PHP hosting has no such route: one probe 404, then silence.
+let blastApiState = "unknown"; // unknown | probing | yes | no
+
+function pingBlastApi(shot) {
+  const query = `kt=${encodeURIComponent(shot.yieldKt)}&air=${shot.airburst ? 1 : 0}`;
+  if (blastApiState === "no" || blastApiState === "probing") return;
+  if (blastApiState === "yes") {
+    fetch(`/api/blast?${query}`).catch(() => {});
+    return;
+  }
+  blastApiState = "probing";
+  fetch(`/api/blast?${query}`)
+    .then((response) => {
+      const type = response.headers.get("content-type") || "";
+      blastApiState = response.ok && type.includes("json") ? "yes" : "no";
+    })
+    .catch(() => {
+      blastApiState = "no";
+    });
 }
 
 function drawNukeShot(shot) {
@@ -3185,6 +3208,60 @@ function drawNukeShot(shot) {
   source.show = true;
 }
 
+// OSM Buildings: one z15 tile around the camera. Debounced, cached per tile,
+// and skipped when the camera stays on the tile already drawn, so panning does
+// not hammer the free anonymous endpoint.
+const STREETS3D_DEBOUNCE_MS = 600;
+const STREETS3D_CACHE_MAX = 32;
+const streets3dCache = new Map(); // "z/x/y" -> features (LRU by insertion order)
+const streets3dInflight = new Map(); // "z/x/y" -> Promise<features>
+let streets3dTimer = null;
+let streets3dShownKey = "";
+
+function scheduleStreets3d() {
+  if (streets3dTimer) clearTimeout(streets3dTimer);
+  streets3dTimer = setTimeout(() => {
+    streets3dTimer = null;
+    loadStreets3d().catch(() => {});
+  }, STREETS3D_DEBOUNCE_MS);
+}
+
+function streets3dTileKey(lon, lat, z) {
+  const n = 2 ** z;
+  const clampedLat = Math.max(-85.0511, Math.min(85.0511, lat));
+  const rad = (clampedLat * Math.PI) / 180;
+  const x = Math.min(n - 1, Math.max(0, Math.floor(((lon + 180) / 360) * n)));
+  const y = Math.min(n - 1, Math.max(0, Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n)));
+  return `${z}/${x}/${y}`;
+}
+
+async function streets3dFeatures(key) {
+  if (streets3dCache.has(key)) {
+    const hit = streets3dCache.get(key);
+    streets3dCache.delete(key);
+    streets3dCache.set(key, hit);
+    return hit;
+  }
+  if (streets3dInflight.has(key)) return streets3dInflight.get(key);
+  const request = (async () => {
+    const response = await fetch(`https://a.data.osmbuildings.org/0.2/anonymous/tile/${key}.json`);
+    if (!response.ok) throw new Error("OSM buildings unavailable");
+    const body = await response.json();
+    const features = Array.isArray(body.features) ? body.features : [];
+    streets3dCache.set(key, features);
+    while (streets3dCache.size > STREETS3D_CACHE_MAX) {
+      streets3dCache.delete(streets3dCache.keys().next().value);
+    }
+    return features;
+  })();
+  streets3dInflight.set(key, request);
+  try {
+    return await request;
+  } finally {
+    streets3dInflight.delete(key);
+  }
+}
+
 async function loadStreets3d() {
   const viewer = state.viewer;
   const source = state.live.streets3d.source;
@@ -3195,17 +3272,10 @@ async function loadStreets3d() {
     return;
   }
   const center = viewer.camera.positionCartographic;
-  const lon = Cesium.Math.toDegrees(center.longitude);
-  const lat = Cesium.Math.toDegrees(center.latitude);
-  const z = 15;
-  const n = 2 ** z;
-  const x = Math.floor(((lon + 180) / 360) * n);
-  const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
-  const url = `https://a.data.osmbuildings.org/0.2/anonymous/tile/${z}/${x}/${y}.json`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("OSM buildings unavailable");
-  const body = await response.json();
-  const features = Array.isArray(body.features) ? body.features : [];
+  const key = streets3dTileKey(Cesium.Math.toDegrees(center.longitude), Cesium.Math.toDegrees(center.latitude), 15);
+  if (key === streets3dShownKey && source.entities.values.length) return;
+  const features = await streets3dFeatures(key);
+  if (!state.layers.streets3d) return;
   source.entities.removeAll();
   let count = 0;
   for (const feature of features.slice(0, 400)) {
@@ -3218,14 +3288,18 @@ async function loadStreets3d() {
     source.entities.add({
       polygon: {
         hierarchy,
+        // Sit on the terrain instead of the ellipsoid so buildings are not buried
+        // when elevation terrain is on. Outlines are unsupported on terrain.
+        height: 0,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         extrudedHeight: heights,
+        extrudedHeightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
         material: Cesium.Color.fromCssColorString("#c4a574").withAlpha(0.85),
-        outline: true,
-        outlineColor: Cesium.Color.fromCssColorString("#6a4e2e"),
       },
     });
     count += 1;
   }
+  streets3dShownKey = key;
   state.live.streets3d.points = new Array(count);
   source.show = true;
   setCount("streets3d", count);

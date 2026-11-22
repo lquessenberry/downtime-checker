@@ -5,10 +5,10 @@ name: PR CI
 # when the code it checks is not on the branch, so it is safe on every branch.
 on:
   pull_request:
+  # Pushes to branches that already have a PR are covered by pull_request;
+  # rust/** has no PR yet, so it keeps a push trigger.
   push:
     branches:
-      - "bot/**"
-      - "ci/**"
       - "rust/**"
   workflow_dispatch:
 

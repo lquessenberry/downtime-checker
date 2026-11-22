@@ -25,6 +25,8 @@ DEFAULT_PORT = 21
 SKIP_NAMES = {".", "..", ".ftpquota"}
 SKIP_UPLOAD_PREFIXES = (".well-known/", "cgi-bin/")
 SKIP_UPLOAD_NAMES = {".ftpquota", "scan.lock", "mil.lock", "stop.flag"}
+# Local-only helpers that must never reach production hosting.
+SKIP_UPLOAD_DEV = {"dev-router.php"}
 TIMEOUT = 60
 
 
@@ -183,6 +185,8 @@ def should_upload(rel: Path) -> bool:
     if posix.startswith(SKIP_UPLOAD_PREFIXES):
         return False
     if rel.name in SKIP_UPLOAD_NAMES:
+        return False
+    if posix in SKIP_UPLOAD_DEV:
         return False
     if rel.suffix.lower() == ".md":
         return False
