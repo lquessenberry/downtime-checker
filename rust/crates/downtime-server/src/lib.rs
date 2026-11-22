@@ -20,6 +20,7 @@ use downtime_native::{
     cache_record, check_all, load_catalog_dir, lookup_ipwho, read_cache, record_value, write_cache,
     HostCheck,
 };
+use rustle::{builtin_grove, Bundle, Grove};
 use serde_json::{json, Map, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -70,15 +71,22 @@ struct App {
     events: Mutex<Vec<mpsc::UnboundedSender<String>>>,
     /// Latest scan id. Writers send after they change `ScanState.scan_id`.
     cancel: watch::Sender<u64>,
+    grove: Grove,
 }
 
 pub async fn serve(listener: TcpListener, config: ServerConfig) -> std::io::Result<()> {
     let (cancel, _) = watch::channel(0u64);
+    let mut grove = builtin_grove();
+    let overlay = config.root.join("leaves");
+    if overlay.is_dir() {
+        let _ = grove.load_dir(&overlay);
+    }
     let app = Arc::new(App {
         config,
         state: Mutex::new(ScanState::idle()),
         events: Mutex::new(Vec::new()),
         cancel,
+        grove,
     });
     loop {
         let (socket, _) = listener.accept().await?;
@@ -119,13 +127,20 @@ async fn handle(mut socket: TcpStream, app: Arc<App>) -> std::io::Result<()> {
             write_json(&mut socket, 200, r#"{"ok":true}"#).await
         }
         ("GET", "/api/blast") => write_json(&mut socket, 200, &blast_json(&request.query)).await,
+        ("GET", path) if path == "/api/leaves" || path.starts_with("/api/leaves/") => {
+            let (status, body) = leaves_json(&app.grove, path, &request.query);
+            write_json(&mut socket, status, &body).await
+        }
         ("GET", "/healthz") => {
-            write_json(
-                &mut socket,
-                200,
-                r#"{"ok":true,"runtime":"rust","threads":"tokio-multi-thread"}"#,
-            )
-            .await
+            let body = json!({
+                "ok": true,
+                "runtime": "rust",
+                "threads": "tokio-multi-thread",
+                "cms": "rustle",
+                "leaves": app.grove.len(),
+            })
+            .to_string();
+            write_json(&mut socket, 200, &body).await
         }
         ("GET", "/favicon.ico") => {
             write_response(&mut socket, 204, "No Content", "image/x-icon", b"", "").await
@@ -785,6 +800,49 @@ fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
+fn leaves_json(grove: &Grove, path: &str, query: &str) -> (u16, String) {
+    if path == "/api/leaves" {
+        if let Some(bundle) = query_param(query, "bundle") {
+            let want = Bundle::parse(bundle);
+            let leaves: Vec<_> = grove
+                .by_bundle(&want)
+                .into_iter()
+                .map(rustle::Leaf::json)
+                .collect();
+            return (
+                200,
+                json!({"cms":"rustle","count": leaves.len(), "leaves": leaves}).to_string(),
+            );
+        }
+        if let Some(tag) = query_param(query, "tag") {
+            let leaves: Vec<_> = grove
+                .by_tag(tag)
+                .into_iter()
+                .map(rustle::Leaf::json)
+                .collect();
+            return (
+                200,
+                json!({"cms":"rustle","count": leaves.len(), "leaves": leaves}).to_string(),
+            );
+        }
+        return (200, grove.json().to_string());
+    }
+    if path == "/api/leaves/context" {
+        let lat: f64 = query_param(query, "lat")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.0);
+        let lon: f64 = query_param(query, "lon")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.0);
+        return (200, grove.context(lat, lon).json().to_string());
+    }
+    let id = path.trim_start_matches("/api/leaves/");
+    match grove.get(id) {
+        Some(leaf) => (200, leaf.json().to_string()),
+        None => (404, json!({"error":"no leaf","id": id}).to_string()),
+    }
+}
+
 fn blast_json(query: &str) -> String {
     let kt: f64 = query_param(query, "kt")
         .and_then(|v| v.parse().ok())
@@ -946,5 +1004,19 @@ mod tests {
         )
         .await;
         assert!(health.contains("tokio-multi-thread"), "{health}");
+        assert!(health.contains("\"cms\":\"rustle\""), "{health}");
+        let leaves = http(
+            addr,
+            "GET /api/leaves HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        assert!(leaves.contains("\"id\":\"iss\""), "{leaves}");
+        assert!(leaves.contains("geoorbital"), "{leaves}");
+        let ctx = http(
+            addr,
+            "GET /api/leaves/context?lat=-30&lon=-20 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        assert!(ctx.contains("\"id\":\"saa\""), "{ctx}");
     }
 }

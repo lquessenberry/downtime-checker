@@ -496,6 +496,7 @@ version = "0.1.0"
 dependencies = [
  "downtime-core",
  "downtime-native",
+ "rustle",
  "serde_json",
  "tokio",
 ]
@@ -505,6 +506,7 @@ name = "downtime-wasm"
 version = "0.1.0"
 dependencies = [
  "downtime-core",
+ "rustle",
  "serde_json",
  "wasm-bindgen",
 ]
@@ -2129,6 +2131,13 @@ dependencies = [
  "libc",
  "linux-raw-sys 0.12.1",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "rustle"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]

@@ -19,5 +19,6 @@ path = "src/main.rs"
 [dependencies]
 downtime-core = { path = "../downtime-core" }
 downtime-native = { path = "../downtime-native" }
+rustle = { path = "../rustle" }
 tokio = { version = "1.42", features = ["rt-multi-thread", "macros", "time", "net", "io-util", "sync", "fs"] }
 serde_json = "1.0"

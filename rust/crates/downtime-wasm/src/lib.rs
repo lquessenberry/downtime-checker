@@ -17,6 +17,7 @@ use downtime_core::{
     blast_card, blast_defcon, blast_rings, builtin_layers, classify, load_catalog, places_for,
     summarize, BlastShot, LayerKind, Loaded, Method, Place, Report, Status, KT_PRESETS,
 };
+use rustle::builtin_grove;
 use serde_json::{json, Value};
 use wasm_bindgen::prelude::*;
 
@@ -63,11 +64,28 @@ pub fn blast_defcon_level(count: u32, max_kt: f64) -> u8 {
 
 #[wasm_bindgen]
 pub fn runtime_note() -> String {
-    "WebAssembly parses the catalog files and aggregates UP/DOWN results. \
-     Browsers cannot send ICMP or open raw TCP sockets, so the ping-then-443-then-80 \
-     probes run in the native CLI or in downtime-server. The globe keeps using \
-     /api/events; point it at whichever server is up."
+    "Rustle grove + catalog in WASM. Click the globe for leaf context \
+     (geofence / nearby / orbital). CHECK GRID runs ICMP/443/80 on the server. \
+     Drag to spin, wheel to zoom, FIRE for first-party blast rings."
         .to_string()
+}
+
+#[wasm_bindgen]
+pub fn rustle_grove_json() -> String {
+    builtin_grove().json().to_string()
+}
+
+#[wasm_bindgen]
+pub fn rustle_context_json(lat: f64, lon: f64) -> String {
+    builtin_grove().context(lat, lon).json().to_string()
+}
+
+#[wasm_bindgen]
+pub fn rustle_leaf_json(id: &str) -> String {
+    match builtin_grove().get(id) {
+        Some(leaf) => leaf.json().to_string(),
+        None => "{}".into(),
+    }
 }
 
 #[wasm_bindgen]
@@ -303,8 +321,21 @@ mod tests {
     #[test]
     fn note_mentions_the_split_between_wasm_and_native() {
         let note = runtime_note();
-        assert!(note.contains("ICMP"));
-        assert!(note.contains("TCP"));
+        assert!(note.contains("CHECK GRID"));
+        assert!(note.contains("Rustle"));
+    }
+
+    #[test]
+    fn rustle_grove_exports_core_leaves() {
+        let grove: Value = serde_json::from_str(&rustle_grove_json()).unwrap();
+        assert!(grove["count"].as_u64().unwrap() >= 8);
+        let ctx: Value =
+            serde_json::from_str(&rustle_context_json(-30.0, -20.0)).unwrap();
+        assert!(ctx["fences"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|leaf| leaf["id"] == "saa"));
     }
 
     #[test]

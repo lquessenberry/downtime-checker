@@ -1,6 +1,6 @@
 # Rust arsenal (Global Status)
 
-Three ways to get PHP off the hot path. **We are not Drupal.** The globe is `router.php` + Node `visualizer/` + Python ingest. Product path is lane 3.
+Three ways to get PHP off the hot path. **We are not Drupal.** The CMS-shaped layer is **Rustle** (`docs/RUSTLE.md`): git-text leaves (geolocation, geofence, geoorbital, geocell) that join entities to live map data. The globe is `router.php` + Node `visualizer/` + Python ingest until those routes finish moving. Product path is lane 3.
 
 ## Lanes
 
@@ -34,6 +34,7 @@ Hottest first. Network-bound work stays rate-limited even in Rust.
 | 8 | `refresh_static_data.mjs` | Overlay copy | `downtime-server` or a tiny ingest bin | 14 |
 | 9 | Offline RAG (brainstorm FTS5 + optional ONNX) | Python is fine for BM25 | `rusqlite` FTS5; ONNX Runtime only if the Pi needs it | 17 |
 | 10 | Blast rings | Tiny | **Done:** `downtime-core::blast`, WASM export, `/api/blast` | 7–9 |
+| 11 | Drupal-shaped entities/fields for map context | PHP/MySQL | **Rustle** crate + `/api/leaves` + WASM grove | 31 |
 
 ## Rules
 
