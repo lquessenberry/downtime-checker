@@ -33,6 +33,7 @@ pub enum AssetKind {
     Geophysical,
     Boundaries,
     OfflineTool,
+    Weather,
 }
 
 pub const CATALOG: &[MapAsset] = &[
@@ -690,6 +691,87 @@ pub const CATALOG: &[MapAsset] = &[
         xyz: None,
         credit: "SDF / Dataforsyningen",
     },
+    MapAsset {
+        id: "noaa-gfs",
+        title: "NOAA GFS / NOMADS",
+        kind: AssetKind::Weather,
+        license: "US government public domain",
+        homepage: "https://nomads.ncep.noaa.gov/",
+        xyz: None,
+        credit: "NOAA / NCEP",
+    },
+    MapAsset {
+        id: "noaa-mrms",
+        title: "NOAA Multi-Radar Multi-Sensor",
+        kind: AssetKind::Weather,
+        license: "US government public domain",
+        homepage: "https://mrms.ncep.noaa.gov/",
+        xyz: None,
+        credit: "NOAA / NSSL",
+    },
+    MapAsset {
+        id: "nws-alerts",
+        title: "NWS weather.gov alerts API",
+        kind: AssetKind::Weather,
+        license: "US government public domain",
+        homepage: "https://www.weather.gov/documentation/services-web-api",
+        xyz: None,
+        credit: "NWS",
+    },
+    MapAsset {
+        id: "nws-radar",
+        title: "NWS radar.weather.gov",
+        kind: AssetKind::Weather,
+        license: "US government public domain",
+        homepage: "https://radar.weather.gov/",
+        xyz: None,
+        credit: "NWS",
+    },
+    MapAsset {
+        id: "iem-nexrad",
+        title: "Iowa Environmental Mesonet NEXRAD mosaic",
+        kind: AssetKind::Weather,
+        license: "IEM / NWS (free)",
+        homepage: "https://mesonet.agron.iastate.edu/docs/nexrad_mosaic/",
+        xyz: Some("https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png"),
+        credit: "Iowa State IEM · NWS NEXRAD",
+    },
+    MapAsset {
+        id: "eumetsat-open",
+        title: "EUMETSAT open data",
+        kind: AssetKind::Weather,
+        license: "EUMETSAT open / attribution",
+        homepage: "https://data.eumetsat.int/",
+        xyz: None,
+        credit: "EUMETSAT",
+    },
+    MapAsset {
+        id: "rainviewer-open",
+        title: "RainViewer weather maps API (no key)",
+        kind: AssetKind::Weather,
+        license: "RainViewer free map API (attribution)",
+        homepage: "https://www.rainviewer.com/api/weather-maps-api.html",
+        xyz: None,
+        credit: "RainViewer",
+    },
+    MapAsset {
+        id: "openweathermap-rejected",
+        title: "OpenWeatherMap (rejected as required)",
+        kind: AssetKind::Portal,
+        license: "paid API key — do not require",
+        homepage: "https://openweathermap.org/api",
+        xyz: None,
+        credit: "REJECTED — no paid weather key",
+    },
+    MapAsset {
+        id: "apple-weatherkit-rejected",
+        title: "Apple WeatherKit (rejected)",
+        kind: AssetKind::Portal,
+        license: "paid — do not require",
+        homepage: "https://developer.apple.com/weatherkit/",
+        xyz: None,
+        credit: "REJECTED — no WeatherKit",
+    },
 ];
 
 pub fn asset(id: &str) -> Option<&'static MapAsset> {
@@ -741,6 +823,8 @@ pub fn paid_host(url: &str) -> bool {
         || lower.contains("tiles.mapbox")
         || lower.contains("ion.cesium.com")
         || lower.contains("photorealistic")
+        || lower.contains("openweathermap.org")
+        || lower.contains("weatherkit.apple.com")
 }
 
 #[cfg(test)]
@@ -792,6 +876,20 @@ mod tests {
         assert_eq!(asset("uk-ea-lidar").unwrap().kind, AssetKind::Dem);
         assert!(!paid_host(asset("linz").unwrap().homepage));
         assert!(!paid_host(asset("nrcan-hrdem").unwrap().homepage));
+        assert!(CATALOG.len() >= 80);
+        assert!(asset("noaa-gfs").is_some());
+        assert!(asset("noaa-mrms").is_some());
+        assert!(asset("nws-alerts").is_some());
+        assert!(asset("iem-nexrad").is_some());
+        assert!(asset("eumetsat-open").is_some());
+        assert_eq!(asset("noaa-gfs").unwrap().kind, AssetKind::Weather);
+        assert!(asset("openweathermap-rejected")
+            .unwrap()
+            .license
+            .contains("do not require"));
+        let radar = xyz_url(asset("iem-nexrad").unwrap().xyz.unwrap(), 4, 2, 5, None);
+        assert!(radar.contains("nexrad-n0q-900913/4/2/5.png"));
+        assert!(!paid_host(&radar));
     }
 
     #[test]
@@ -828,5 +926,8 @@ mod tests {
         assert!(paid_host("https://tile.googleapis.com/v1/3dtiles/photorealistic"));
         assert!(!paid_host("https://tile.openstreetmap.org/1/0/0.png"));
         assert!(paid_host(asset("cesium-ion-rejected").unwrap().homepage));
+        assert!(paid_host("https://api.openweathermap.org/data/2.5/weather"));
+        assert!(paid_host("https://weatherkit.apple.com/api/v1/weather"));
+        assert!(!paid_host("https://api.weather.gov/alerts/active"));
     }
 }
