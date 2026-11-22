@@ -666,6 +666,22 @@ button:hover { border-color: #9fd4e2; }
 .swatch.disease { background: #ff4d6a; }
 .swatch.animal { background: #e2b340; }
 .swatch.amfm { background: #7aa2ff; }
+.swatch.designations { background: #f0c14a; }
+.swatch.violence { background: #c44b4b; }
+.ext-tool {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  color: #f3d27a;
+  border: 1px solid #3a3320;
+  border-radius: 4px;
+  text-decoration: none;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+}
+.ext-tool:hover { background: #1c1810; }
 .layer[data-layer-toggle="conflicts"],
 .layer[data-layer-toggle="aircraft"],
 .layer[data-layer-toggle="jamming"],
@@ -674,7 +690,9 @@ button:hover { border-color: #9fd4e2; }
 .layer[data-layer-toggle="hunger"],
 .layer[data-layer-toggle="disease"],
 .layer[data-layer-toggle="animal"],
-.layer[data-layer-toggle="amfm"] { letter-spacing: 0.04em; }
+.layer[data-layer-toggle="amfm"],
+.layer[data-layer-toggle="designations"],
+.layer[data-layer-toggle="violence"] { letter-spacing: 0.04em; }
 .legend .layer {
   display: inline-flex;
   align-items: center;

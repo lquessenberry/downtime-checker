@@ -10,14 +10,18 @@ python3 scripts/designations/designations.py --report --out data/designations
 python3 -m unittest scripts/designations/tests/test_designations.py
 ```
 
-UN individuals are skipped unless `--include-individuals`. Do not put named
-people on the globe.
+Individuals are ingested by default. `--entities-only` skips them.
 
-NGO CSVs (SPLC, ADL, InfluenceWatch) are local-only. SPLC grants no bulk
-redistribution license; do not commit that jsonl. A layer with SPLC and no
-counter-designator fails `SYMMETRY.md`.
+```bash
+python3 scripts/designations/designations.py --ingest fto --out data/designations
+python3 scripts/designations/designations.py --ingest uk --out data/designations
+python3 scripts/designations/geocode_designations.py --no-nominatim --stats \
+  --pack globalstatus/api/designations.json
+```
 
-Government legal designations and NGO catalogs must not share a mark style
-on the globe. Attributed violence is UCDP/ACLED, a different variable.
+NGO dumps (SPLC hatemap JSON) stay local. SPLC grants no bulk redistribution
+license; do not commit that jsonl. Government gold pins and NGO purple pins
+are different marks. UCDP/ACLED is the violence layer.
 
-No Cesium overlay in this change. No FTP.
+Cesium layers: DESIGNATIONS, ATTRIBUTED VIOLENCE. NUKEMAP is an external
+link, not an iframe. No FTP until Lee says go-live.

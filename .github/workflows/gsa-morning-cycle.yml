@@ -1,0 +1,83 @@
+name: GSA morning cycle
+
+# Six cycles across a Central-time morning. Does not FTP. Does not merge.
+# Chrome CDP runs on the laptop self-hosted runner when present; Ubuntu
+# still runs tests and comments as GLOBALSTATUS / RUCKUS.
+
+on:
+  schedule:
+    - cron: "20 12-17 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      cdp:
+        description: Run Chrome CDP (needs self-hosted laptop runner)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: gsa-morning-cycle
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    name: One agile cycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tests
+        env:
+          GSA_CDP: "0"
+          GSA_REPO: ${{ github.repository }}
+          GSA_CYCLE_ISSUE: ${{ vars.GSA_CYCLE_ISSUE }}
+        run: |
+          set -euo pipefail
+          python3 -m unittest scripts/designations/tests/test_designations.py
+          php -l globalstatus/router.php
+          node --check globalstatus/cesium.js
+
+      - name: Comment GLOBALSTATUS / RUCKUS
+        if: ${{ vars.GSA_CYCLE_ISSUE != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BODY=$(cat <<'EOF'
+          ## Morning cycle ${{ github.run_number }}
+
+          ### GLOBALSTATUS
+          - unit tests ran on Actions
+          - no FTP
+          - no merge to production
+          - next: designations (#60), claims (#59), poll-runner (#34)
+
+          ### RUCKUS
+          - SPLC dumps stay gitignored
+          - NUKEMAP remains a new-tab link
+          - Chrome CDP is the laptop runner, not this VM
+          EOF
+          )
+          gh issue comment "${{ vars.GSA_CYCLE_ISSUE }}" --body "$BODY"
+
+  cdp:
+    name: Chrome CDP on laptop
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.cdp }}
+    runs-on: [self-hosted, gsa-laptop]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify globe in Chrome CDP
+        env:
+          CDP_URL: http://127.0.0.1:9222
+          GSA_VERIFY_URL: http://127.0.0.1:4180/
+        run: python3 scripts/gsa-cycle/cdp_verify.py

@@ -36,6 +36,8 @@ const state = {
     disease: { source: null, points: [] },
     animal: { source: null, points: [] },
     amfm: { source: null, points: [] },
+    designations: { source: null, points: [] },
+    violence: { source: null, points: [] },
   },
   layers: {
     outages: false,
@@ -49,6 +51,8 @@ const state = {
     disease: false,
     animal: false,
     amfm: false,
+    designations: false,
+    violence: false,
   },
   openKind: "",
   openId: "",
@@ -341,7 +345,7 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
@@ -1093,6 +1097,16 @@ function setLayer(layer, on) {
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
   if (layer === "disease" && state.layers.disease) scheduleDisease();
   if (layer === "animal" && state.layers.animal) scheduleAnimal();
+  if (layer === "designations") {
+    if (state.layers.designations) {
+      loadDesignations().catch((error) => statusLive(error.message || String(error)));
+    }
+  }
+  if (layer === "violence") {
+    if (state.layers.violence) {
+      loadViolence().catch((error) => statusLive(error.message || String(error)));
+    }
+  }
   if (layer === "amfm") {
     if (state.layers.amfm) {
       loadAmfm().catch((error) => statusLive(error.message || String(error)));
@@ -1126,12 +1140,14 @@ const LAYER_LABEL = {
   disease: "DISEASE OUTBREAK",
   animal: "ANIMAL DISEASE OUTBREAK",
   amfm: "AM FM TOWERS",
+  designations: "DESIGNATIONS",
+  violence: "ATTRIBUTED VIOLENCE",
 };
 
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -1989,6 +2005,8 @@ const LIVE_STYLE = {
   disease: { color: "#ff4d6a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DISEASE OUTBREAK" },
   animal: { color: "#e2b340", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ANIMAL DISEASE OUTBREAK" },
   amfm: { color: "#7aa2ff", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "AM FM TOWERS" },
+  designations: { color: "#f0c14a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DESIGNATION" },
+  violence: { color: "#c44b4b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ATTRIBUTED VIOLENCE" },
 };
 
 function aircraftOnGround(point) {
@@ -2545,6 +2563,8 @@ function cullAircraftHorizon() {
     state.live.disease.source,
     state.live.animal.source,
     state.live.amfm.source,
+    state.live.designations.source,
+    state.live.violence.source,
     state.outageSource,
     state.hungerSource,
   ];
@@ -2625,6 +2645,88 @@ async function loadAmfm() {
   }
 }
 
+function designationColor(point) {
+  if (point.designator_kind === "ngo") return "#c084fc";
+  if (point.person) return "#e8a54b";
+  return "#f0c14a";
+}
+
+function designationSize(point) {
+  const precision = String(point.precision || "");
+  if (precision === "street") return MARKER_SIZE;
+  if (precision === "city" || precision === "county") return 14;
+  if (precision === "state") return 12;
+  return 10;
+}
+
+function mapPackedPoints(body, extra) {
+  return (Array.isArray(body.points) ? body.points : [])
+    .filter((point) => point.lat != null && point.lon != null)
+    .map((point) => extra(point));
+}
+
+let designationsLoading = null;
+
+async function loadDesignations() {
+  if (state.live.designations.points.length) {
+    setCount("designations", state.live.designations.points.length);
+    placeLiveLayer("designations", state.live.designations.points);
+    return;
+  }
+  if (designationsLoading) return designationsLoading;
+  designationsLoading = (async () => {
+    const response = await fetch("/api/designations");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Designations failed");
+    state.live.designations.points = mapPackedPoints(body, (point) => ({
+      ...point,
+      color: designationColor(point),
+      size: designationSize(point),
+      kind: point.person ? "LISTED PERSON" : "DESIGNATION",
+      url: point.url,
+    }));
+    setCount("designations", state.live.designations.points.length);
+    placeLiveLayer("designations", state.live.designations.points);
+    statusLive();
+  })();
+  try {
+    await designationsLoading;
+  } finally {
+    designationsLoading = null;
+  }
+}
+
+let violenceLoading = null;
+
+async function loadViolence() {
+  if (state.live.violence.points.length) {
+    setCount("violence", state.live.violence.points.length);
+    placeLiveLayer("violence", state.live.violence.points);
+    return;
+  }
+  if (violenceLoading) return violenceLoading;
+  violenceLoading = (async () => {
+    const response = await fetch("/api/violence");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Violence overlay failed");
+    state.live.violence.points = mapPackedPoints(body, (point) => ({
+      ...point,
+      color: "#c44b4b",
+      size: 12,
+      kind: "UCDP EVENT",
+      url: point.url || "https://ucdp.uu.se/",
+    }));
+    setCount("violence", state.live.violence.points.length);
+    placeLiveLayer("violence", state.live.violence.points);
+    statusLive();
+  })();
+  try {
+    await violenceLoading;
+  } finally {
+    violenceLoading = null;
+  }
+}
+
 function placeLiveLayer(key, points) {
   const layer = state.live[key];
   if (!layer?.source) return;
@@ -2660,10 +2762,10 @@ function placeLiveLayer(key, points) {
       kind = "ADS-B";
     } else {
       const style = key === "aircraft" ? aircraftStyle(point) : {
-        color: base.color,
+        color: point.color || base.color,
         outline: base.outline,
-        size: MARKER_SIZE,
-        kind: base.kind,
+        size: point.size || MARKER_SIZE,
+        kind: point.kind || base.kind,
       };
       kind = style.kind;
       entityOptions.point = key === "aircraft"
@@ -2674,7 +2776,7 @@ function placeLiveLayer(key, points) {
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         }
-        : markerPoint(style.color);
+        : markerPoint(style.color, style.size);
     }
     const entity = layer.source.entities.add(entityOptions);
     entity._live = { ...point, kind, layer: key };
@@ -2781,6 +2883,23 @@ function showLive(item) {
     extra = item.country ? `<br>${esc(item.country)}` : "";
     if (shown.length) extra += `<br>${shown.join("<br>")}`;
     if (names.length > shown.length) extra += `<br>and ${names.length - shown.length} more`;
+  }
+  else if (item.layer === "designations") {
+    const bits = [
+      item.designator,
+      item.legal_status,
+      item.claim_type,
+      item.precision,
+      item.address,
+    ].filter(Boolean).map((part) => esc(part));
+    extra = bits.length ? `<br>${bits.join("<br>")}` : "";
+    if (item.url) extra += `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">source list</a>`;
+  }
+  else if (item.layer === "violence") {
+    const bits = [item.year, item.deaths != null ? `${item.deaths} deaths` : "", item.address]
+      .filter(Boolean).map((part) => esc(String(part)));
+    extra = bits.length ? `<br>${bits.join(" · ")}` : "";
+    extra += `<br><a href="https://ucdp.uu.se/" target="_blank" rel="noreferrer">ucdp.uu.se</a>`;
   }
   else if (item.sog != null) extra = `<br>${esc(shipTypeLabel(item))} · ${esc(item.sog)} kn`;
   box.innerHTML = `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
@@ -2915,6 +3034,12 @@ function statusLive(error) {
     state.amfmReady
       ? `AM FM TOWERS ${amfmVisibleCount(state.live.amfm.points)}`
       : "AM FM TOWERS",
+    state.live.designations.points.length
+      ? `DESIGNATIONS ${state.live.designations.points.length}`
+      : "DESIGNATIONS",
+    state.live.violence.points.length
+      ? `ATTRIBUTED VIOLENCE ${state.live.violence.points.length}`
+      : "ATTRIBUTED VIOLENCE",
   ];
   if (error) parts.push(error);
   setStatus(parts.join(" · "));

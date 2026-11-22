@@ -24,4 +24,6 @@ globalstatus/.ftpquota
 data/designations/*.jsonl
 data/designations/LAYER.md
 data/designations/SYMMETRY.md
+data/designations/geo/*.geojson
+.geocode-cache/
 

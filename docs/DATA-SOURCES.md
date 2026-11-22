@@ -60,19 +60,24 @@ sample hammers nothing useful and the file is large.
 | Fly `downtime-globe` | Node `visualizer/server.mjs` uses pack → cache → network (`datapack.mjs`). |
 | Local `:4173` / `:4174` | Same Node path. `OFFLINE=1` stops at pack/cache. |
 
-## Designation claims (not a live globe layer yet)
+## Designation claims
 
 Issue [#60](https://github.com/lquessenberry/downtime-checker/issues/60).
-Ingest: `python3 scripts/designations/designations.py --ingest un`.
+Ingest: `python3 scripts/designations/designations.py --ingest un` (people included).
+Geocode: `python3 scripts/designations/geocode_designations.py --contact you@example.com`.
+Globe: `GET /api/designations`, `GET /api/violence`. Layers default off.
 
 | Source | Kind | Access | Notes |
 | --- | --- | --- | --- |
-| UN Security Council consolidated list | government | XML feed | Entities only by default. Street/city/country from the list stay on the record. |
-| US State FTO, UK proscribed, EU FSF | government | CSV / later | Legal designation; distinct marks from NGO lists. |
-| SPLC Hate Map, ADL, InfluenceWatch | ngo | manual CSV | Claims, not facts. SPLC: no bulk redistribution. Symmetry report required. |
-| UCDP / ACLED | violence | not ingested here | Different variable from “was designated”. |
+| UN Security Council consolidated list | government | XML feed | Entities and individuals. Street/city/country stay on the record. |
+| US State FTO | government | HTML table (Chrome UA) | Name + date; no published address. |
+| UK Home Office proscribed | government | accessible HTML | Name + proscription date. |
+| EU FSF | government | XML bulk | Street/city when the file has them. EU persons stay in jsonl; globe pack is entities unless `--eu-people`. |
+| SPLC Hate Map | ngo | public `/wp-json/splc/v1/hatemap` | Local jsonl only. No bulk redistribution. |
+| UCDP GED | violence | CSV zip with lat/lon | Separate layer. Cap 8000, year >= 2020. |
+| ACLED | violence | API key / local CSV | Same violence layer if a file or key is present. |
 
-Do not cron designation dumps into git. Source addresses stay on the claim.
+Do not cron designation dumps into git. Source addresses stay on the claim. NUKEMAP is a new-tab link to https://nuclearsecrecy.com/nukemap/ (#39).
 
 ## Credit / license reminders
 
