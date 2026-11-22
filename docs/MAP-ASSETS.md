@@ -68,6 +68,27 @@ Tile/raster: `pmtiles`, `geotiff`, `flatgeobuf`, `geoparquet`.
 Geodesy: `proj4rs`, `geographiclib-rs`, `h3o`.  
 Orbits: `sgp4`, `anise`, `vsop87`. Add a crate only when a cycle draws that layer.
 
+## Batch 3 — nautical, more orbits, STAC/COG/PMTiles/GeoParquet
+
+| id | What | Git |
+| --- | --- | --- |
+| openseamap, openrailwaymap | XYZ overlays | URLs only |
+| ourairports, noaa-enc, faa-vfr | US/gov + PD airports/charts | portals |
+| celestrak-gp-iss / gnss | Small TLE/JSON | `fetch.sh --iss-tle` |
+| vsop87 | Planetary theory | portal / `anise` later |
+| gebco-wms | Bathymetry WMS | **no grid in git** |
+| earth-search | Sentinel COG via STAC | query, don't vendor scenes |
+| overture-geoparquet | Buildings/places | download to cache |
+| protomaps-builds, pmtiles-spec, stac-spec | Cloud-native formats | crates later |
+| openaerialmap | CC BY scenes | portal |
+| usgs-3dep, noaa-digital-coast, opentopography | LiDAR/DEM | portals |
+
+```bash
+scripts/globe-assets/fetch.sh --ne110 --wmm --tz --iss-tle
+```
+
+`--tz` copies the **UTC sample polygon** fixture, not Who's On First world. `--wmm` tries NOAA `.COF` mirrors into `data/map-assets/` (gitignored).
+
 Open a new PR per batch. Each PR only adds registry rows + a fetch script target. Never a multi-GB blob.
 
 ## Paid hosts (RUCKUS fail)

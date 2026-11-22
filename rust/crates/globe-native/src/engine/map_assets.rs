@@ -275,6 +275,168 @@ pub const CATALOG: &[MapAsset] = &[
         xyz: None,
         credit: "geoBoundaries",
     },
+    MapAsset {
+        id: "openseamap",
+        title: "OpenSeaMap seamarks",
+        kind: AssetKind::Basemap,
+        license: "ODbL",
+        homepage: "https://www.openseamap.org/",
+        xyz: Some("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png"),
+        credit: "OpenSeaMap · OSM",
+    },
+    MapAsset {
+        id: "openrailwaymap",
+        title: "OpenRailwayMap",
+        kind: AssetKind::Basemap,
+        license: "ODbL",
+        homepage: "https://www.openrailwaymap.org/",
+        xyz: Some("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png"),
+        credit: "OpenRailwayMap · OSM",
+    },
+    MapAsset {
+        id: "ourairports",
+        title: "OurAirports",
+        kind: AssetKind::Portal,
+        license: "public domain dedication",
+        homepage: "https://ourairports.com/data/",
+        xyz: None,
+        credit: "OurAirports",
+    },
+    MapAsset {
+        id: "noaa-enc",
+        title: "NOAA ENC electronic charts",
+        kind: AssetKind::Portal,
+        license: "US government public domain",
+        homepage: "https://www.charts.noaa.gov/ENCs/ENCs.shtml",
+        xyz: None,
+        credit: "NOAA OCS",
+    },
+    MapAsset {
+        id: "faa-vfr",
+        title: "FAA VFR sectional charts",
+        kind: AssetKind::Portal,
+        license: "US government public domain",
+        homepage: "https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/vfr/",
+        xyz: None,
+        credit: "FAA",
+    },
+    MapAsset {
+        id: "celestrak-gp-iss",
+        title: "CelesTrak GP ISS",
+        kind: AssetKind::Orbital,
+        license: "CelesTrak terms",
+        homepage: "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle",
+        xyz: None,
+        credit: "CelesTrak",
+    },
+    MapAsset {
+        id: "celestrak-gnss",
+        title: "CelesTrak GP GNSS",
+        kind: AssetKind::Orbital,
+        license: "CelesTrak terms",
+        homepage: "https://celestrak.org/NORAD/elements/gp.php?GROUP=gnss&FORMAT=json",
+        xyz: None,
+        credit: "CelesTrak",
+    },
+    MapAsset {
+        id: "vsop87",
+        title: "VSOP87 planetary theory",
+        kind: AssetKind::Celestial,
+        license: "public scientific data",
+        homepage: "ftp://ftp.imcce.fr/pub/ephem/planets/vsop87/",
+        xyz: None,
+        credit: "IMCCE VSOP87",
+    },
+    MapAsset {
+        id: "gebco-wms",
+        title: "GEBCO WMS / COG portal",
+        kind: AssetKind::Bathymetry,
+        license: "GEBCO attribution",
+        homepage: "https://www.gebco.net/data_and_products/gebco_web_services/web_map_service/",
+        xyz: None,
+        credit: "GEBCO",
+    },
+    MapAsset {
+        id: "earth-search",
+        title: "Element84 Earth Search STAC (Sentinel COG)",
+        kind: AssetKind::Portal,
+        license: "Sentinel open + AWS Open Data",
+        homepage: "https://earth-search.aws.element84.com/v1",
+        xyz: None,
+        credit: "Element84 Earth Search · Copernicus",
+    },
+    MapAsset {
+        id: "overture-geoparquet",
+        title: "Overture Maps GeoParquet",
+        kind: AssetKind::VectorArchive,
+        license: "ODbL / CDLA per theme",
+        homepage: "https://overturemaps.org/download/",
+        xyz: None,
+        credit: "Overture Maps Foundation",
+    },
+    MapAsset {
+        id: "protomaps-builds",
+        title: "Protomaps daily PMTiles builds",
+        kind: AssetKind::VectorArchive,
+        license: "ODbL",
+        homepage: "https://docs.protomaps.com/basemaps/downloads",
+        xyz: None,
+        credit: "Protomaps · OSM",
+    },
+    MapAsset {
+        id: "stac-spec",
+        title: "STAC / COG cloud-native raster",
+        kind: AssetKind::Portal,
+        license: "Apache-2.0 spec",
+        homepage: "https://stacspec.org/",
+        xyz: None,
+        credit: "STAC",
+    },
+    MapAsset {
+        id: "pmtiles-spec",
+        title: "PMTiles spec + crate",
+        kind: AssetKind::Portal,
+        license: "BSD (spec/impl)",
+        homepage: "https://docs.protomaps.com/pmtiles/",
+        xyz: None,
+        credit: "Protomaps PMTiles",
+    },
+    MapAsset {
+        id: "openaerialmap",
+        title: "OpenAerialMap",
+        kind: AssetKind::Satellite,
+        license: "CC BY / public per scene",
+        homepage: "https://map.openaerialmap.org/",
+        xyz: None,
+        credit: "OpenAerialMap",
+    },
+    MapAsset {
+        id: "usgs-3dep",
+        title: "USGS 3DEP lidar / DEM",
+        kind: AssetKind::Dem,
+        license: "US government public domain",
+        homepage: "https://www.usgs.gov/3d-elevation-program",
+        xyz: None,
+        credit: "USGS 3DEP",
+    },
+    MapAsset {
+        id: "noaa-digital-coast",
+        title: "NOAA Digital Coast lidar",
+        kind: AssetKind::Dem,
+        license: "US government public domain",
+        homepage: "https://coast.noaa.gov/dataviewer/",
+        xyz: None,
+        credit: "NOAA Digital Coast",
+    },
+    MapAsset {
+        id: "opentopography",
+        title: "OpenTopography",
+        kind: AssetKind::Dem,
+        license: "per dataset (mostly open)",
+        homepage: "https://portal.opentopography.org/dataCatalog",
+        xyz: None,
+        credit: "OpenTopography",
+    },
 ];
 
 pub fn asset(id: &str) -> Option<&'static MapAsset> {
@@ -344,6 +506,12 @@ mod tests {
         assert!(asset("wmm").is_some());
         assert!(asset("geoboundaries").is_some());
         assert!(asset("black-marble").is_some());
+        assert!(asset("openseamap").is_some());
+        assert!(asset("earth-search").is_some());
+        assert!(asset("overture-geoparquet").is_some());
+        assert!(asset("protomaps-builds").is_some());
+        assert!(asset("celestrak-gp-iss").is_some());
+        assert!(CATALOG.len() >= 40);
     }
 
     #[test]
@@ -359,6 +527,20 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn openseamap_xyz_is_free() {
+        let url = xyz_url(asset("openseamap").unwrap().xyz.unwrap(), 6, 32, 21, None);
+        assert!(url.contains("tiles.openseamap.org/seamark/6/32/21.png"));
+        assert!(!paid_host(&url));
+    }
+
+    #[test]
+    fn utc_timezone_fixture_is_tiny() {
+        let raw = include_str!("fixtures/timezone-utc-sample.geojson");
+        assert!(raw.contains("Etc/UTC"));
+        assert!(raw.len() < 1024);
+    }
+
     fn refuses_paid_hosts() {
         assert!(paid_host("https://api.mapbox.com/v4/mapbox.satellite/1/0/0.png"));
         assert!(paid_host("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"));

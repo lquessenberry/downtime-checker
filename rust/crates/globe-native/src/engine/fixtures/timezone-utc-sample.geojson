@@ -1,0 +1,20 @@
+{
+  "type": "FeatureCollection",
+  "name": "utc-sample-not-the-world",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "tzid": "Etc/UTC", "note": "tiny fixture around Null Island" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-1.0, -1.0],
+          [1.0, -1.0],
+          [1.0, 1.0],
+          [-1.0, 1.0],
+          [-1.0, -1.0]
+        ]]
+      }
+    }
+  ]
+}
