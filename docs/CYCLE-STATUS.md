@@ -5,7 +5,7 @@ Grok bots **GLOBALSTATUS** (product) and **RUCKUS** (review) watch this file and
 | Field | Value |
 | --- | --- |
 | Board | [#75](https://github.com/lquessenberry/downtime-checker/issues/75) |
-| Default | `feat/globalstatus-prod` @ `37eca1a` |
+| Default | `feat/globalstatus-prod` @ `2e2da14` |
 | Staging | Fly `globalstatus-stage` **v7** already live (2026-11-22 07:31 CT). Do not redeploy unless Lee says so. |
 | Pace | 2-hour feature cycles. Cycles **7–18** are features; **19–30** are catch-up. |
 | Priority | Lee (2026-11-22): anything Will Casey suggests goes to the front of the feature cycles. Label: `will-priority`. |
@@ -15,8 +15,8 @@ Grok bots **GLOBALSTATUS** (product) and **RUCKUS** (review) watch this file and
 ## Open for review
 
 - **#1** rust-wasm scaffold — wrong base (`feat/node-visualizer`). Do not merge into prod.
-- Cycle-plan docs PR for this file and `docs/GSA-CYCLE.md` — RUCKUS review before merge.
-- Cycle **13** in the old plan (PHP poll-runner only) is **not** green; Rust poll work moves with live feeds into cycles 13 and 20–22.
+- Cycle-plan docs PR **#90** is merged at `2e2da14`. This handshake follows up so the default SHA and review list match that merge.
+- Cycle **13** in the old plan (PHP poll-runner only) is **not** green; the #34 poll-runner branch is being rebased onto `feat/globalstatus-prod` as a reference PR. No new Fly app and no `globalstatus-stage` redeploy. Rust poll work stays in cycles 13 and 20–22.
 
 ## Cycles 7–18 (Will's items first)
 
@@ -24,8 +24,8 @@ Grok bots **GLOBALSTATUS** (product) and **RUCKUS** (review) watch this file and
 | --- | --- | --- |
 | 7 | Live USGS QUAKES layer | #81 |
 | 8 | Mobile pinch-zoom, zoom-scaled icons, labels under icons | #84 |
-| 9 | Rename downtime section to Internet Grid Status; live-up weather, outages, JAM | #85 #8 #7 #34 |
-| 10 | Live feeds v1: storms, fires, AQI, fireballs, waves/contrails (public feeds only) | #83 #8 |
+| 9 | Rename downtime section to Internet Grid Status | #85 |
+| 10 | Live feeds v1: storms, fires, AQI, fireballs, waves/contrails, outages (public feeds only; branch `live-layers-83`) | #83 #8 #7 |
 | 11 | Blast calculator on globe layers + death % by distance/altitude (public math only) | #39 |
 | 12 | UNEXPLAINED UFO/cryptid layer | #82 |
 | 13 | Aviation/ADS-B, ships, traffic cams via polite proxy (poll-runner continues) | #83 #44 #45 #34 |
