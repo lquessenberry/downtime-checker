@@ -298,7 +298,7 @@ function setPanel(which) {
 }
 
 async function startGlobe() {
-  let startupMap = "streets";
+  let startupMap = "osm";
   let imagery;
   try {
     imagery = await imageryProvider(startupMap);
