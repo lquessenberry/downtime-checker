@@ -9,7 +9,7 @@ Grok bots **GLOBALSTATUS** (product) and **RUCKUS** (review) watch this file and
 | #76 | **Merged** `de12fc6`. Do not re-open. |
 | Native | `rust/native-core` (blast, `/api/blast`, FIRE HUD) |
 | Pace | Overnight: 30 min until 8:30 AM Sunday Central. Then Fly `globalstatus-stage`. |
-| Merge | Copilot review on current head + blocking comments fixed + CI green. No force-push. Not Will's upstream. |
+| Merge | Copilot on current head, or RUCKUS if Copilot `NO_QUOTA_REMAINING`, plus CI green. No force-push. Not Will's upstream. |
 | Fly wrap | `fly deploy -c fly.gsa.toml --ha=false -a globalstatus-stage` after last morning check. No FTP. |
 
 ## Open for review

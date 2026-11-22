@@ -12,6 +12,8 @@ on:
       - "globalstatus/**"
       - "scripts/designations/**"
       - "scripts/gsa-cycle/**"
+      - "docs/**"
+      - "rust/**"
       - ".github/workflows/gsa-morning-cycle.yml"
   workflow_dispatch:
     inputs:
