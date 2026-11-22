@@ -80,6 +80,28 @@ fn tls_config() -> Arc<ClientConfig> {
 }
 
 fn https_get(host: &str, path: &str, budget: Duration) -> Result<String, LookupError> {
+    let body = https_get_bytes(
+        host,
+        path,
+        "application/json",
+        "downtime-checker",
+        1_000_000,
+        budget,
+    )?;
+    String::from_utf8(body).map_err(|_| LookupError {
+        message: "location response was not utf-8".into(),
+    })
+}
+
+/// HTTPS GET that returns the raw body. Used by ipwho and the globe tile proxy.
+pub fn https_get_bytes(
+    host: &str,
+    path: &str,
+    accept: &str,
+    user_agent: &str,
+    max_bytes: usize,
+    budget: Duration,
+) -> Result<Vec<u8>, LookupError> {
     let address = (host, 443u16)
         .to_socket_addrs()
         .map_err(|err| LookupError {
@@ -103,7 +125,7 @@ fn https_get(host: &str, path: &str, budget: Duration) -> Result<String, LookupE
         })?;
     let mut tls = StreamOwned::new(connection, socket);
     let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: downtime-checker\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
+        "GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: {user_agent}\r\nAccept: {accept}\r\nConnection: close\r\n\r\n"
     );
     tls.write_all(request.as_bytes())
         .map_err(|err| LookupError {
@@ -119,8 +141,8 @@ fn https_get(host: &str, path: &str, budget: Duration) -> Result<String, LookupE
             })
         }
     }
-    if raw.len() > 1_000_000 {
-        raw.truncate(1_000_000);
+    if raw.len() > max_bytes.saturating_add(32_768) {
+        raw.truncate(max_bytes.saturating_add(32_768));
     }
     let split_at = raw
         .windows(4)
@@ -133,10 +155,10 @@ fn https_get(host: &str, path: &str, budget: Duration) -> Result<String, LookupE
     let status = head.lines().next().unwrap_or("");
     if !status.contains(" 200 ") {
         return Err(LookupError {
-            message: format!("ipwho.is status {status}"),
+            message: format!("{host} status {status}"),
         });
     }
-    let body = if head
+    let mut body = if head
         .to_ascii_lowercase()
         .contains("transfer-encoding: chunked")
     {
@@ -144,9 +166,10 @@ fn https_get(host: &str, path: &str, budget: Duration) -> Result<String, LookupE
     } else {
         body_bytes.to_vec()
     };
-    String::from_utf8(body).map_err(|_| LookupError {
-        message: "location response was not utf-8".into(),
-    })
+    if body.len() > max_bytes {
+        body.truncate(max_bytes);
+    }
+    Ok(body)
 }
 
 /// Reassemble chunked transfer encoding before any UTF-8 conversion. A chunk

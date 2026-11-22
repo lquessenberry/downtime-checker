@@ -17,8 +17,8 @@ use downtime_core::{
     Loaded, LocateMode, Place, Report, Status, KT_PRESETS, LOOKUP_WORKERS,
 };
 use downtime_native::{
-    cache_record, check_all, load_catalog_dir, lookup_ipwho, read_cache, record_value, write_cache,
-    HostCheck,
+    cache_record, check_all, https_get_bytes, load_catalog_dir, lookup_ipwho, read_cache,
+    record_value, write_cache, HostCheck,
 };
 use rustle::{builtin_grove, Bundle, Grove};
 use serde_json::{json, Map, Value};
@@ -131,6 +131,7 @@ async fn handle(mut socket: TcpStream, app: Arc<App>) -> std::io::Result<()> {
             let (status, body) = leaves_json(&app.grove, path, &request.query);
             write_json(&mut socket, status, &body).await
         }
+        ("GET", path) if path.starts_with("/tiles/") => proxy_tile(&mut socket, path).await,
         ("GET", "/healthz") => {
             let body = json!({
                 "ok": true,
@@ -800,6 +801,97 @@ fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
+const TILE_UA: &str = "GlobalStatusApp/0.1 (https://globalstatus.app; rustle-globe)";
+
+fn parse_tile_path(path: &str) -> Option<(String, String, &'static str, u32, u32, u32)> {
+    // /tiles/{osm|gibs}/{z}/{x}/{y}.png|.jpg
+    let rest = path.strip_prefix("/tiles/")?;
+    let mut parts = rest.split('/');
+    let layer = parts.next()?;
+    let z: u32 = parts.next()?.parse().ok()?;
+    let x: u32 = parts.next()?.parse().ok()?;
+    let y_file = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    let y_str = y_file.split('.').next()?;
+    let y: u32 = y_str.parse().ok()?;
+    let n = 1u32.checked_shl(z)?;
+    if x >= n || y >= n {
+        return None;
+    }
+    match layer {
+        "osm" if z <= 12 => {
+            let upstream = format!("/{z}/{x}/{y}.png");
+            Some((
+                upstream,
+                "tile.openstreetmap.org".into(),
+                "image/png",
+                z,
+                x,
+                y,
+            ))
+        }
+        "gibs" if z <= 8 => {
+            // GIBS GoogleMapsCompatible is {z}/{y}/{x}
+            let upstream = format!(
+                "/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg"
+            );
+            Some((
+                upstream,
+                "gibs.earthdata.nasa.gov".into(),
+                "image/jpeg",
+                z,
+                x,
+                y,
+            ))
+        }
+        _ => None,
+    }
+}
+
+async fn proxy_tile(socket: &mut TcpStream, path: &str) -> std::io::Result<()> {
+    let Some((upstream, host, mime, _, _, _)) = parse_tile_path(path) else {
+        return write_json(socket, 400, r#"{"error":"bad tile"}"#).await;
+    };
+    let fetched = tokio::task::spawn_blocking(move || {
+        https_get_bytes(
+            &host,
+            &upstream,
+            mime,
+            TILE_UA,
+            400_000,
+            Duration::from_secs(8),
+        )
+    })
+    .await;
+    match fetched {
+        Ok(Ok(mut bytes)) if !bytes.is_empty() => {
+            while bytes.starts_with(b"\r\n") {
+                bytes.drain(..2);
+            }
+            if bytes.starts_with(b"\x89PNG") || bytes.starts_with(b"\xff\xd8") || bytes.starts_with(b"<") {
+                write_response(
+                    socket,
+                    200,
+                    "OK",
+                    mime,
+                    &bytes,
+                    "Cache-Control: public, max-age=86400",
+                )
+                .await
+            } else {
+                write_json(socket, 502, r#"{"error":"tile was not an image"}"#).await
+            }
+        }
+        Ok(Err(err)) => {
+            let body = json!({"error": err.message}).to_string();
+            write_json(socket, 502, &body).await
+        }
+        _ => write_json(socket, 502, r#"{"error":"tile fetch failed"}"#).await,
+    }
+}
+
 fn leaves_json(grove: &Grove, path: &str, query: &str) -> (u16, String) {
     if path == "/api/leaves" {
         if let Some(bundle) = query_param(query, "bundle") {
@@ -1018,5 +1110,22 @@ mod tests {
         )
         .await;
         assert!(ctx.contains("\"id\":\"saa\""), "{ctx}");
+        let bad = http(
+            addr,
+            "GET /tiles/osm/3/99/1.png HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        assert!(bad.contains("400") || bad.contains("bad tile"), "{bad}");
+    }
+
+    #[test]
+    fn tile_paths_are_allowlisted() {
+        let osm = parse_tile_path("/tiles/osm/3/2/4.png").unwrap();
+        assert_eq!(osm.1, "tile.openstreetmap.org");
+        assert_eq!(osm.0, "/3/2/4.png");
+        let gibs = parse_tile_path("/tiles/gibs/4/1/2.jpg").unwrap();
+        assert!(gibs.0.contains("/4/2/1.jpg"), "{}", gibs.0);
+        assert!(parse_tile_path("/tiles/osm/3/20/1.png").is_none());
+        assert!(parse_tile_path("/tiles/esri/1/0/0.png").is_none());
     }
 }

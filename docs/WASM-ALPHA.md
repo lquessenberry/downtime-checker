@@ -7,6 +7,7 @@ This cut replaces the PHP Cesium globe on Fly staging with:
 - `downtime-wasm` in the browser (blast, **Rustle grove**, catalog helpers)
 - `downtime-server` (tokio) for `/healthz`, `/api/blast`, `/api/leaves`, `/api/catalog`, `/api/scan`
 - WebGL orthographic Earth (NASA Blue Marble JPEG), drag / pitch / wheel zoom
+- OSM XYZ tiles via same-origin `/tiles/osm/{z}/{x}/{y}.png` once you zoom in (GIBS marble tiles at `/tiles/gibs/...`)
 - Click a point for Rustle context (geofence, nearby leaves, orbitals)
 - CHECK GRID against the catalog (weather default)
 - **No CesiumJS, no Cesium ion, no Mapbox**

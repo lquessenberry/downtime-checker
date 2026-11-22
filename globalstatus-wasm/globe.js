@@ -71,6 +71,17 @@ function latLonFromPixel(px, py) {
   return { lat: (lat * 180) / Math.PI, lon: (((lon * 180) / Math.PI + 540) % 360) - 180 };
 }
 
+function spherePos(latDeg, lonDeg, scale) {
+  const lat = (latDeg * Math.PI) / 180;
+  const lon = (lonDeg * Math.PI) / 180;
+  const s = scale || 1;
+  return [
+    Math.cos(lat) * Math.sin(lon) * s,
+    Math.sin(lat) * s,
+    Math.cos(lat) * Math.cos(lon) * s,
+  ];
+}
+
 function initGl() {
   const gl = globe.getContext("webgl", { antialias: true, alpha: false, powerPreference: "high-performance" });
   if (!gl) return null;
@@ -96,8 +107,17 @@ function initGl() {
   const fs = gl.createShader(gl.FRAGMENT_SHADER);
   gl.shaderSource(
     fs,
-    `precision mediump float; uniform sampler2D uTex; varying vec2 vUv;
-     void main() { gl_FragColor = texture2D(uTex, vUv); }`
+    `precision mediump float;
+     uniform sampler2D uTex;
+     uniform float uEquirect;
+     varying vec2 vUv;
+     void main() {
+       vec2 uv = vUv;
+       if (uEquirect > 0.5) {
+         uv = vec2(vUv.y / 360.0 + 0.5, 0.5 - vUv.x / 180.0);
+       }
+       gl_FragColor = texture2D(uTex, uv);
+     }`
   );
   gl.compileShader(fs);
   const prog = gl.createProgram();
@@ -111,6 +131,7 @@ function initGl() {
         gl.clearColor(0.02, 0.027, 0.043, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
       },
+      texture() { return null; },
       resize() {},
     };
   }
@@ -121,18 +142,18 @@ function initGl() {
   const uv = [];
   const idx = [];
   for (let iy = 0; iy <= latBands; iy++) {
-    const lat = (iy / latBands) * Math.PI - Math.PI / 2;
+    const lat = (iy / latBands) * 180 - 90;
     for (let ix = 0; ix <= lonBands; ix++) {
-      const lon = (ix / lonBands) * 2 * Math.PI - Math.PI;
-      pos.push(Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon));
-      uv.push(ix / lonBands, 1 - iy / latBands);
+      const lon = (ix / lonBands) * 360 - 180;
+      pos.push(...spherePos(lat, lon, 1));
+      uv.push(lat, lon);
     }
   }
   for (let iy = 0; iy < latBands; iy++) {
     for (let ix = 0; ix < lonBands; ix++) {
       const a = iy * (lonBands + 1) + ix;
       const b = a + lonBands + 1;
-      idx.push(a, b, a + 1, b, b + 1, a + 1);
+      idx.push(a, a + 1, b, b, a + 1, b + 1);
     }
   }
   const posBuf = gl.createBuffer();
@@ -144,42 +165,71 @@ function initGl() {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uv), gl.STATIC_DRAW);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
-  const tex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
-  if (earth.complete && earth.naturalWidth) {
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, earth);
-  } else {
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array([18, 50, 74]));
+  function makeTex(image, mip) {
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    if (image) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
+      if (mip) {
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      } else {
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      }
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array([18, 50, 74]));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    }
+    return t;
+  }
+  const tex = makeTex(earth.complete && earth.naturalWidth ? earth : null, true);
+  if (!(earth.complete && earth.naturalWidth)) {
     earth.addEventListener("load", () => {
       gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, earth);
-      draw();
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      requestDraw();
     });
   }
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.CULL_FACE);
+  gl.enable(gl.POLYGON_OFFSET_FILL);
   const uYaw = gl.getUniformLocation(prog, "uYaw");
   const uPitch = gl.getUniformLocation(prog, "uPitch");
   const uSx = gl.getUniformLocation(prog, "uSx");
   const uSy = gl.getUniformLocation(prog, "uSy");
+  const uEquirect = gl.getUniformLocation(prog, "uEquirect");
   const aPos = gl.getAttribLocation(prog, "aPos");
   const aUv = gl.getAttribLocation(prog, "aUv");
+  const patchPos = gl.createBuffer();
+  const patchUv = gl.createBuffer();
+  const patchIdx = gl.createBuffer();
+  function bindProgram() {
+    gl.useProgram(prog);
+    const r = radius();
+    gl.uniform1f(uYaw, yaw);
+    gl.uniform1f(uPitch, pitch);
+    gl.uniform1f(uSx, (2 * r) / globe.width);
+    gl.uniform1f(uSy, (2 * r) / globe.height);
+  }
   return {
-    draw() {
+    gl,
+    texture(image) {
+      return makeTex(image, false);
+    },
+    draw(patches) {
       gl.viewport(0, 0, globe.width, globe.height);
       gl.clearColor(0.02, 0.027, 0.043, 1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      gl.useProgram(prog);
-      const r = radius();
-      gl.uniform1f(uYaw, yaw);
-      gl.uniform1f(uPitch, pitch);
-      gl.uniform1f(uSx, (2 * r) / globe.width);
-      gl.uniform1f(uSy, (2 * r) / globe.height);
+      bindProgram();
+      gl.uniform1f(uEquirect, 1);
+      gl.polygonOffset(0, 0);
       gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
       gl.enableVertexAttribArray(aPos);
       gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
@@ -189,6 +239,22 @@ function initGl() {
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
+      if (!patches || !patches.length) return;
+      gl.uniform1f(uEquirect, 0);
+      gl.polygonOffset(-1.5, -1.5);
+      for (const patch of patches) {
+        if (!patch.tex) continue;
+        gl.bindBuffer(gl.ARRAY_BUFFER, patchPos);
+        gl.bufferData(gl.ARRAY_BUFFER, patch.pos, gl.STREAM_DRAW);
+        gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, patchUv);
+        gl.bufferData(gl.ARRAY_BUFFER, patch.uv, gl.STREAM_DRAW);
+        gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, patchIdx);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, patch.idx, gl.STREAM_DRAW);
+        gl.bindTexture(gl.TEXTURE_2D, patch.tex);
+        gl.drawElements(gl.TRIANGLES, patch.idx.length, gl.UNSIGNED_SHORT, 0);
+      }
     },
     resize() {},
   };
@@ -342,10 +408,116 @@ function pointOf(leaf) {
   return null;
 }
 
+const tileCache = new Map();
+
+function mercatorY(lat) {
+  const s = Math.sin((lat * Math.PI) / 180);
+  return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+}
+
+function lonLatToTile(lat, lon, z) {
+  const n = 2 ** z;
+  const x = Math.floor(((lon + 180) / 360) * n);
+  const y = Math.floor(mercatorY(Math.max(-85.05, Math.min(85.05, lat))) * n);
+  return [Math.max(0, Math.min(n - 1, x)), Math.max(0, Math.min(n - 1, y))];
+}
+
+function tileNW(x, y, z) {
+  const n = 2 ** z;
+  const lon = (x / n) * 360 - 180;
+  const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI;
+  return { lat, lon };
+}
+
+function buildTileMesh(z, x, y) {
+  const div = 6;
+  const nw = tileNW(x, y, z);
+  const se = tileNW(x + 1, y + 1, z);
+  const pos = [];
+  const uv = [];
+  const idx = [];
+  for (let iy = 0; iy <= div; iy++) {
+    const lat = nw.lat + (se.lat - nw.lat) * (iy / div);
+    for (let ix = 0; ix <= div; ix++) {
+      const lon = nw.lon + (se.lon - nw.lon) * (ix / div);
+      pos.push(...spherePos(lat, lon, 1.004));
+      uv.push(ix / div, iy / div);
+    }
+  }
+  for (let iy = 0; iy < div; iy++) {
+    for (let ix = 0; ix < div; ix++) {
+      const a = iy * (div + 1) + ix;
+      const b = a + div + 1;
+      idx.push(a, a + 1, b, b, a + 1, b + 1);
+    }
+  }
+  return {
+    pos: new Float32Array(pos),
+    uv: new Float32Array(uv),
+    idx: new Uint16Array(idx),
+  };
+}
+
+function tileZoom() {
+  if (zoom < 1.4) return 0;
+  return Math.max(3, Math.min(10, Math.round(3 + Math.log2(zoom) * 1.6)));
+}
+
+function visibleTileKeys() {
+  const z = tileZoom();
+  if (!z) return [];
+  const seen = new Map();
+  const step = 48;
+  for (let py = 0; py < globe.height; py += step) {
+    for (let px = 0; px < globe.width; px += step) {
+      const ll = latLonFromPixel(px, py);
+      if (!ll) continue;
+      const [x, y] = lonLatToTile(ll.lat, ll.lon, z);
+      seen.set(`${z}/${x}/${y}`, [z, x, y]);
+    }
+  }
+  return [...seen.values()].slice(0, 18);
+}
+
+function loadTile(z, x, y) {
+  const key = `${z}/${x}/${y}`;
+  let rec = tileCache.get(key);
+  if (rec) {
+    tileCache.delete(key);
+    tileCache.set(key, rec);
+    return rec;
+  }
+  rec = { key, tex: null, ...buildTileMesh(z, x, y) };
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    if (glapi && glapi.texture) rec.tex = glapi.texture(img);
+    requestDraw();
+  };
+  img.src = `/tiles/osm/${z}/${x}/${y}.png`;
+  tileCache.set(key, rec);
+  if (tileCache.size > 80) {
+    const first = tileCache.keys().next().value;
+    tileCache.delete(first);
+  }
+  return rec;
+}
+
+function tilePatches() {
+  return visibleTileKeys().map(([z, x, y]) => loadTile(z, x, y));
+}
+
 function draw() {
-  if (glapi) glapi.draw();
+  if (glapi) glapi.draw(tilePatches());
   else drawFallback();
   drawOverlay();
+  const z = tileZoom();
+  const hint = document.getElementById("hint");
+  if (hint) {
+    hint.textContent = z
+      ? `drag spin · wheel zoom · OSM z${z}`
+      : "drag spin · wheel zoom for streets";
+  }
 }
 
 let raf = 0;
@@ -403,7 +575,7 @@ globe.addEventListener(
   "wheel",
   (ev) => {
     ev.preventDefault();
-    zoom = Math.max(0.7, Math.min(3.2, zoom * (ev.deltaY > 0 ? 0.92 : 1.08)));
+    zoom = Math.max(0.85, Math.min(16, zoom * (ev.deltaY > 0 ? 0.9 : 1.12)));
     requestDraw();
   },
   { passive: false }
