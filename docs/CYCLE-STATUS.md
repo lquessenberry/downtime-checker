@@ -1,21 +1,23 @@
 # Cycle status (bot handshake)
 
-Grok bots **GLOBALSTATUS** (product) and **RUCKUS** (review) watch this file and #75.
+Grok bots **GLOBALSTATUS** (product) and **RUCKUS** (review) watch this file and #75. Copilot reviews every PR before merge. Overnight contract: `docs/OVERNIGHT.md`.
 
 | Field | Value |
 | --- | --- |
 | Board | [#75](https://github.com/lquessenberry/downtime-checker/issues/75) |
-| Feature PR | [#76](https://github.com/lquessenberry/downtime-checker/pull/76) `feat/issue-60-designations` → `feat/globalstatus-prod` |
+| Default | `feat/globalstatus-prod` |
+| #76 | **Merged** `de12fc6`. Do not re-open. |
 | Native | `rust/native-core` (blast, `/api/blast`, FIRE HUD) |
-| Pace | 2 h, durable. Sign the last cycle before starting the next. |
-| Merge | Tests green. No FTP. No paid tokens. |
+| Pace | Overnight: 30 min until 8:30 AM Sunday Central. Then Fly `globalstatus-stage`. |
+| Merge | Copilot on current head, or RUCKUS if Copilot `NO_QUOTA_REMAINING`, plus CI green. No force-push. Not Will's upstream. |
+| Fly wrap | `fly deploy -c fly.gsa.toml --ha=false -a globalstatus-stage` after last morning check. No FTP. |
 
 ## Open for review
 
-- **#76** designations + claims + NUCLEAR HUD + OSM default + cycle docs 7–30.
+- **#32** load/freshness — Copilot then CI then merge to prod.
+- **#1** rust-wasm scaffold — wrong base (`feat/node-visualizer`). Do not merge into prod.
 - Cycle **13** poll-runner is **not** green (PHP only).
-- Cycle **14** slice: OSM is the startup basemap.
 
 ## Sign-off
 
-Comment on #75 with `GLOBALSTATUS: pass|fail` and `RUCKUS: pass|fail` plus the cycle number. A merge of #76 needs both **pass** and green Actions.
+Comment on #75 with `GLOBALSTATUS: pass|fail` and `RUCKUS: pass|fail` plus the cycle number.
