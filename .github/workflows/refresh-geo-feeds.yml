@@ -1,0 +1,99 @@
+name: Refresh geo-feeds layers
+
+# Keys come from Actions secrets and are passed as env. Never echo the values.
+on:
+  workflow_dispatch:
+    inputs:
+      ids:
+        description: Optional comma-separated catalog ids (empty = all eligible)
+        type: string
+        required: false
+        default: ""
+      commit:
+        description: Open a PR with layer JSON (off by default; snapshots are not auto-committed)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: refresh-geo-feeds
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Fetch layers into the shared envelope
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch catalog feeds
+        env:
+          WAQI_TOKEN: ${{ secrets.WAQI_TOKEN }}
+          OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
+          OCM_API_KEY: ${{ secrets.OCM_API_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          ids="${{ inputs.ids }}"
+          extra=()
+          if [ -n "$ids" ]; then
+            extra+=(--ids "$ids")
+          fi
+          python3 scripts/geo-feeds/fetch_all.py "${extra[@]}"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("scripts/geo-feeds/layers")
+          files = sorted(root.glob("*.json")) if root.exists() else []
+          ok = fail = 0
+          for path in files:
+              env = json.loads(path.read_text())
+              if env.get("error"):
+                  fail += 1
+              else:
+                  ok += 1
+          print(f"layers={len(files)} ok={ok} error={fail}")
+          PY
+
+      - name: Upload layer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: geo-feed-layers
+          path: |
+            scripts/geo-feeds/layers
+            scripts/geo-feeds/all_points.geojson
+          if-no-files-found: warn
+          retention-days: 5
+
+      - name: Open PR with layer snapshots
+        if: ${{ inputs.commit }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          set +x
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          base="${{ github.event.repository.default_branch }}"
+          branch="bot/refresh-geo-feeds-$(date -u +%Y%m%dT%H%M%SZ)"
+          git checkout -b "$branch"
+          git add -f scripts/geo-feeds/layers/*.json scripts/geo-feeds/all_points.geojson || true
+          if git diff --cached --quiet; then
+            echo "No layer changes to commit"
+            exit 0
+          fi
+          git commit -m "Refresh geo-feeds layer snapshots."
+          git push origin "$branch"
+          gh pr create \
+            --base "$base" \
+            --head "$branch" \
+            --title "Refresh geo-feeds layer snapshots" \
+            --body "Automated refresh of \`scripts/geo-feeds/layers\` from \`fetch_all.py\`. Keys were read from Actions secrets and are not written into the files. Please review before merge. Do not deploy from this PR."
