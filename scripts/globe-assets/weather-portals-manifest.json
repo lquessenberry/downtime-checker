@@ -1,0 +1,15 @@
+{
+  "note": "URLs only. fetch.sh --weather-portals copies this into data/map-assets/. Do not git GFS GRIB, MRMS volumes, or radar mosaics.",
+  "license": "US government public domain / EUMETSAT open / IEM free. No OpenWeatherMap or WeatherKit keys.",
+  "items": [
+    {"id": "noaa-gfs", "homepage": "https://nomads.ncep.noaa.gov/", "license": "US gov"},
+    {"id": "noaa-mrms", "homepage": "https://mrms.ncep.noaa.gov/", "license": "US gov"},
+    {"id": "nws-alerts", "homepage": "https://www.weather.gov/documentation/services-web-api", "license": "US gov"},
+    {"id": "nws-radar", "homepage": "https://radar.weather.gov/", "license": "US gov"},
+    {"id": "iem-nexrad", "homepage": "https://mesonet.agron.iastate.edu/docs/nexrad_mosaic/", "license": "IEM / NWS"},
+    {"id": "eumetsat-open", "homepage": "https://data.eumetsat.int/", "license": "EUMETSAT open"},
+    {"id": "rainviewer-open", "homepage": "https://www.rainviewer.com/api/weather-maps-api.html", "license": "RainViewer free API"},
+    {"id": "openweathermap-rejected", "homepage": "https://openweathermap.org/api", "license": "do not require"},
+    {"id": "apple-weatherkit-rejected", "homepage": "https://developer.apple.com/weatherkit/", "license": "do not require"}
+  ]
+}

@@ -44,11 +44,14 @@ Poly Haven HDRIs, Kenney terrain, OpenGameArt height, NASA SVS stills, Cesium io
 **Batch 5 — offline desktop/mobile**  
 QGIS + QuickMapServices (OSM/GIBS), Marble, `pmtiles` CLI, `tippecanoe`, ATAK with local MBTiles (no TAK server license).
 
-**Batch 6 — leftover country LiDAR portals** (this PR)  
+**Batch 6 — leftover country LiDAR portals**  
 UK Environment Agency LiDAR, LINZ, NRCan HRDEM, Copernicus DEM, swissALTI3D, ELVIS, NLS Finland, Denmark DHM (USGS 3DEP / NOAA Digital Coast / OpenTopography already in batch 3).
 
-**Batch 7 — weather / radar (free)**  
-NOAA GFS / MRMS, RainViewer-class open radar, EUMETSAT open, NWS alerts. No paid weather API.
+**Batch 7 — weather / radar (free)** (this PR)  
+NOAA GFS / MRMS, NWS alerts + radar, IEM NEXRAD, RainViewer-class open radar, EUMETSAT open. OpenWeatherMap and WeatherKit **rejected**.
+
+**Batch 8 — more free AIS / ADS-B portals**  
+Finnish Digitraffic AIS, adsb.lol unkeyed, OpenSky (rate-limited). No AISStream key.
 
 ## Batch 2 — orbital, bathymetry, borders, factoids
 
@@ -151,8 +154,25 @@ scripts/globe-assets/fetch.sh --lidar-portals
 
 Does not download LiDAR LAS/COG/GeoTIFF grids. Copilot is out of the review loop until 2026-12-01.
 
+## Batch 7 — weather / radar (no paid API)
+
+| id | What | Git |
+| --- | --- | --- |
+| noaa-gfs, noaa-mrms | GFS / MRMS | portals, **no GRIB** |
+| nws-alerts, nws-radar | weather.gov API + radar | URLs |
+| iem-nexrad | NEXRAD mosaic XYZ | URL only |
+| eumetsat-open | EUMETSAT open data | portal |
+| rainviewer-open | free weather-maps API | URL |
+| openweathermap-rejected, apple-weatherkit-rejected | **do not require** | catalog rows |
+
+```bash
+scripts/globe-assets/fetch.sh --weather-portals
+```
+
+Does not download GRIB/MRMS volumes. Copilot is out of the review loop until 2026-12-01.
+
 Open a new PR per batch. Each PR only adds registry rows + a fetch script target. Never a multi-GB blob.
 
 ## Paid hosts (RUCKUS fail)
 
-`mapbox.com`, `cesium.com` ion, `arcgisonline.com`, Google Photorealistic 3D Tiles, Maxar. `paid_host()` in `map_assets.rs` flags them.
+`mapbox.com`, `cesium.com` ion, `arcgisonline.com`, Google Photorealistic 3D Tiles, Maxar, OpenWeatherMap, Apple WeatherKit. `paid_host()` in `map_assets.rs` flags them.

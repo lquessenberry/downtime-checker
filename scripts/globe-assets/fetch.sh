@@ -24,6 +24,7 @@ iss=0
 pbr=0
 offline=0
 lidar=0
+weather=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ne110) ne110=1 ;;
@@ -33,15 +34,17 @@ while [[ $# -gt 0 ]]; do
     --pbr-manifest) pbr=1 ;;
     --offline-tools) offline=1 ;;
     --lidar-portals) lidar=1 ;;
+    --weather-portals) weather=1 ;;
     --help|-h)
-      echo "Usage: $0 [--ne110] [--wmm] [--tz] [--iss-tle] [--pbr-manifest] [--offline-tools] [--lidar-portals]"
+      echo "Usage: $0 [--ne110] [--wmm] [--tz] [--iss-tle] [--pbr-manifest] [--offline-tools] [--lidar-portals] [--weather-portals]"
       echo "  --wmm      NOAA WMM coefficient file (tiny). Tries several mirrors."
       echo "  --tz       Copy the UTC sample polygon (fixture). Not the world file."
       echo "  --iss-tle  CelesTrak stations TLE (small text)."
       echo "  --pbr-manifest  Copy CC0/NASA PBR URL list (no 8K files)."
       echo "  --offline-tools Copy QGIS/Marble/pmtiles/tippecanoe/ATAK URL list (no APKs)."
       echo "  --lidar-portals Copy country LiDAR portal URLs (no grids)."
-      echo "Never downloads GEBCO grids, planet PMTiles, Landsat, LiDAR, or ion tiles."
+      echo "  --weather-portals Copy NOAA/NWS/EUMETSAT URL list (no GRIB)."
+      echo "Never downloads GEBCO grids, planet PMTiles, Landsat, LiDAR, GRIB, or ion tiles."
       exit 0
       ;;
     *) echo "unknown $1" >&2; exit 1 ;;
@@ -105,6 +108,14 @@ if [[ "$lidar" -eq 1 ]]; then
   if [[ -f "$src" ]]; then
     cp "$src" "$DEST/lidar-portals-manifest.json"
     echo "lidar-portals manifest $DEST/lidar-portals-manifest.json (URLs only, no grids)"
+  fi
+fi
+
+if [[ "$weather" -eq 1 ]]; then
+  src="$ROOT/scripts/globe-assets/weather-portals-manifest.json"
+  if [[ -f "$src" ]]; then
+    cp "$src" "$DEST/weather-portals-manifest.json"
+    echo "weather-portals manifest $DEST/weather-portals-manifest.json (URLs only, no GRIB)"
   fi
 fi
 
