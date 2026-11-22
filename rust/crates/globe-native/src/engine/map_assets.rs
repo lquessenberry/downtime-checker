@@ -618,6 +618,78 @@ pub const CATALOG: &[MapAsset] = &[
         xyz: None,
         credit: "OsmAnd · OSM",
     },
+    MapAsset {
+        id: "uk-ea-lidar",
+        title: "UK Environment Agency LiDAR",
+        kind: AssetKind::Dem,
+        license: "Open Government Licence v3.0",
+        homepage: "https://environment.data.gov.uk/dataset/13787b9a-26a4-4775-8523-806d13af58fc",
+        xyz: None,
+        credit: "Environment Agency / Defra",
+    },
+    MapAsset {
+        id: "linz",
+        title: "LINZ Data Service (NZ elevation)",
+        kind: AssetKind::Dem,
+        license: "CC BY 4.0 (LINZ)",
+        homepage: "https://data.linz.govt.nz/",
+        xyz: None,
+        credit: "LINZ",
+    },
+    MapAsset {
+        id: "nrcan-hrdem",
+        title: "NRCan High Resolution DEM",
+        kind: AssetKind::Dem,
+        license: "Open Government Licence — Canada",
+        homepage: "https://open.canada.ca/data/en/dataset/957782bf-847c-4644-a757-e383c0057995",
+        xyz: None,
+        credit: "Natural Resources Canada",
+    },
+    MapAsset {
+        id: "copernicus-dem",
+        title: "Copernicus DEM (COP-DEM / EU-DEM)",
+        kind: AssetKind::Dem,
+        license: "Copernicus licence (attribution)",
+        homepage: "https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model",
+        xyz: None,
+        credit: "Copernicus DEM / ESA",
+    },
+    MapAsset {
+        id: "swissalti3d",
+        title: "swissALTI3D",
+        kind: AssetKind::Dem,
+        license: "opendata.swiss (CC / GeoIV)",
+        homepage: "https://www.swisstopo.admin.ch/en/height-model-swissalti3d",
+        xyz: None,
+        credit: "swisstopo",
+    },
+    MapAsset {
+        id: "aus-elvis",
+        title: "ELVIS elevation (Australia)",
+        kind: AssetKind::Dem,
+        license: "CC BY (per jurisdiction)",
+        homepage: "https://elevation.fsdf.org.au/",
+        xyz: None,
+        credit: "Geoscience Australia / FSDF",
+    },
+    MapAsset {
+        id: "nls-finland-dtm",
+        title: "NLS Finland elevation models",
+        kind: AssetKind::Dem,
+        license: "CC BY 4.0 (NLS)",
+        homepage: "https://www.maanmittauslaitos.fi/en/maps-and-spatial-data/expert-users/product-descriptions/elevation-model-2-m",
+        xyz: None,
+        credit: "National Land Survey of Finland",
+    },
+    MapAsset {
+        id: "dk-dhm",
+        title: "Denmark DHM (Dataforsyningen)",
+        kind: AssetKind::Dem,
+        license: "Danish open data (free)",
+        homepage: "https://dataforsyningen.dk/",
+        xyz: None,
+        credit: "SDF / Dataforsyningen",
+    },
 ];
 
 pub fn asset(id: &str) -> Option<&'static MapAsset> {
@@ -711,6 +783,15 @@ mod tests {
             .license
             .contains("do not require"));
         assert_eq!(asset("qgis").unwrap().kind, AssetKind::OfflineTool);
+        assert!(CATALOG.len() >= 70);
+        assert!(asset("uk-ea-lidar").is_some());
+        assert!(asset("linz").is_some());
+        assert!(asset("nrcan-hrdem").is_some());
+        assert!(asset("copernicus-dem").is_some());
+        assert!(asset("swissalti3d").is_some());
+        assert_eq!(asset("uk-ea-lidar").unwrap().kind, AssetKind::Dem);
+        assert!(!paid_host(asset("linz").unwrap().homepage));
+        assert!(!paid_host(asset("nrcan-hrdem").unwrap().homepage));
     }
 
     #[test]

@@ -41,11 +41,14 @@ USGS 3DEP, NOAA Digital Coast, OpenTopography, UK Environment Agency LiDAR, LINZ
 **Batch 4 — more CC0 PBR / 3D**  
 Poly Haven HDRIs, Kenney terrain, OpenGameArt height, NASA SVS stills, Cesium ion **rejected**.
 
-**Batch 5 — offline desktop/mobile** (this PR)  
+**Batch 5 — offline desktop/mobile**  
 QGIS + QuickMapServices (OSM/GIBS), Marble, `pmtiles` CLI, `tippecanoe`, ATAK with local MBTiles (no TAK server license).
 
-**Batch 6 — leftover country LiDAR portals**  
-UK Environment Agency LiDAR, LINZ, NRCan HRDEM, EUCOP DEM (USGS 3DEP / NOAA Digital Coast / OpenTopography already in batch 3).
+**Batch 6 — leftover country LiDAR portals** (this PR)  
+UK Environment Agency LiDAR, LINZ, NRCan HRDEM, Copernicus DEM, swissALTI3D, ELVIS, NLS Finland, Denmark DHM (USGS 3DEP / NOAA Digital Coast / OpenTopography already in batch 3).
+
+**Batch 7 — weather / radar (free)**  
+NOAA GFS / MRMS, RainViewer-class open radar, EUMETSAT open, NWS alerts. No paid weather API.
 
 ## Batch 2 — orbital, bathymetry, borders, factoids
 
@@ -126,6 +129,27 @@ scripts/globe-assets/fetch.sh --offline-tools
 ```
 
 Does not download QGIS installers, Marble packages, planet PMTiles, or ATAK APKs. Copilot is out of the review loop until 2026-12-01.
+
+## Batch 6 — country LiDAR / DEM portals (no grids in git)
+
+| id | What | Git |
+| --- | --- | --- |
+| uk-ea-lidar | UK Environment Agency LiDAR (OGL) | portal |
+| linz | LINZ Data Service elevation | portal |
+| nrcan-hrdem | NRCan High Resolution DEM | portal |
+| copernicus-dem | Copernicus DEM / EU-DEM | portal |
+| swissalti3d | swisstopo swissALTI3D | portal |
+| aus-elvis | Australia ELVIS elevation | portal |
+| nls-finland-dtm | NLS Finland 2 m DTM | portal |
+| dk-dhm | Denmark DHM (Dataforsyningen) | portal |
+
+USGS 3DEP, NOAA Digital Coast, and OpenTopography are already in batch 3.
+
+```bash
+scripts/globe-assets/fetch.sh --lidar-portals
+```
+
+Does not download LiDAR LAS/COG/GeoTIFF grids. Copilot is out of the review loop until 2026-12-01.
 
 Open a new PR per batch. Each PR only adds registry rows + a fetch script target. Never a multi-GB blob.
 
