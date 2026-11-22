@@ -1,0 +1,4 @@
+# Lee is the human merge gate for everything. Bots (WORLDSTATUS, RUCKUS) open
+# and update PRs; Copilot reviews; Lee or a bot acting on Lee's standing sprint
+# approval merges only after CI and the Copilot review gate are green.
+* @lquessenberry
