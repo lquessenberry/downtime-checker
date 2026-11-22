@@ -38,6 +38,12 @@ if ($path === '/api/mil' && $method === 'GET') {
 if ($path === '/api/mesh' && $method === 'GET') {
     json_out(200, mesh_snapshot());
 }
+if ($path === '/api/disease' && $method === 'GET') {
+    json_out(200, disease_snapshot());
+}
+if ($path === '/api/animal' && $method === 'GET') {
+    json_out(200, animal_snapshot());
+}
 
 $files = array(
     '/api/catalog' => 'api/catalog.json',
@@ -48,6 +54,11 @@ $files = array(
     '/api/radio' => 'api/radio.json',
     '/api/streams' => 'api/streams.json',
     '/api/feeds' => 'api/feeds.json',
+    '/api/amfm' => 'api/amfm.json',
+    '/api/designations' => 'api/designations.json',
+    '/api/violence' => 'api/violence.json',
+    '/api/zones' => 'api/zones.json',
+    '/api/claims' => 'api/claims.json',
 );
 if (isset($files[$path]) && $method === 'GET') {
     $file = $root . '/' . $files[$path];
@@ -1465,4 +1476,279 @@ function mesh_snapshot_locked()
     $stored['fetchedAt'] = time();
     file_put_contents($cacheFile, json_encode($stored), LOCK_EX);
     return $built;
+}
+
+function outbreak_coord($value, $limit)
+{
+    if (!is_numeric($value)) {
+        return null;
+    }
+    $n = (float) $value;
+    if ($n < -$limit || $n > $limit) {
+        return null;
+    }
+    return round($n, 5);
+}
+
+function outbreak_lock($name, $callback)
+{
+    global $dataDir;
+    $lock = fopen($dataDir . '/' . $name . '.lock', 'c');
+    if ($lock) {
+        flock($lock, LOCK_EX);
+    }
+    try {
+        return $callback();
+    } finally {
+        if ($lock) {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+}
+
+function outbreak_fetch($url, $timeout)
+{
+    if (!function_exists('curl_init')) {
+        return null;
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, array(
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_HTTPHEADER => array(
+            'Accept: application/json',
+            'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        ),
+    ));
+    $body = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    if ($body === false || $code < 200 || $code >= 400) {
+        return null;
+    }
+    $decoded = json_decode((string) $body, true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+function outbreak_cached($cacheFile, $ttl, $fetch, $emptyError, $source, $sourceUrl)
+{
+    $cached = null;
+    if (is_file($cacheFile)) {
+        $cached = json_decode((string) file_get_contents($cacheFile), true);
+    }
+    if (is_array($cached) && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $ttl && !empty($cached['points'])) {
+        unset($cached['fetchedAt']);
+        $cached['stale'] = false;
+        return $cached;
+    }
+    $points = $fetch();
+    if (!$points) {
+        if (is_array($cached) && !empty($cached['points'])) {
+            unset($cached['fetchedAt']);
+            $cached['stale'] = true;
+            return $cached;
+        }
+        return array(
+            'source' => $source,
+            'sourceUrl' => $sourceUrl,
+            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+            'stale' => false,
+            'error' => $emptyError,
+            'count' => 0,
+            'points' => array(),
+        );
+    }
+    $built = array(
+        'source' => $source,
+        'sourceUrl' => $sourceUrl,
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'stale' => false,
+        'count' => count($points),
+        'points' => $points,
+    );
+    $stored = $built;
+    $stored['fetchedAt'] = time();
+    file_put_contents($cacheFile, json_encode($stored), LOCK_EX);
+    return $built;
+}
+
+function disease_clip($text, $limit)
+{
+    $text = trim(preg_replace('/\s+/', ' ', (string) $text));
+    if ($text === '') {
+        return '';
+    }
+    if (function_exists('mb_strlen') && mb_strlen($text) > $limit) {
+        return mb_substr($text, 0, $limit - 1) . '…';
+    }
+    if (strlen($text) > $limit) {
+        return substr($text, 0, $limit - 1) . '…';
+    }
+    return $text;
+}
+
+function disease_points($raw)
+{
+    $markers = is_array($raw) ? ($raw['markers'] ?? null) : null;
+    if (!is_array($markers)) {
+        return array();
+    }
+    $points = array();
+    foreach ($markers as $marker) {
+        if (!is_array($marker)) {
+            continue;
+        }
+        $lat = outbreak_coord($marker['lat'] ?? null, 90);
+        $lon = outbreak_coord($marker['lon'] ?? null, 180);
+        if ($lat === null || $lon === null || ($lat == 0.0 && $lon == 0.0)) {
+            continue;
+        }
+        $html = (string) ($marker['html'] ?? '');
+        $date = '';
+        $summary = '';
+        if (preg_match('/<span class="d">\s*([^<]+)/i', $html, $match)) {
+            $date = trim(html_entity_decode($match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'), " \t\n\r\0\x0B-");
+        }
+        if (preg_match('/<a\b[^>]*>([^<]+)<\/a>/i', $html, $match)) {
+            $summary = trim(html_entity_decode($match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        }
+        $name = trim((string) ($marker['label'] ?? ''), " \t\n\r\0\x0B,");
+        if ($name === '') {
+            $name = 'Disease alert';
+        }
+        $id = trim((string) ($marker['place_id'] ?? ''));
+        if ($id === '') {
+            $id = $lat . ',' . $lon;
+        }
+        $alerts = 0;
+        if (isset($marker['alertids']) && is_array($marker['alertids'])) {
+            $alerts = count($marker['alertids']);
+        }
+        $points[] = array(
+            'id' => $id,
+            'name' => disease_clip($name, 80),
+            'place' => disease_clip($marker['place_name'] ?? '', 120),
+            'date' => disease_clip($date, 40),
+            'summary' => disease_clip($summary, 160),
+            'alerts' => $alerts,
+            'lat' => $lat,
+            'lon' => $lon,
+        );
+    }
+    return $points;
+}
+
+function disease_snapshot()
+{
+    global $dataDir;
+    return outbreak_lock('disease', function () use ($dataDir) {
+        return outbreak_cached(
+            $dataDir . '/disease-cache.json',
+            180,
+            function () {
+                $query = 'category%5B%5D=1&category%5B%5D=2&category%5B%5D=29&time_interval=1%20week&heatscore=1';
+                $raw = outbreak_fetch('https://www.healthmap.org/getAlerts.php?' . $query, 25);
+                return disease_points($raw);
+            },
+            'HealthMap did not answer',
+            'healthmap.org',
+            'https://www.healthmap.org/en/'
+        );
+    });
+}
+
+function outbreak_count($n, $one, $many)
+{
+    return $n . ' ' . ($n === 1 ? $one : $many);
+}
+
+function animal_flag($value)
+{
+    return $value === true || $value === 1 || $value === '1';
+}
+
+function animal_points($raw)
+{
+    $rows = is_array($raw) ? ($raw['data'] ?? null) : null;
+    if (!is_array($rows)) {
+        return array();
+    }
+    $points = array();
+    foreach ($rows as $row) {
+        if (!is_array($row) || !animal_flag($row['is_animal'] ?? null)) {
+            continue;
+        }
+        $lat = outbreak_coord($row['latitude'] ?? null, 90);
+        $lon = outbreak_coord($row['longitude'] ?? null, 180);
+        if ($lat === null || $lon === null || (abs($lat) < 0.001 && abs($lon) < 0.001)) {
+            continue;
+        }
+        $place = array();
+        foreach (array('city', 'state', 'region', 'country') as $key) {
+            $part = trim((string) ($row[$key] ?? ''));
+            if ($part !== '' && !in_array($part, $place, true)) {
+                $place[] = $part;
+            }
+        }
+        $start = is_numeric($row['outbreak_start'] ?? null) ? (int) $row['outbreak_start'] : 0;
+        $end = is_numeric($row['outbreak_last_reported'] ?? null) ? (int) $row['outbreak_last_reported'] : 0;
+        $when = '';
+        if ($start && $end && $start !== $end) {
+            $when = $start . '–' . $end;
+        } elseif ($end) {
+            $when = (string) $end;
+        } elseif ($start) {
+            $when = (string) $start;
+        }
+        $note = array();
+        if (is_numeric($row['animal_cases'] ?? null)) {
+            $note[] = outbreak_count((int) $row['animal_cases'], 'animal case', 'animal cases');
+        } elseif (is_numeric($row['cases'] ?? null)) {
+            $note[] = outbreak_count((int) $row['cases'], 'case', 'cases');
+        }
+        if (is_numeric($row['animal_deaths'] ?? null)) {
+            $note[] = outbreak_count((int) $row['animal_deaths'], 'animal death', 'animal deaths');
+        } elseif (is_numeric($row['deaths'] ?? null)) {
+            $note[] = outbreak_count((int) $row['deaths'], 'death', 'deaths');
+        }
+        $id = trim((string) ($row['hash_id'] ?? ''));
+        if ($id === '') {
+            $id = trim((string) ($row['id'] ?? ''));
+        }
+        $name = trim((string) ($row['disease'] ?? ''));
+        if ($name === '') {
+            $name = 'Animal disease';
+        }
+        $points[] = array(
+            'id' => $id,
+            'name' => disease_clip($name, 80),
+            'place' => disease_clip(implode(', ', $place), 140),
+            'when' => $when,
+            'note' => implode(' · ', $note),
+            'lat' => $lat,
+            'lon' => $lon,
+        );
+    }
+    return $points;
+}
+
+function animal_snapshot()
+{
+    global $dataDir;
+    return outbreak_lock('animal', function () use ($dataDir) {
+        return outbreak_cached(
+            $dataDir . '/animal-cache.json',
+            600,
+            function () {
+                $raw = outbreak_fetch('https://app.gideononline.com/api/public/diseases/events?return=simple', 40);
+                return animal_points($raw);
+            },
+            'GIDEON did not answer',
+            'gideononline.com',
+            'https://app.gideononline.com/updates/outbreaks'
+        );
+    });
 }

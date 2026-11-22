@@ -33,6 +33,13 @@ const state = {
     aircraft: { source: null, points: [] },
     ships: { source: null, points: [] },
     mesh: { source: null, points: [] },
+    disease: { source: null, points: [] },
+    animal: { source: null, points: [] },
+    amfm: { source: null, points: [] },
+    designations: { source: null, points: [] },
+    violence: { source: null, points: [] },
+    nuke: { source: null, points: [] },
+    streets3d: { source: null, points: [] },
   },
   layers: {
     outages: false,
@@ -43,7 +50,15 @@ const state = {
     ships: false,
     conflicts: false,
     mesh: false,
+    disease: false,
+    animal: false,
+    amfm: false,
+    designations: false,
+    violence: false,
+    nuke: false,
+    streets3d: false,
   },
+  nuke: { shots: [], yieldIdx: 0, airburst: true },
   openKind: "",
   openId: "",
   feedMode: "outages",
@@ -51,6 +66,7 @@ const state = {
   aircraftFeed: [],
   militaryPoints: null,
   shipFilter: "underway",
+  amfmReady: false,
   trafficPane: "air",
   scanWanted: false,
   scanLive: false,
@@ -282,7 +298,7 @@ function setPanel(which) {
 }
 
 async function startGlobe() {
-  let startupMap = "streets";
+  let startupMap = "osm";
   let imagery;
   try {
     imagery = await imageryProvider(startupMap);
@@ -334,7 +350,7 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships", "mesh"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "streets3d"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
@@ -349,13 +365,36 @@ async function startGlobe() {
   setInterval(() => {
     if (state.layers.mesh) loadMesh();
   }, 60000);
+  setInterval(() => {
+    if (state.layers.disease) loadDisease();
+  }, 180000);
+  setInterval(() => {
+    if (state.layers.animal) loadAnimal();
+  }, 600000);
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
   });
   ensureOrigin();
+  // A second handler, so Cesium can still select a pin. Empty ground is not a pin.
+  // Cesium then inserts a temporary imagery entity; that is not a layer pin either.
+  const popupClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  popupClicks.setInputAction((click) => {
+    if (state.layers.nuke && placeNukeAt(click.position)) return;
+    if (pickedMapPin(click.position)) return;
+    closeMapPopups();
+    if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  bindNukeHud();
+  viewer.camera.moveEnd.addEventListener(() => {
+    if (state.layers.streets3d) scheduleStreets3d();
+  });
   viewer.selectedEntityChanged.addEventListener((entity) => {
-    if (!entity) return;
+    if (!entity || !isMapPin(entity)) {
+      closeMapPopups();
+      if (entity && viewer.selectedEntity === entity) viewer.selectedEntity = undefined;
+      return;
+    }
     if (entity._outage) {
       openOutage(entity._outage, { fly: false });
       return;
@@ -1066,6 +1105,46 @@ function setLayer(layer, on) {
   }
   if (layer === "ships" && state.layers.ships) scheduleShips();
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
+  if (layer === "disease" && state.layers.disease) scheduleDisease();
+  if (layer === "animal" && state.layers.animal) scheduleAnimal();
+  if (layer === "designations") {
+    if (state.layers.designations) {
+      loadDesignations().catch((error) => statusLive(error.message || String(error)));
+    }
+  }
+  if (layer === "violence") {
+    if (state.layers.violence) {
+      loadViolence().catch((error) => statusLive(error.message || String(error)));
+    }
+  }
+  if (layer === "nuke") {
+    const hud = document.getElementById("nuke-hud");
+    if (hud) hud.hidden = !state.layers.nuke;
+    if (state.layers.nuke) {
+      applyTerrain("elevation");
+      syncNukeHud();
+    }
+  }
+  if (layer === "streets3d") {
+    if (state.layers.streets3d) {
+      applyTerrain("elevation");
+      loadStreets3d().catch((error) => statusLive(error.message || String(error)));
+    } else if (state.live.streets3d.source) {
+      state.live.streets3d.source.entities.removeAll();
+    }
+  }
+  if (layer === "amfm") {
+    if (state.layers.amfm) {
+      loadAmfm().catch((error) => statusLive(error.message || String(error)));
+    } else {
+      const selected = state.viewer && state.viewer.selectedEntity;
+      if (selected && selected._live && selected._live.layer === "amfm") {
+        state.viewer.selectedEntity = undefined;
+        const box = document.getElementById("selected");
+        if (box) box.hidden = true;
+      }
+    }
+  }
   if (layer === "outages" && state.layers.outages && !state.outageMeta) {
     loadOutages().catch((error) => statusLive(error.message || String(error)));
   }
@@ -1084,12 +1163,19 @@ const LAYER_LABEL = {
   conflicts: "CONFLICT TRACKER",
   hunger: "WORLD HUNGER",
   mesh: "MESH NODES",
+  disease: "DISEASE OUTBREAK",
+  animal: "ANIMAL DISEASE OUTBREAK",
+  amfm: "AM FM TOWERS",
+  designations: "DESIGNATIONS",
+  violence: "ATTRIBUTED VIOLENCE",
+  nuke: "NUCLEAR",
+  streets3d: "STREETS 3D",
 };
 
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "streets3d"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -1944,6 +2030,13 @@ const LIVE_STYLE = {
   aircraft: { color: "#7ec8ff", outline: "#082033", size: () => 5, kind: "ADS-B" },
   ships: { color: "#3dffd0", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "MARITIME" },
   mesh: { color: "#8fe04a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "MESH NODES" },
+  disease: { color: "#ff4d6a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DISEASE OUTBREAK" },
+  animal: { color: "#e2b340", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ANIMAL DISEASE OUTBREAK" },
+  amfm: { color: "#7aa2ff", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "AM FM TOWERS" },
+  designations: { color: "#f0c14a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DESIGNATION" },
+  violence: { color: "#c44b4b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ATTRIBUTED VIOLENCE" },
+  nuke: { color: "#7cff6b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "NUCLEAR" },
+  streets3d: { color: "#c4a574", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "STREETS 3D" },
 };
 
 function aircraftOnGround(point) {
@@ -2345,6 +2438,62 @@ async function loadMesh() {
   }
 }
 
+let diseaseTimer = 0;
+let diseaseToken = 0;
+
+function scheduleDisease() {
+  clearTimeout(diseaseTimer);
+  diseaseTimer = setTimeout(loadDisease, 400);
+}
+
+async function loadDisease() {
+  if (!state.layers.disease) return;
+  const token = ++diseaseToken;
+  try {
+    const response = await fetch("/api/disease");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Disease Outbreak failed");
+    if (token !== diseaseToken || !state.layers.disease) return;
+    const points = Array.isArray(body.points) ? body.points : [];
+    state.live.disease.points = points;
+    placeLiveLayer("disease", points);
+    setCount("disease", points.length);
+    if (!state.running) statusLive();
+  } catch (error) {
+    if (token !== diseaseToken) return;
+    setCount("disease", state.live.disease.points.length || "—");
+    if (!state.running) statusLive(error.message || String(error));
+  }
+}
+
+let animalTimer = 0;
+let animalToken = 0;
+
+function scheduleAnimal() {
+  clearTimeout(animalTimer);
+  animalTimer = setTimeout(loadAnimal, 400);
+}
+
+async function loadAnimal() {
+  if (!state.layers.animal) return;
+  const token = ++animalToken;
+  try {
+    const response = await fetch("/api/animal");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Animal Disease Outbreak failed");
+    if (token !== animalToken || !state.layers.animal) return;
+    const points = Array.isArray(body.points) ? body.points : [];
+    state.live.animal.points = points;
+    placeLiveLayer("animal", points);
+    setCount("animal", points.length);
+    if (!state.running) statusLive();
+  } catch (error) {
+    if (token !== animalToken) return;
+    setCount("animal", state.live.animal.points.length || "—");
+    if (!state.running) statusLive(error.message || String(error));
+  }
+}
+
 function shipVisibleCount(points) {
   let count = 0;
   for (const point of points || []) {
@@ -2441,6 +2590,13 @@ function cullAircraftHorizon() {
     state.live.aircraft.source,
     state.live.ships.source,
     state.live.mesh.source,
+    state.live.disease.source,
+    state.live.animal.source,
+    state.live.amfm.source,
+    state.live.designations.source,
+    state.live.violence.source,
+    state.live.nuke.source,
+    state.live.streets3d.source,
     state.outageSource,
     state.hungerSource,
   ];
@@ -2472,6 +2628,137 @@ function cullAircraftHorizon() {
   }
 }
 
+function amfmStations(point) {
+  return Array.isArray(point && point.stations) ? point.stations : [];
+}
+
+function amfmVisibleCount(points) {
+  let count = 0;
+  for (const point of points || []) count += amfmStations(point).length;
+  return count;
+}
+
+function publishAmfm() {
+  const points = state.live.amfm.points || [];
+  setCount("amfm", amfmVisibleCount(points));
+  placeLiveLayer("amfm", points);
+}
+
+let amfmLoading = null;
+
+async function loadAmfm() {
+  if (state.amfmReady) {
+    publishAmfm();
+    return;
+  }
+  if (amfmLoading) return amfmLoading;
+  amfmLoading = (async () => {
+    const response = await fetch("/api/amfm");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "AM FM towers failed");
+    const places = Array.isArray(body.places) ? body.places : [];
+    state.live.amfm.points = places
+      .filter((place) => place.lat != null && place.lon != null)
+      .map((place) => ({
+        name: place.city || place.name || "",
+        country: place.country || "",
+        lat: Number(place.lat),
+        lon: Number(place.lon),
+        stations: Array.isArray(place.stations) ? place.stations : [],
+      }));
+    state.amfmReady = true;
+    publishAmfm();
+    statusLive();
+  })();
+  try {
+    await amfmLoading;
+  } finally {
+    amfmLoading = null;
+  }
+}
+
+function designationColor(point) {
+  if (point.designator_kind === "ngo") return "#c084fc";
+  if (point.person) return "#e8a54b";
+  return "#f0c14a";
+}
+
+function designationSize(point) {
+  const precision = String(point.precision || "");
+  if (precision === "street") return MARKER_SIZE;
+  if (precision === "city" || precision === "county") return 14;
+  if (precision === "state") return 12;
+  return 10;
+}
+
+function mapPackedPoints(body, extra) {
+  return (Array.isArray(body.points) ? body.points : [])
+    .filter((point) => point.lat != null && point.lon != null)
+    .map((point) => extra(point));
+}
+
+let designationsLoading = null;
+
+async function loadDesignations() {
+  if (state.live.designations.points.length) {
+    setCount("designations", state.live.designations.points.length);
+    placeLiveLayer("designations", state.live.designations.points);
+    return;
+  }
+  if (designationsLoading) return designationsLoading;
+  designationsLoading = (async () => {
+    const response = await fetch("/api/designations");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Designations failed");
+    state.live.designations.points = mapPackedPoints(body, (point) => ({
+      ...point,
+      color: designationColor(point),
+      size: designationSize(point),
+      kind: point.person ? "LISTED PERSON" : "DESIGNATION",
+      url: point.url,
+    }));
+    setCount("designations", state.live.designations.points.length);
+    placeLiveLayer("designations", state.live.designations.points);
+    statusLive();
+  })();
+  try {
+    await designationsLoading;
+  } finally {
+    designationsLoading = null;
+  }
+}
+
+let violenceLoading = null;
+
+async function loadViolence() {
+  if (state.live.violence.points.length) {
+    setCount("violence", state.live.violence.points.length);
+    placeLiveLayer("violence", state.live.violence.points);
+    return;
+  }
+  if (violenceLoading) return violenceLoading;
+  violenceLoading = (async () => {
+    const response = await fetch("/api/violence");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Violence overlay failed");
+    state.live.violence.points = mapPackedPoints(body, (point) => ({
+      ...point,
+      color: "#c44b4b",
+      size: 12,
+      kind: "UCDP EVENT",
+      url: point.url || "https://ucdp.uu.se/",
+    }));
+    setCount("violence", state.live.violence.points.length);
+    placeLiveLayer("violence", state.live.violence.points);
+    statusLive();
+  })();
+  try {
+    await violenceLoading;
+  } finally {
+    violenceLoading = null;
+  }
+}
+
 function placeLiveLayer(key, points) {
   const layer = state.live[key];
   if (!layer?.source) return;
@@ -2483,6 +2770,7 @@ function placeLiveLayer(key, points) {
     if (point.lat == null || point.lon == null) continue;
     if (key === "aircraft" && !aircraftMatches(point)) continue;
     if (key === "ships" && !shipMatches(point)) continue;
+    if (key === "amfm" && !amfmStations(point).length) continue;
     const height = key === "aircraft" ? Number(point.altM) || 0 : 0;
     const entityOptions = {
       name: point.name,
@@ -2506,10 +2794,10 @@ function placeLiveLayer(key, points) {
       kind = "ADS-B";
     } else {
       const style = key === "aircraft" ? aircraftStyle(point) : {
-        color: base.color,
+        color: point.color || base.color,
         outline: base.outline,
-        size: MARKER_SIZE,
-        kind: base.kind,
+        size: point.size || MARKER_SIZE,
+        kind: point.kind || base.kind,
       };
       kind = style.kind;
       entityOptions.point = key === "aircraft"
@@ -2520,7 +2808,7 @@ function placeLiveLayer(key, points) {
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         }
-        : markerPoint(style.color);
+        : markerPoint(style.color, style.size);
     }
     const entity = layer.source.entities.add(entityOptions);
     entity._live = { ...point, kind, layer: key };
@@ -2560,6 +2848,42 @@ function closeAircraft() {
   if (card) card.hidden = true;
 }
 
+function pickedMapPin(position) {
+  const viewer = state.viewer;
+  if (!viewer) return false;
+  const picked = viewer.scene.pick(position);
+  if (!Cesium.defined(picked)) return false;
+  const id = picked.id ?? (picked.primitive && picked.primitive.id);
+  return id instanceof Cesium.Entity;
+}
+
+function isMapPin(entity) {
+  const viewer = state.viewer;
+  if (!entity || !viewer) return false;
+  if (entity._outage || entity._hunger || entity._pin || entity._stream || entity._live || entity._resultIndex != null) return true;
+  const sources = viewer.dataSources;
+  for (let i = 0; i < sources.length; i += 1) {
+    if (sources.get(i).entities.contains(entity)) return true;
+  }
+  return viewer.entities.contains(entity);
+}
+
+// Pin cards use [data-map-popup]. A later layer closes on empty ground the same way
+// when its card has that attribute, or when it reuses one of the close functions below.
+function closeMapPopups() {
+  const open = Array.from(document.querySelectorAll("[data-map-popup]")).some((popup) => !popup.hidden);
+  if (!open && !state.selected && !state.openKind && !state.streamOpenId) return;
+  state.streamOpenId = "";
+  closeAircraft();
+  closeConflict();
+  hideOutageCard();
+  closePin();
+  state.selected = null;
+  const box = document.getElementById("selected");
+  if (box) box.hidden = true;
+  for (const popup of document.querySelectorAll("[data-map-popup]")) popup.hidden = true;
+}
+
 function showLive(item) {
   if (item.layer === "aircraft") {
     openAircraft(item);
@@ -2574,6 +2898,40 @@ function showLive(item) {
     const bits = [item.short, item.hw, item.role].filter(Boolean).map((part) => esc(part));
     extra = bits.length ? `<br>${bits.join(" · ")}` : "";
     extra += `<br><a href="https://meshmap.net/#${encodeURIComponent(item.id || "")}" target="_blank" rel="noreferrer">meshmap.net</a>`;
+  }
+  else if (item.layer === "disease") {
+    const bits = [item.place, item.date, item.summary].filter(Boolean).map((part) => esc(part));
+    extra = bits.length ? `<br>${bits.join("<br>")}` : "";
+    extra += `<br><a href="https://www.healthmap.org/en/" target="_blank" rel="noreferrer">healthmap.org</a>`;
+  }
+  else if (item.layer === "animal") {
+    const bits = [item.place, item.when, item.note].filter(Boolean).map((part) => esc(part));
+    extra = bits.length ? `<br>${bits.join("<br>")}` : "";
+    extra += `<br><a href="https://app.gideononline.com/updates/outbreaks" target="_blank" rel="noreferrer">gideononline.com</a>`;
+  }
+  else if (item.layer === "amfm") {
+    const names = amfmStations(item).map((station) => esc(station.name));
+    const shown = names.slice(0, 12);
+    extra = item.country ? `<br>${esc(item.country)}` : "";
+    if (shown.length) extra += `<br>${shown.join("<br>")}`;
+    if (names.length > shown.length) extra += `<br>and ${names.length - shown.length} more`;
+  }
+  else if (item.layer === "designations") {
+    const bits = [
+      item.designator,
+      item.legal_status,
+      item.claim_type,
+      item.precision,
+      item.address,
+    ].filter(Boolean).map((part) => esc(part));
+    extra = bits.length ? `<br>${bits.join("<br>")}` : "";
+    if (item.url) extra += `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">source list</a>`;
+  }
+  else if (item.layer === "violence") {
+    const bits = [item.year, item.deaths != null ? `${item.deaths} deaths` : "", item.address]
+      .filter(Boolean).map((part) => esc(String(part)));
+    extra = bits.length ? `<br>${bits.join(" · ")}` : "";
+    extra += `<br><a href="https://ucdp.uu.se/" target="_blank" rel="noreferrer">ucdp.uu.se</a>`;
   }
   else if (item.sog != null) extra = `<br>${esc(shipTypeLabel(item))} · ${esc(item.sog)} kn`;
   box.innerHTML = `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
@@ -2699,9 +3057,252 @@ function statusLive(error) {
     air,
     ships,
     war,
+    state.live.disease.points.length
+      ? `DISEASE OUTBREAK ${state.live.disease.points.length}`
+      : "DISEASE OUTBREAK",
+    state.live.animal.points.length
+      ? `ANIMAL DISEASE OUTBREAK ${state.live.animal.points.length}`
+      : "ANIMAL DISEASE OUTBREAK",
+    state.amfmReady
+      ? `AM FM TOWERS ${amfmVisibleCount(state.live.amfm.points)}`
+      : "AM FM TOWERS",
+    state.live.designations.points.length
+      ? `DESIGNATIONS ${state.live.designations.points.length}`
+      : "DESIGNATIONS",
+    state.live.violence.points.length
+      ? `ATTRIBUTED VIOLENCE ${state.live.violence.points.length}`
+      : "ATTRIBUTED VIOLENCE",
+    state.layers.nuke ? `NUCLEAR ${state.nuke.shots.length}` : "NUCLEAR",
+    state.layers.streets3d ? `STREETS 3D ${state.live.streets3d.points.length}` : "STREETS 3D",
   ];
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
+}
+
+function currentYieldKt() {
+  const presets = (window.GsaBlast && window.GsaBlast.KT_PRESETS) || [15, 100, 300, 1000, 5000];
+  return presets[state.nuke.yieldIdx] || 15;
+}
+
+function bindNukeHud() {
+  const yieldEl = document.getElementById("nuke-yield");
+  const burst = document.getElementById("nuke-burst");
+  if (yieldEl) {
+    yieldEl.addEventListener("input", () => {
+      state.nuke.yieldIdx = Number(yieldEl.value) || 0;
+      syncNukeHud();
+    });
+  }
+  if (burst) {
+    burst.addEventListener("click", () => {
+      state.nuke.airburst = !state.nuke.airburst;
+      burst.textContent = state.nuke.airburst ? "AIR" : "GROUND";
+      burst.setAttribute("aria-pressed", state.nuke.airburst ? "true" : "false");
+      syncNukeHud();
+    });
+  }
+}
+
+function syncNukeHud() {
+  const kt = currentYieldKt();
+  const label = document.getElementById("nuke-yield-label");
+  if (label) label.textContent = `${kt} kt`;
+  const level = (window.GsaBlast && window.GsaBlast.defcon(state.nuke.shots)) || 5;
+  const lamp = document.getElementById("defcon-lamp");
+  const strong = document.getElementById("defcon-level");
+  if (lamp) lamp.dataset.defcon = String(level);
+  if (strong) strong.textContent = String(level);
+  setCount("nuke", state.nuke.shots.length);
+  const last = state.nuke.shots[state.nuke.shots.length - 1];
+  const card = document.getElementById("nuke-card");
+  if (card) {
+    if (last && window.GsaBlast) {
+      card.hidden = false;
+      card.textContent = window.GsaBlast.card(last);
+    } else {
+      card.hidden = true;
+    }
+  }
+}
+
+function placeNukeAt(position) {
+  const viewer = state.viewer;
+  if (!viewer || !window.GsaBlast) return false;
+  const cartesian = viewer.camera.pickEllipsoid(position, viewer.scene.globe.ellipsoid);
+  if (!cartesian) return false;
+  const carto = Cesium.Cartographic.fromCartesian(cartesian);
+  const shot = {
+    lat: Cesium.Math.toDegrees(carto.latitude),
+    lon: Cesium.Math.toDegrees(carto.longitude),
+    yieldKt: currentYieldKt(),
+    airburst: state.nuke.airburst,
+  };
+  state.nuke.shots.push(shot);
+  drawNukeShot(shot);
+  syncNukeHud();
+  pingBlastApi(shot);
+  statusLive();
+  return true;
+}
+
+// Rings are computed in the browser (blast.js). The Rust server's /api/blast is
+// only a parity check, so it is probed once and never sent the tap location.
+// PHP hosting has no such route: one probe 404, then silence.
+let blastApiState = "unknown"; // unknown | probing | yes | no
+
+function pingBlastApi(shot) {
+  const query = `kt=${encodeURIComponent(shot.yieldKt)}&air=${shot.airburst ? 1 : 0}`;
+  if (blastApiState === "no" || blastApiState === "probing") return;
+  if (blastApiState === "yes") {
+    fetch(`/api/blast?${query}`).catch(() => {});
+    return;
+  }
+  blastApiState = "probing";
+  fetch(`/api/blast?${query}`)
+    .then((response) => {
+      const type = response.headers.get("content-type") || "";
+      blastApiState = response.ok && type.includes("json") ? "yes" : "no";
+    })
+    .catch(() => {
+      blastApiState = "no";
+    });
+}
+
+function drawNukeShot(shot) {
+  const source = state.live.nuke.source;
+  if (!source) return;
+  const rings = window.GsaBlast.rings(shot.yieldKt, shot.airburst);
+  const center = Cesium.Cartesian3.fromDegrees(shot.lon, shot.lat);
+  const bands = [
+    { m: rings.fireballM, color: "#ffdc50", name: "FIREBALL" },
+    { m: rings.heavyM, color: "#dc281e", name: "HEAVY" },
+    { m: rings.mediumM, color: "#e67828", name: "MEDIUM" },
+    { m: rings.lightM, color: "#50b45a", name: "LIGHT" },
+    { m: rings.thermalM, color: "#ffa03c", name: "THERMAL" },
+  ];
+  if (rings.falloutM) bands.push({ m: rings.falloutM, color: "#c8f54c", name: "FALLOUT" });
+  source.entities.add({
+    position: center,
+    point: { pixelSize: 10, color: Cesium.Color.fromCssColorString("#7cff6b"), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 },
+    label: {
+      text: `${shot.yieldKt} kt`,
+      font: "12px IBM Plex Mono, monospace",
+      fillColor: Cesium.Color.fromCssColorString("#9aff8a"),
+      pixelOffset: new Cesium.Cartesian2(0, -16),
+    },
+  });
+  for (const band of bands) {
+    source.entities.add({
+      position: center,
+      ellipse: {
+        semiMinorAxis: band.m,
+        semiMajorAxis: band.m,
+        material: Cesium.Color.fromCssColorString(band.color).withAlpha(0.12),
+        outline: true,
+        outlineColor: Cesium.Color.fromCssColorString(band.color).withAlpha(0.85),
+        height: 0,
+      },
+      name: band.name,
+    });
+  }
+  source.show = true;
+}
+
+// OSM Buildings: one z15 tile around the camera. Debounced, cached per tile,
+// and skipped when the camera stays on the tile already drawn, so panning does
+// not hammer the free anonymous endpoint.
+const STREETS3D_DEBOUNCE_MS = 600;
+const STREETS3D_CACHE_MAX = 32;
+const streets3dCache = new Map(); // "z/x/y" -> features (LRU by insertion order)
+const streets3dInflight = new Map(); // "z/x/y" -> Promise<features>
+let streets3dTimer = null;
+let streets3dShownKey = "";
+
+function scheduleStreets3d() {
+  if (streets3dTimer) clearTimeout(streets3dTimer);
+  streets3dTimer = setTimeout(() => {
+    streets3dTimer = null;
+    loadStreets3d().catch(() => {});
+  }, STREETS3D_DEBOUNCE_MS);
+}
+
+function streets3dTileKey(lon, lat, z) {
+  const n = 2 ** z;
+  const clampedLat = Math.max(-85.0511, Math.min(85.0511, lat));
+  const rad = (clampedLat * Math.PI) / 180;
+  const x = Math.min(n - 1, Math.max(0, Math.floor(((lon + 180) / 360) * n)));
+  const y = Math.min(n - 1, Math.max(0, Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n)));
+  return `${z}/${x}/${y}`;
+}
+
+async function streets3dFeatures(key) {
+  if (streets3dCache.has(key)) {
+    const hit = streets3dCache.get(key);
+    streets3dCache.delete(key);
+    streets3dCache.set(key, hit);
+    return hit;
+  }
+  if (streets3dInflight.has(key)) return streets3dInflight.get(key);
+  const request = (async () => {
+    const response = await fetch(`https://a.data.osmbuildings.org/0.2/anonymous/tile/${key}.json`);
+    if (!response.ok) throw new Error("OSM buildings unavailable");
+    const body = await response.json();
+    const features = Array.isArray(body.features) ? body.features : [];
+    streets3dCache.set(key, features);
+    while (streets3dCache.size > STREETS3D_CACHE_MAX) {
+      streets3dCache.delete(streets3dCache.keys().next().value);
+    }
+    return features;
+  })();
+  streets3dInflight.set(key, request);
+  try {
+    return await request;
+  } finally {
+    streets3dInflight.delete(key);
+  }
+}
+
+async function loadStreets3d() {
+  const viewer = state.viewer;
+  const source = state.live.streets3d.source;
+  if (!viewer || !source) return;
+  const height = viewer.camera.positionCartographic.height;
+  if (height > 4000) {
+    setCount("streets3d", source.entities.values.length);
+    return;
+  }
+  const center = viewer.camera.positionCartographic;
+  const key = streets3dTileKey(Cesium.Math.toDegrees(center.longitude), Cesium.Math.toDegrees(center.latitude), 15);
+  if (key === streets3dShownKey && source.entities.values.length) return;
+  const features = await streets3dFeatures(key);
+  if (!state.layers.streets3d) return;
+  source.entities.removeAll();
+  let count = 0;
+  for (const feature of features.slice(0, 400)) {
+    const geom = feature.geometry;
+    if (!geom || geom.type !== "Polygon" || !geom.coordinates) continue;
+    const ring = geom.coordinates[0];
+    if (!ring || ring.length < 3) continue;
+    const heights = Number(feature.properties && (feature.properties.height || feature.properties.levels * 3)) || 12;
+    const hierarchy = ring.map((pair) => Cesium.Cartesian3.fromDegrees(pair[0], pair[1]));
+    source.entities.add({
+      polygon: {
+        hierarchy,
+        // Sit on the terrain instead of the ellipsoid so buildings are not buried
+        // when elevation terrain is on. Outlines are unsupported on terrain.
+        height: 0,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        extrudedHeight: heights,
+        extrudedHeightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+        material: Cesium.Color.fromCssColorString("#c4a574").withAlpha(0.85),
+      },
+    });
+    count += 1;
+  }
+  streets3dShownKey = key;
+  state.live.streets3d.points = new Array(count);
+  source.show = true;
+  setCount("streets3d", count);
 }
 
 boot().catch((error) => setStatus(error.message || String(error)));

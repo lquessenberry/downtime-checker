@@ -1,0 +1,4 @@
+id,year,type_of_violence,conflict_name,dyad_name,side_a,side_b,where_coordinates,adm_1,adm_2,latitude,longitude,country,date_start,best
+1,2022,1,Yemen (Ansarallah),Govt of Yemen - Ansarallah,Government of Yemen,Ansarallah,Sanaa,Amanat al Asimah,Sanaa,15.35,44.21,Yemen,2022-01-01,25
+2,2018,1,Old war,skip,A,B,Somewhere,X,Y,0,0,Nowhere,2018-01-01,9
+3,2023,2,Ukraine,Govt of Ukraine - Russia,Government of Ukraine,Government of Russia,Bakhmut,Donetsk,Bakhmut,48.59,38.00,Ukraine,2023-05-01,80

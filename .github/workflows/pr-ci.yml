@@ -1,0 +1,166 @@
+name: PR CI
+
+# Runs on every pull request into the default branch and on pushes to bot
+# branches. Read-only: no deploys, no FTP, no secrets. Each job skips itself
+# when the code it checks is not on the branch, so it is safe on every branch.
+on:
+  pull_request:
+  # Pushes to branches that already have a PR are covered by pull_request;
+  # rust/** has no PR yet, so it keeps a push trigger.
+  push:
+    branches:
+      - "rust/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Compressed (gzip -9) size budget for each release .wasm, in KB.
+  # The design plan targets <= 1 MB for the web globe; Cesium alone ships ~1.8 MB.
+  WASM_BUDGET_KB: "1024"
+
+jobs:
+  web:
+    name: Web, PHP and Python checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: JavaScript syntax
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in globalstatus/*.js visualizer/*.mjs visualizer/lib/*.mjs; do
+            echo "node --check $f"; node --check "$f"
+          done
+      - name: PHP lint
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in globalstatus/*.php scripts/*.php; do php -l "$f"; done
+      - name: Python unit tests
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ran=0
+          for t in scripts/*/tests/test_*.py scripts/*/test_*.py; do
+            echo "== $t"; python3 -m unittest "$t"; ran=1
+          done
+          [ "$ran" = 1 ] || echo "no python tests on this branch"
+      - name: Guardrails (no secrets-looking files, no private sim, no GADM in web)
+        run: |
+          set -euo pipefail
+          bad=0
+          if git ls-files | grep -E '(^|/)(\.env|.*\.pem|.*\.key|id_rsa|id_ed25519)$'; then
+            echo "::error::credential-like file tracked"; bad=1
+          fi
+          if git ls-files | grep -iE '(nuke-?sim|nukesim|calculator-will)'; then
+            echo "::error::private simulator or Will's calculator path tracked; keep out until Will approves"; bad=1
+          fi
+          if git ls-files globalstatus visualizer/public | grep -i 'gadm'; then
+            echo "::error::GADM is non-commercial; keep it out of the default web build"; bad=1
+          fi
+          if git ls-files | grep -iE 'splc.*\.jsonl$'; then
+            echo "::error::SPLC exports must not be committed"; bad=1
+          fi
+          exit $bad
+
+  rust:
+    name: Rust fmt, clippy, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect workspace
+        id: ws
+        run: |
+          if [ -f rust/Cargo.toml ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "no rust/ workspace on this branch"; fi
+      - if: steps.ws.outputs.present == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - if: steps.ws.outputs.present == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: System libs for the wgpu/egui globe
+        if: steps.ws.outputs.present == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libasound2-dev libudev-dev pkg-config >/dev/null
+      - name: cargo fmt --check
+        if: steps.ws.outputs.present == 'true'
+        working-directory: rust
+        # Advisory until the workspace is formatted once; flip to blocking in docs/AUTOMATION.md.
+        continue-on-error: true
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        if: steps.ws.outputs.present == 'true'
+        working-directory: rust
+        continue-on-error: true
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: cargo test
+        if: steps.ws.outputs.present == 'true'
+        working-directory: rust
+        run: cargo test --workspace --locked
+
+  wasm:
+    name: WebAssembly build and size budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect wasm crates
+        id: ws
+        run: |
+          crates=""
+          for c in rust/crates/*-wasm rust/crates/globe-web rust/crates/globe-native; do
+            [ -f "$c/Cargo.toml" ] || continue
+            name=$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$c/Cargo.toml" | head -1)
+            if [ "${c##*/}" = "globe-native" ] && ! grep -q 'wasm32' "$c/Cargo.toml"; then continue; fi
+            crates="$crates $name"
+          done
+          echo "crates=${crates# }" >> "$GITHUB_OUTPUT"
+          [ -n "$crates" ] || echo "no wasm crates on this branch"
+      - if: steps.ws.outputs.crates != ''
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - if: steps.ws.outputs.crates != ''
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Build release wasm
+        if: steps.ws.outputs.crates != ''
+        working-directory: rust
+        run: |
+          set -euo pipefail
+          for c in ${{ steps.ws.outputs.crates }}; do
+            cargo build -p "$c" --release --target wasm32-unknown-unknown --locked
+          done
+      - name: Size budget
+        if: steps.ws.outputs.crates != ''
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          fail=0
+          echo "| wasm | raw KB | gzip -9 KB | budget KB |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- | --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          for w in rust/target/wasm32-unknown-unknown/release/*.wasm; do
+            raw=$(( $(stat -c %s "$w") / 1024 ))
+            gz=$(( $(gzip -9 -c "$w" | wc -c) / 1024 ))
+            echo "| ${w##*/} | $raw | $gz | $WASM_BUDGET_KB |" >> "$GITHUB_STEP_SUMMARY"
+            echo "${w##*/}: raw ${raw} KB, gzip ${gz} KB (budget ${WASM_BUDGET_KB} KB)"
+            if [ "$gz" -gt "$WASM_BUDGET_KB" ]; then
+              echo "::error file=${w}::${w##*/} is ${gz} KB gzipped, over the ${WASM_BUDGET_KB} KB budget"; fail=1
+            fi
+          done
+          exit $fail

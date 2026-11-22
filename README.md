@@ -161,7 +161,9 @@ node scripts/refresh_static_data.mjs streams
 node scripts/refresh_static_data.mjs radio
 ```
 
-Staging URL: https://downtime-globe.fly.dev — `/` is the Cesium globe, `/index.html` is the canvas grid, `/healthz` is the health check.
+PHP globe staging (Will's `globalstatus/` tree, disease layers, etc.): https://globalstatus-stage.fly.dev — `fly deploy -c fly.gsa.toml --ha=false`
+
+Node globe staging: https://downtime-globe.fly.dev — `/` is the Cesium globe, `/index.html` is the canvas grid, `/healthz` is the health check.
 
 Production URL: https://globalstatus.app — static files plus `router.php` for `/api`. The FTP login must show remote folder `/` and must not show a church site.
 
