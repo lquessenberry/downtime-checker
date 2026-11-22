@@ -43,10 +43,13 @@ Exceed Cesium (the reason we left it):
 - `src/globe_math.rs`: lat/lon → unit sphere, UV sphere mesh, orbit camera. Headless tests.
 - `src/globe.wgsl`: Earth albedo + lighting + optional 15° graticule.
 - `src/render.rs`: wgpu pipeline, Blue Marble texture (`assets/earth.jpg`).
+- `src/engine/`: Cesium-shaped rebuild (WGS84 ellipsoid, cartographic, imagery, quadtree, terrain, primitives, scene). Live draw path is still `render.rs`.
 - `src/pins.rs`: catalogs through `downtime-native::load_catalog_dir`, capitals via `downtime_core::capital`.
 - `src/lib.rs`: chrome, drag/zoom, hover/click pins; `android_main` for the APK.
 - `src/main.rs`: `--root`, `--summary`, `--version`.
 - Catalogs and Earth texture are compiled in so the app runs with no data folder.
+
+Cesium → Rust map and the RE/MCP automation: [CESIUM_MAP.md](CESIUM_MAP.md), CLI `python3 scripts/globe-re/globe_re.py`. Apache-2.0 Cesium `Source/` only; proprietary Earth apps are refused.
 
 Releases: [RELEASING.md](RELEASING.md).
 

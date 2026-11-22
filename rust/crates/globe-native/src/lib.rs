@@ -12,6 +12,7 @@
 //! until its authors say it is ready, and would only ever be compiled with the
 //! non-default `nuke-sim` feature, which release builds never enable.
 
+mod engine;
 mod globe_math;
 pub mod pins;
 mod render;

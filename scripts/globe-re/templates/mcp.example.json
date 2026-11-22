@@ -1,0 +1,36 @@
+{
+  "mcpServers": {
+    "ghidra": {
+      "url": "http://127.0.0.1:8080/mcp",
+      "comment": "GhidraMCP (LaurieWired). Default zero-cost. Ghidra 12.x."
+    },
+    "ida-mrexodia": {
+      "url": "http://127.0.0.1:13337/mcp",
+      "comment": "IDA Pro MCP. Needs IDA 8.3+. IDA Free unsupported."
+    },
+    "ida-hexrays": {
+      "url": "http://127.0.0.1:11337/mcp",
+      "comment": "Official Hex-Rays MCP. IDA 9.4+."
+    },
+    "binaryninja": {
+      "url": "http://127.0.0.1:9009/mcp",
+      "comment": "Binary Ninja MCP plugin. Free edition has no API."
+    },
+    "radare2": {
+      "url": "http://127.0.0.1:9393/mcp",
+      "comment": "r2ai / radare2 MCP."
+    },
+    "frida": {
+      "url": "http://127.0.0.1:27042/mcp",
+      "comment": "Runtime hooks. Only on binaries we own."
+    },
+    "jadx": {
+      "url": "http://127.0.0.1:8650/mcp",
+      "comment": "Android Java/Kotlin (WorldWind APK / our APK)."
+    },
+    "rea": {
+      "url": "http://127.0.0.1:8750/mcp",
+      "comment": "morluto/rea — Ghidra, Hopper, IDA, .NET, APK, Electron, web."
+    }
+  }
+}
