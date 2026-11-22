@@ -181,6 +181,7 @@ function applyBasemap() {
   }
   const labels = document.querySelector("[data-labels]");
   if (labels) labels.classList.toggle("on", state.labels);
+  requestRender();
 }
 
 function makeTerrariumTerrain() {
@@ -248,6 +249,7 @@ function setTerrain(on) {
   state.viewer.terrainProvider = state.terrain ? state.terrainProvider : state.ellipsoidTerrain;
   const button = document.querySelector("[data-terrain]");
   if (button) button.classList.toggle("on", state.terrain);
+  requestRender();
 }
 
 async function startGlobe() {
@@ -263,11 +265,14 @@ async function startGlobe() {
     navigationHelpButton: false,
     fullscreenButton: false,
     infoBox: false,
-    selectionIndicator: true,
+    selectionIndicator: false,
+    requestRenderMode: true,
+    maximumRenderTimeChange: Infinity,
     baseLayer: new Cesium.ImageryLayer(imageryProvider("sat")),
     terrainProvider: state.terrainProvider,
     skyBox: false,
   });
+  PinLayer.installRequestRenderMode(viewer);
   const controller = viewer.scene.screenSpaceCameraController;
   controller.minimumZoomDistance = 40;
   controller.maximumZoomDistance = 40000000;
@@ -280,49 +285,117 @@ async function startGlobe() {
   state.viewer = viewer;
   applyBasemap();
   setTerrain(true);
-  state.sdrSource = new Cesium.CustomDataSource("websdr");
-  state.radioSource = new Cesium.CustomDataSource("uniden-radio");
-  state.streamSource = new Cesium.CustomDataSource("hpdb-streams");
-  state.gpsSource = new Cesium.CustomDataSource("gpsjam");
-  state.conflictSource = new Cesium.CustomDataSource("conflicts");
-  state.scanSource = new Cesium.CustomDataSource("scan");
-  viewer.dataSources.add(state.sdrSource);
-  viewer.dataSources.add(state.radioSource);
-  viewer.dataSources.add(state.streamSource);
-  viewer.dataSources.add(state.gpsSource);
-  viewer.dataSources.add(state.conflictSource);
-  viewer.dataSources.add(state.scanSource);
+  state.sdrSource = PinLayer.create(viewer, "websdr");
+  state.radioSource = PinLayer.create(viewer, "uniden-radio");
+  state.streamSource = PinLayer.create(viewer, "hpdb-streams");
+  state.gpsSource = PinLayer.create(viewer, "gpsjam");
+  state.conflictSource = PinLayer.create(viewer, "conflicts");
+  state.scanSource = PinLayer.create(viewer, "scan");
   for (const key of ["jamming", "aircraft", "ships"]) {
-    state.live[key].source = new Cesium.CustomDataSource(key);
-    viewer.dataSources.add(state.live[key].source);
+    state.live[key].source = PinLayer.create(viewer, key);
   }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
   });
   ensureOrigin();
-  viewer.selectedEntityChanged.addEventListener((entity) => {
-    if (!entity) return;
-    if (entity._pin) {
-      openPin(entity._pin);
+  bindPinPicking(viewer);
+  installPinBench(viewer);
+  requestRender();
+}
+
+function requestRender() {
+  PinLayer.requestRender(state.viewer);
+}
+
+function bindPinPicking(viewer) {
+  viewer.screenSpaceEventHandler.setInputAction((click) => {
+    const picked = viewer.scene.pick(click.position);
+    const rec = picked && picked.id;
+    const data = rec && rec.data;
+    if (!data) return;
+    if (data._pin) {
+      openPin(data._pin);
       return;
     }
-    if (entity._radio) {
-      handleRadioPick(entity._radio, { fly: false });
+    if (data._radio) {
+      handleRadioPick(data._radio, { fly: false });
       return;
     }
-    if (entity._stream) {
-      openStream(entity._stream, { fly: false });
+    if (data._stream) {
+      openStream(data._stream, { fly: false });
       return;
     }
-    if (entity._live) {
-      showLive(entity._live);
+    if (data._live) {
+      showLive(data._live);
       return;
     }
-    if (entity._resultIndex == null) return;
-    const result = state.results[entity._resultIndex];
+    if (data._resultIndex == null) return;
+    const result = state.results[data._resultIndex];
     if (result) showSelected(result);
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+}
+
+function installPinBench(viewer) {
+  let stress = null;
+  const perf = window.__pinPerf || (window.__pinPerf = {});
+  perf.api = "primitives";
+  perf.viewer = viewer;
+  perf.counts = () => ({
+    sdr: state.sdrSource ? state.sdrSource.length : 0,
+    radio: state.radioSource ? state.radioSource.length : 0,
+    stream: state.streamSource ? state.streamSource.length : 0,
+    gps: state.gpsSource ? state.gpsSource.length : 0,
+    conflicts: state.conflictSource ? state.conflictSource.length : 0,
+    scan: state.scanSource ? state.scanSource.length : 0,
+    jamming: state.live.jamming.source ? state.live.jamming.source.length : 0,
+    aircraft: state.live.aircraft.source ? state.live.aircraft.source.length : 0,
+    ships: state.live.ships.source ? state.live.ships.source.length : 0,
   });
+  perf.stressCreate = (n) => {
+    if (stress) perf.stressTeardown();
+    stress = PinLayer.create(viewer, "stress");
+    for (let i = 0; i < n; i += 1) {
+      const lat = -80 + (160 * i) / n;
+      const lon = -180 + (360 * ((i * 17) % n)) / n;
+      stress.upsert(String(i), {
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+        point: {
+          pixelSize: 6,
+          color: Cesium.Color.CYAN,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 1,
+          disableDepthTestDistance: 0,
+        },
+      });
+    }
+    requestRender();
+    return n;
+  };
+  perf.stressUpdate = (n) => {
+    if (!stress) return;
+    for (let i = 0; i < n; i += 1) {
+      const lat = -80 + (160 * i) / n;
+      const lon = -180 + (360 * ((i * 17 + 40) % n)) / n;
+      stress.upsert(String(i), {
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+        point: {
+          pixelSize: 6,
+          color: Cesium.Color.CYAN,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 1,
+          disableDepthTestDistance: 0,
+        },
+      });
+    }
+    requestRender();
+  };
+  perf.stressTeardown = () => {
+    if (!stress) return;
+    stress.destroy();
+    stress = null;
+    requestRender();
+  };
 }
 
 function renderSearches(catalog) {
@@ -492,15 +565,17 @@ function applySnapshot(snap) {
 
 function clearPoints() {
   if (!state.viewer) return;
-  if (state.scanSource) state.scanSource.entities.removeAll();
+  if (state.scanSource) state.scanSource.clear();
   state.points.clear();
   state.arcs.clear();
+  state.origin = null;
   ensureOrigin();
+  requestRender();
 }
 
 function ensureOrigin() {
-  if (!state.viewer || state.origin) return;
-  state.origin = state.viewer.entities.add({
+  if (!state.viewer || !state.scanSource || state.origin) return;
+  state.origin = state.scanSource.upsert("origin", {
     position: Cesium.Cartesian3.fromDegrees(ORIGIN.lon, ORIGIN.lat, 0),
     point: {
       pixelSize: 8,
@@ -510,6 +585,7 @@ function ensureOrigin() {
       heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
       disableDepthTestDistance: 0,
     },
+    data: { _origin: true },
   });
 }
 
@@ -538,50 +614,33 @@ function upsertArc(result) {
   const positions = arcPositions(result.lat, result.lon);
   if (!positions) return;
   const color = COLORS[result.status] || COLORS.pending;
-  const material = new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color });
-  let entity = state.arcs.get(result.index);
-  if (!entity) {
-    entity = state.scanSource.entities.add({
-      polyline: {
-        positions,
-        width: 3,
-        material,
-        arcType: Cesium.ArcType.NONE,
-      },
-    });
-    state.arcs.set(result.index, entity);
-    return;
-  }
-  entity.polyline.positions = positions;
-  entity.polyline.material = material;
+  const material = Cesium.Material.fromType("PolylineGlow", { glowPower: 0.2, color });
+  const rec = state.scanSource.upsert(`arc:${result.index}`, {
+    polyline: { positions, width: 3, material },
+    data: { _resultIndex: result.index, _arc: true },
+  });
+  state.arcs.set(result.index, rec);
 }
 
 function upsertPoint(result) {
   if (!state.viewer || !state.scanSource || result.lat == null || result.lon == null) return;
   const color = COLORS[result.status] || COLORS.pending;
-  let entity = state.points.get(result.index);
   const position = Cesium.Cartesian3.fromDegrees(result.lon, result.lat, 0);
-  if (!entity) {
-    entity = state.scanSource.entities.add({
-      position,
-      point: {
-        pixelSize: result.status === "down" ? 11 : 8,
-        color,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 1,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: 0,
-      },
-    });
-    entity._resultIndex = result.index;
-    state.points.set(result.index, entity);
-    upsertArc(result);
-    return;
-  }
-  entity.position = position;
-  entity.point.pixelSize = result.status === "down" ? 11 : 8;
-  entity.point.color = color;
+  const rec = state.scanSource.upsert(`pt:${result.index}`, {
+    position,
+    point: {
+      pixelSize: result.status === "down" ? 11 : 8,
+      color,
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 1,
+      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      disableDepthTestDistance: 0,
+    },
+    data: { _resultIndex: result.index },
+  });
+  state.points.set(result.index, rec);
   upsertArc(result);
+  requestRender();
 }
 
 function visibleResults() {
@@ -618,10 +677,11 @@ function rowEl(result) {
 
 function focusResult(result) {
   showSelected(result);
-  const entity = state.points.get(result.index);
-  if (!entity || !state.viewer) return;
-  state.viewer.selectedEntity = entity;
-  state.viewer.flyTo(entity, { duration: 0.8 });
+  if (!state.viewer || result.lat == null || result.lon == null) return;
+  state.viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(result.lon, result.lat, 280000),
+    duration: 0.8,
+  });
 }
 
 function showSelected(result) {
@@ -687,8 +747,8 @@ function addFlyButton(nav, { id, label, countId, layer, feed, rectangle }) {
       return;
     }
     const source = sourceFor(layer);
-    if (source && source.entities.values.length) {
-      state.viewer.flyTo(source, { duration: 1.1 });
+    if (source && source.length) {
+      source.flyTo(1.1);
     }
   });
   nav.append(fly);
@@ -715,6 +775,7 @@ function setLayer(layer, on) {
   state.layers[layer] = Boolean(on);
   const source = sourceFor(layer);
   if (source) source.show = state.layers[layer];
+  requestRender();
   for (const button of document.querySelectorAll(`[data-layer-toggle="${layer}"]`)) {
     button.classList.toggle("on", state.layers[layer]);
     button.setAttribute("aria-pressed", state.layers[layer] ? "true" : "false");
@@ -768,7 +829,7 @@ async function loadWebsdr() {
   setCount("sdr", state.sdrStations.length);
   placeMarkers(state.sdrSource, "sdr", state.sdrStations.map(sdrPin), "/icons/ham-radio.png", true);
   const host = document.getElementById("cesium");
-  if (host && state.sdrSource) host.dataset.pins = String(state.sdrSource.entities.values.length);
+  if (host && state.sdrSource) host.dataset.pins = String(state.sdrSource.length);
   renderSdrList();
   layerStatus(body.stale ? "SDR CACHED" : "");
 }
@@ -788,7 +849,7 @@ async function loadGps() {
   }
   placeMarkers(state.gpsSource, "gps", state.gpsZones, "/icons/satellite.png", false);
   const host = document.getElementById("cesium");
-  if (host && state.gpsSource) host.dataset.gps = String(state.gpsSource.entities.values.length);
+  if (host && state.gpsSource) host.dataset.gps = String(state.gpsSource.length);
   renderGpsList();
   layerStatus(body.stale ? "GPS CACHED" : "");
 }
@@ -807,18 +868,18 @@ async function loadConflicts() {
   }
   placeMarkers(state.conflictSource, "conflicts", state.conflicts, "/icons/bomb.png", false);
   const host = document.getElementById("cesium");
-  if (host && state.conflictSource) host.dataset.conflicts = String(state.conflictSource.entities.values.length);
+  if (host && state.conflictSource) host.dataset.conflicts = String(state.conflictSource.length);
   renderConflictList();
   layerStatus(body.stale ? "CONFLICTS CACHED" : "");
 }
 
 function placeMarkers(source, layer, items, icon, stack) {
   if (!state.viewer || !source) return;
-  source.entities.removeAll();
   source.show = Boolean(state.layers[layer]);
   const stacks = new Map();
+  const keep = new Set();
   for (const item of items) {
-    if (item.lat == null || item.lon == null) continue;
+    if (item.lat == null || item.lon == null || item.id == null) continue;
     let shift = 0;
     if (stack) {
       const key = `${Number(item.lat).toFixed(4)},${Number(item.lon).toFixed(4)}`;
@@ -826,8 +887,9 @@ function placeMarkers(source, layer, items, icon, stack) {
       stacks.set(key, n + 1);
       shift = n * 28;
     }
-    const entity = source.entities.add({
-      name: item.name,
+    const id = String(item.id);
+    keep.add(id);
+    source.upsert(id, {
       position: Cesium.Cartesian3.fromDegrees(item.lon, item.lat, 0),
       billboard: {
         image: icon,
@@ -839,6 +901,7 @@ function placeMarkers(source, layer, items, icon, stack) {
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: 0,
         scaleByDistance: new Cesium.NearFarScalar(4e5, 1, 1.2e7, 0.62),
+        distanceDisplayCondition: PinLayer.FAR_BILLBOARD(),
       },
       label: {
         text: item.kind === "gps" ? `${wrapName(item.name)}\n${Math.round(item.pct)}%` : wrapName(item.name),
@@ -856,10 +919,14 @@ function placeMarkers(source, layer, items, icon, stack) {
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: 0,
         scaleByDistance: new Cesium.NearFarScalar(5e5, 1, 7e6, 0.45),
+        distanceDisplayCondition: PinLayer.FAR_LABEL(),
       },
+      data: { _pin: item },
     });
-    entity._pin = item;
   }
+  source.retain(keep);
+  if (keep.size) PinLayer.markFirstPins();
+  requestRender();
 }
 
 function renderSdrList() {
@@ -951,10 +1018,9 @@ function renderConflictList() {
 
 function findPin(kind, id) {
   const source = sourceFor(kind === "conflict" ? "conflicts" : kind);
-  if (!source) return null;
-  for (const entity of source.entities.values) {
-    if (entity._pin && entity._pin.kind === kind && entity._pin.id === id) return entity;
-  }
+  if (!source || id == null) return null;
+  const rec = source.record(id);
+  if (rec && rec.data && rec.data._pin && rec.data._pin.kind === kind) return rec;
   return null;
 }
 
@@ -980,10 +1046,6 @@ function openPin(pin, options = {}) {
   renderConflictList();
   renderRadioList();
   renderStreamList();
-  const entity = findPin(pin.kind, pin.id);
-  if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
-    state.viewer.selectedEntity = entity;
-  }
   if (options.fly && state.viewer && Number.isFinite(Number(pin.lat)) && Number.isFinite(Number(pin.lon))) {
     const height = pin.kind === "sdr" ? 280000 : 800000;
     state.viewer.camera.flyTo({
@@ -1172,15 +1234,16 @@ function handleRadioPick(item, options = {}) {
 
 function placeRadioPins(points, level) {
   if (!state.viewer || !state.radioSource) return;
-  state.radioSource.entities.removeAll();
   state.radioSource.show = Boolean(state.layers.radio);
   const gold = Cesium.Color.fromCssColorString("#f5c542");
   const outline = Cesium.Color.fromCssColorString("#2a1c04");
   const size = level === "state" ? 10 : level === "region" ? 7 : 5;
+  const keep = new Set();
   for (const site of points || []) {
     if (site.lat == null || site.lon == null) continue;
-    const entity = state.radioSource.entities.add({
-      name: site.label || site.name,
+    const id = String(site.id != null ? site.id : `${site.lat},${site.lon}:${site.name || site.label || ""}`);
+    keep.add(id);
+    state.radioSource.upsert(id, {
       position: Cesium.Cartesian3.fromDegrees(site.lon, site.lat, 0),
       point: {
         pixelSize: level === "site" && site.n > 20 ? 8 : size,
@@ -1190,10 +1253,14 @@ function placeRadioPins(points, level) {
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: 0,
         scaleByDistance: new Cesium.NearFarScalar(2e5, 1.2, 8e6, 0.45),
+        distanceDisplayCondition: level === "site" ? new Cesium.DistanceDisplayCondition(0, 8e6) : PinLayer.FAR_POINT(),
       },
+      data: { _radio: site },
     });
-    entity._radio = site;
   }
+  state.radioSource.retain(keep);
+  if (keep.size) PinLayer.markFirstPins();
+  requestRender();
 }
 
 function renderRadioCountries() {
@@ -1324,11 +1391,8 @@ function renderRadioList() {
 }
 
 function findRadioEntity(id) {
-  if (!state.radioSource) return null;
-  for (const entity of state.radioSource.entities.values) {
-    if (entity._radio && entity._radio.id === id) return entity;
-  }
-  return null;
+  if (!state.radioSource || id == null) return null;
+  return state.radioSource.record(id) || null;
 }
 
 async function loadStreams() {
@@ -1343,14 +1407,15 @@ async function loadStreams() {
 
 function placeStreamPins(points) {
   if (!state.viewer || !state.streamSource) return;
-  state.streamSource.entities.removeAll();
   state.streamSource.show = Boolean(state.layers.stream);
   const color = Cesium.Color.fromCssColorString("#c084fc");
   const outline = Cesium.Color.fromCssColorString("#2a1038");
+  const keep = new Set();
   for (const site of points) {
     if (site.lat == null || site.lon == null) continue;
-    const entity = state.streamSource.entities.add({
-      name: site.name,
+    const id = String(site.id != null ? site.id : `${site.lat},${site.lon}`);
+    keep.add(id);
+    state.streamSource.upsert(id, {
       position: Cesium.Cartesian3.fromDegrees(site.lon, site.lat, 0),
       point: {
         pixelSize: site.online === false ? 6 : 8,
@@ -1360,10 +1425,14 @@ function placeStreamPins(points) {
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: 0,
         scaleByDistance: new Cesium.NearFarScalar(2e5, 1.25, 8e6, 0.5),
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.0e7),
       },
+      data: { _stream: site },
     });
-    entity._stream = site;
   }
+  state.streamSource.retain(keep);
+  if (keep.size) PinLayer.markFirstPins();
+  requestRender();
 }
 
 function renderStreamList() {
@@ -1396,11 +1465,8 @@ function renderStreamList() {
 }
 
 function findStreamEntity(id) {
-  if (!state.streamSource) return null;
-  for (const entity of state.streamSource.entities.values) {
-    if (entity._stream && entity._stream.id === id) return entity;
-  }
-  return null;
+  if (!state.streamSource || id == null) return null;
+  return state.streamSource.record(id) || null;
 }
 
 function openStream(site, options = {}) {
@@ -1412,10 +1478,6 @@ function openStream(site, options = {}) {
   const match = site.hpdbName ? ` · HPDB ${site.hpdbName}` : "";
   box.innerHTML = `<b>STREAM</b> ${esc(site.name)}<br>${esc(site.source || "")} · ${esc(site.county || "")} ${esc(site.state || "")}${match}<br>${site.lat.toFixed(4)}, ${site.lon.toFixed(4)}`;
   renderStreamList();
-  const entity = findStreamEntity(site.id);
-  if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
-    state.viewer.selectedEntity = entity;
-  }
   if (options.fly && state.viewer) {
     state.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(site.lon, site.lat, 180000),
@@ -1445,10 +1507,6 @@ function openRadio(site, options = {}) {
   box.hidden = false;
   box.innerHTML = `<b>RADIO</b> ${esc(site.name)}<br>${esc(site.mode || "HPDB")} · ${site.n || 0} freqs<br>${site.lat.toFixed(4)}, ${site.lon.toFixed(4)}${mhz ? "<br>" + esc(mhz) : ""}`;
   renderRadioList();
-  const entity = findRadioEntity(site.id);
-  if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
-    state.viewer.selectedEntity = entity;
-  }
   if (options.fly && state.viewer) {
     state.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(site.lon, site.lat, 180000),
@@ -1488,14 +1546,25 @@ async function pollLiveFeeds() {
   statusLive();
 }
 
+function livePointId(key, point, index) {
+  return String(
+    point.id
+    || point.hex
+    || point.icao
+    || point.mmsi
+    || point.flight
+    || `${key}:${point.lat},${point.lon}:${index}`
+  );
+}
+
 function placeLiveLayer(key, points) {
   const layer = state.live[key];
   if (!layer?.source) return;
-  layer.source.entities.removeAll();
   layer.source.show = Boolean(state.layers[key]);
   const base = LIVE_STYLE[key];
-  for (const point of points) {
-    if (point.lat == null || point.lon == null) continue;
+  const keep = new Set();
+  (points || []).forEach((point, index) => {
+    if (point.lat == null || point.lon == null) return;
     const style = key === "aircraft" ? aircraftStyle(point) : {
       color: base.color,
       outline: base.outline,
@@ -1503,8 +1572,9 @@ function placeLiveLayer(key, points) {
       kind: base.kind,
     };
     const height = key === "aircraft" ? Number(point.altM) || 0 : 0;
-    const entity = layer.source.entities.add({
-      name: point.name,
+    const id = livePointId(key, point, index);
+    keep.add(id);
+    layer.source.upsert(id, {
       position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, height),
       point: {
         pixelSize: style.size,
@@ -1513,10 +1583,14 @@ function placeLiveLayer(key, points) {
         outlineWidth: 1,
         heightReference: key === "aircraft" ? Cesium.HeightReference.NONE : Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: 0,
+        scaleByDistance: new Cesium.NearFarScalar(1.5e5, 1.3, 1.2e7, 0.5),
       },
+      data: { _live: { ...point, kind: style.kind, layer: key } },
     });
-    entity._live = { ...point, kind: style.kind, layer: key };
-  }
+  });
+  layer.source.retain(keep);
+  if (keep.size) PinLayer.markFirstPins();
+  requestRender();
 }
 
 function showLive(item) {
