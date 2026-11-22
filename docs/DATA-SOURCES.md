@@ -86,7 +86,9 @@ Do not cron designation dumps into git. Source addresses stay on the claim. NUCL
 - gpsjam.org: credit John Wiseman; underlying aircraft from ADS-B Exchange and airplanes.live.
 - CFR: conflict tracker page, theater markers, not ACLED dots.
 - FAO Hunger Map / SOFI: undernourishment prevalence.
-- EOX 2018–2025 mosaics are CC BY-NC-SA; ads need a commercial license or the 2016 CC BY mosaic.
+- EOX 2018–2025 mosaics are CC BY-NC-SA; ads need a commercial license or the 2016 CC BY mosaic. We do not buy the commercial license; the shipped SAT path is NASA GIBS / EOX 2016 CC BY / OSM.
+- Esri World Imagery, Street Map, and Terrain3D are not required defaults (cycles 11 and 14). Terrarium + OSM replace them.
+- No Cesium ion key. No Mapbox GL JS v2+. See `docs/NO-PAID-LICENSES.md`.
 - Uniden HPDB is the public BT885 Update Manager dump.
 - HealthMap: credit Boston Children's Hospital / healthmap.org. Aggregates news, ProMED, WHO, etc.
 - GIDEON: credit gideononline.com. Public events feed is free to view; bulk licensed API is not. Do not scrape the paid app UI.
