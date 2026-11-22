@@ -1,0 +1,29 @@
+# Bounded morning-cycle status board. Does not FTP. Does not merge.
+# Deploy: fly deploy -c fly.cycle.toml --ha=false
+# App is created on first deploy if missing.
+
+app = 'gsa-agile-cycle'
+primary_region = 'dfw'
+
+[build]
+  dockerfile = 'Dockerfile.cycle'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [[http_service.checks]]
+    grace_period = '10s'
+    interval = '30s'
+    timeout = '5s'
+    method = 'GET'
+    path = '/healthz'
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1
