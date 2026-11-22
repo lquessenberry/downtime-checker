@@ -8,7 +8,7 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
-description = "Native Downtime globe: wgpu sphere + egui chrome, linked to downtime-core"
+description = "Native Global Status globe: wgpu Earth that has to succeed Cesium"
 
 [lib]
 name = "downtime_globe_native"
@@ -35,6 +35,7 @@ eframe = { version = "0.32", default-features = false, features = ["wgpu", "defa
 wgpu = "25"
 bytemuck = { version = "1", features = ["derive"] }
 glam = "0.30"
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 downtime-native = { path = "../downtime-native" }

@@ -22,9 +22,58 @@ pub struct GlobeResources {
     index_count: u32,
 }
 
+fn load_earth_rgba() -> (u32, u32, Vec<u8>) {
+    let jpeg = include_bytes!("../assets/earth.jpg");
+    let img = image::load_from_memory(jpeg).expect("earth.jpg is a valid NASA Blue Marble JPEG");
+    let rgba = img.to_rgba8();
+    (rgba.width(), rgba.height(), rgba.into_raw())
+}
+
+fn earth_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureView, wgpu::Sampler) {
+    let (width, height, pixels) = load_earth_rgba();
+    let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("earth"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &pixels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * width),
+            rows_per_image: Some(height),
+        },
+        size,
+    );
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("earth"),
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        address_mode_u: wgpu::AddressMode::Repeat,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        ..Default::default()
+    });
+    (view, sampler)
+}
+
 impl GlobeResources {
     pub fn install(state: &egui_wgpu::RenderState) {
         let device = &state.device;
+        let (earth_view, earth_samp) = earth_texture(device, &state.queue);
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("globe"),
             source: wgpu::ShaderSource::Wgsl(include_str!("globe.wgsl").into()),
@@ -37,21 +86,49 @@ impl GlobeResources {
         });
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("globe"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("globe"),
             layout: &layout,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() }],
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&earth_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&earth_samp),
+                },
+            ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("globe"),
@@ -114,6 +191,7 @@ impl GlobeResources {
 pub struct GlobeCallback {
     pub view_proj: Mat4,
     pub sun: Vec3,
+    pub grid: f32,
 }
 
 impl egui_wgpu::CallbackTrait for GlobeCallback {
@@ -128,7 +206,7 @@ impl egui_wgpu::CallbackTrait for GlobeCallback {
         if let Some(res) = resources.get::<GlobeResources>() {
             let globals = Globals {
                 view_proj: self.view_proj.to_cols_array_2d(),
-                sun: self.sun.normalize_or_zero().extend(0.0).to_array(),
+                sun: self.sun.normalize_or_zero().extend(self.grid).to_array(),
             };
             queue.write_buffer(&res.uniforms, 0, bytemuck::bytes_of(&globals));
         }
@@ -147,5 +225,16 @@ impl egui_wgpu::CallbackTrait for GlobeCallback {
         pass.set_vertex_buffer(0, res.vertices.slice(..));
         pass.set_index_buffer(res.indices.slice(..), wgpu::IndexFormat::Uint32);
         pass.draw_indexed(0..res.index_count, 0, 0..1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn earth_texture_is_equirectangular() {
+        let jpeg = include_bytes!("../assets/earth.jpg");
+        let img = image::load_from_memory(jpeg).unwrap();
+        assert_eq!(img.width(), 2048);
+        assert_eq!(img.height(), 1024);
     }
 }

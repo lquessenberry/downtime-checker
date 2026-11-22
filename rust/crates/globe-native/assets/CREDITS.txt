@@ -1,0 +1,3 @@
+earth.jpg is a 2048×1024 downsample of NASA Blue Marble (land, ocean, ice).
+NASA imagery is public domain. Credit: NASA Visible Earth / Blue Marble.
+https://visibleearth.nasa.gov/images/57752/blue-marble-land-surface-ocean-color-sea-ice

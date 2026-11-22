@@ -1,9 +1,9 @@
 //! Global Status native globe (alpha).
 //!
 //! A wgpu-rendered globe inside an eframe/egui window, with catalog pins
-//! taken from `downtime-core`. This is the start of the native path in
-//! `docs/rust-native.md`: imagery tiles, terrain, live layers and instanced
-//! aircraft/ship rendering come in later phases.
+//! taken from `downtime-core`. This crate is the product renderer: it has to
+//! succeed Cesium in every way (see `docs/rust-native.md`). NASA Blue Marble
+//! is on the sphere today; XYZ imagery, terrain, and live layers follow.
 //!
 //! The same code runs on Linux, macOS and Windows (`main.rs`) and on Android
 //! (`android_main` below, built as a `cdylib` with cargo-apk).
@@ -16,6 +16,7 @@ mod globe_math;
 pub mod pins;
 mod render;
 
+use downtime_core::{builtin_layers, LayerKind};
 use eframe::egui;
 use glam::Vec3;
 
@@ -66,12 +67,19 @@ struct GlobeApp {
     camera: OrbitCamera,
     data: pins::PinData,
     show_pins: bool,
+    show_grid: bool,
     selected: Option<usize>,
 }
 
 impl GlobeApp {
     fn new(data: pins::PinData) -> Self {
-        Self { camera: OrbitCamera::default(), data, show_pins: true, selected: None }
+        Self {
+            camera: OrbitCamera::default(),
+            data,
+            show_pins: true,
+            show_grid: false,
+            selected: None,
+        }
     }
 
     fn side_panel(&mut self, ctx: &egui::Context) {
@@ -80,7 +88,20 @@ impl GlobeApp {
             ui.label(egui::RichText::new(concat!("Native globe alpha ", env!("CARGO_PKG_VERSION"))).weak());
             ui.separator();
             ui.label(&self.data.status);
+            ui.label("Earth: NASA Blue Marble (public domain)");
             ui.checkbox(&mut self.show_pins, format!("Capital pins ({})", self.data.pins.len()));
+            ui.checkbox(&mut self.show_grid, "Graticule");
+            ui.separator();
+            ui.label("Layers (Cesium parity)");
+            egui::ScrollArea::vertical().id_salt("layer-stubs").max_height(160.0).show(ui, |ui| {
+                for layer in builtin_layers() {
+                    let mark = match layer.kind {
+                        LayerKind::Active => "on",
+                        LayerKind::Stub => "soon",
+                    };
+                    ui.label(format!("{mark}  {}", layer.title));
+                }
+            });
             ui.separator();
             ui.label("Camera");
             ui.add(egui::Slider::new(&mut self.camera.lat, -85.0..=85.0).text("lat"));
@@ -116,7 +137,7 @@ impl GlobeApp {
         let sun = self.camera.eye() + Vec3::new(0.0, 1.5, 0.0);
         ui.painter().add(eframe::egui_wgpu::Callback::new_paint_callback(
             rect,
-            GlobeCallback { view_proj, sun },
+            GlobeCallback { view_proj, sun, grid: if self.show_grid { 1.0 } else { 0.0 } },
         ));
 
         if !self.show_pins {

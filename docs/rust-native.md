@@ -1,30 +1,52 @@
 # Rust native apps
 
-The Cesium web app (`globalstatus/`, `visualizer/`) stays the web target.
-Android, Linux, macOS and Windows get native Rust apps that share one core
-with the server. Nothing under `globalstatus/`, `visualizer/` or the Python
-CLI changes on this branch.
+The native wgpu globe is the product renderer. **It has to succeed Cesium in every way** — look, layers, feel, and then go past it (count, offline, phones, no JavaScript main thread).
+
+The Cesium tree (`globalstatus/`, `visualizer/`) stays the live web globe until native matches it. After that, the web target is the same Rust globe (WebGPU / WebGL2), not a second Cesium app.
+
+## Succeed-Cesium bar
+
+Native wins when a visitor (or a phone) can do everything the Cesium globe does, at least as well, without opening a browser.
+
+| Cesium today | Native must |
+| --- | --- |
+| Street / satellite / Sentinel / Blue Marble / night / OSM / plain | Same basemaps, switchable. Blue Marble is on the sphere now; XYZ tiles and night lights next. |
+| Esri terrain | Heightmap / Terrarium DEM on the mesh |
+| 3D / 2D / Columbus | Orbit globe plus a flat map that does not tear on Android |
+| Power outages, AIR, JAM, AIS, mesh, disease, animal, scanners, AM/FM, hunger, conflict | Real `DataLayer` impls, same sources and credits |
+| Country grid + spiderweb | 15-minute saved pass, replayed as arcs from Jonesboro |
+| One-user poller (#34) | Same model in-process: one runner, cache, browsers/windows only read |
+| Phone footer dots, MENU names, PWA | Native chrome that matches; Android APK is the install |
+| Keep CesiumJS 1.134 for the web until this bar is met | Then drop Cesium from production |
+
+Exceed Cesium (the reason we left it):
+
+- 20k aircraft + 20k ships + 10k pins at 60 fps on a laptop and a low-end Android
+- Offline packs (PMTiles, DEM, catalogs) with `OFFLINE=1`
+- GPU instancing instead of JS entities
+- Signed desktop installers and F-Droid
+- Optional private nuke-sim behind a feature flag that release builds never enable
 
 ## Crate layout (`rust/`)
 
 | Crate | What it does |
 | --- | --- |
-| `downtime-core` | Catalog parsing, the ping → TCP 443 → TCP 80 decision, geo, grouping, `DataLayer` registry. `no_std` + `alloc` capable. From PR #1. |
-| `downtime-native` | tokio DNS/TCP probes, ICMP via `ping`, ipwho.is lookups, catalog files on disk. From PR #1. |
-| `downtime-cli` | `downtime` binary, same menus and search ids as `downtime.py`. From PR #1. |
-| `downtime-server` | SSE server with the same `/api/*` routes as `visualizer/server.mjs`. From PR #1. |
-| `downtime-wasm` | Browser-side catalog parsing and aggregation (wasm-bindgen). From PR #1. |
-| `globe-native` | **New.** `downtime-globe` binary: eframe/egui window, wgpu globe drawn through an `egui_wgpu` paint callback, capital pins and search counts from `downtime-core`. |
+| `downtime-core` | Catalog parsing, ping → TCP 443 → TCP 80, geo, grouping, `DataLayer` registry. `no_std` + `alloc`. |
+| `downtime-native` | tokio DNS/TCP probes, ICMP via `ping`, ipwho.is, catalog files on disk. |
+| `downtime-cli` | `downtime` binary, same menus as `downtime.py`. |
+| `downtime-server` | SSE `/api/*` compatible with the Node visualizer. Becomes the one-user poller. |
+| `downtime-wasm` | Browser catalog parsing (wasm-bindgen). Bridge until the globe itself is wasm. |
+| `globe-native` | `downtime-globe`: eframe/egui + wgpu Earth, NASA Blue Marble, capital pins, search counts. |
 
 `globe-native` layout:
 
-- `src/globe_math.rs`: lat/lon → unit sphere, UV sphere mesh, orbit camera, projection. Pure math, unit-tested headless.
-- `src/globe.wgsl`: sphere shader (lighting, 15° graticule, equator).
-- `src/render.rs`: wgpu pipeline and buffers stored in egui's callback resources.
-- `src/pins.rs`: loads catalogs through `downtime-native::load_catalog_dir` and places capital pins with `downtime_core::capital`.
-- `src/lib.rs`: app state, side panel, drag to rotate, scroll to zoom, hover/click pins; `android_main` for the APK.
-- `src/main.rs`: desktop entry point (`--root`, `--summary`, `--version`).
-- Catalogs are compiled in (`pins::EMBEDDED`) so the app runs without a data folder.
+- `src/globe_math.rs`: lat/lon → unit sphere, UV sphere mesh, orbit camera. Headless tests.
+- `src/globe.wgsl`: Earth albedo + lighting + optional 15° graticule.
+- `src/render.rs`: wgpu pipeline, Blue Marble texture (`assets/earth.jpg`).
+- `src/pins.rs`: catalogs through `downtime-native::load_catalog_dir`, capitals via `downtime_core::capital`.
+- `src/lib.rs`: chrome, drag/zoom, hover/click pins; `android_main` for the APK.
+- `src/main.rs`: `--root`, `--summary`, `--version`.
+- Catalogs and Earth texture are compiled in so the app runs with no data folder.
 
 Releases: [RELEASING.md](RELEASING.md).
 
@@ -33,30 +55,30 @@ Releases: [RELEASING.md](RELEASING.md).
 ```bash
 cd rust
 cargo test --workspace
-cargo run -p downtime-globe-native            # opens the window (needs a GPU or a software Vulkan/GL driver)
-cargo run -p downtime-globe-native -- --summary   # headless: prints catalog counts
+cargo run -p downtime-globe-native            # window (GPU or software Vulkan/GL)
+cargo run -p downtime-globe-native -- --summary
 cargo run -p downtime-cli -- --root .. check weather
 cargo run -p downtime-server -- --root ..
 ```
 
-The workspace targets Rust 1.85+ (`rust-version`, resolver 3 picks compatible
-dependency versions). `eframe` is pinned to 0.32 / `wgpu` 25 for that reason;
-bump both together when the minimum Rust version moves.
+Workspace targets Rust 1.85+ (`eframe` 0.32 / `wgpu` 25). Bump both together.
 
 ## Phases
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 0 | Bring PR #1's workspace onto `feat/globalstatus-prod` without touching the web app; Rust CI; tune Cesium pins (Entities → primitive collections) | Workspace and CI on this branch; Cesium tuning not started |
-| 1 | Renderer bake-off: same scene (20k aircraft, 20k ships, 10k pins, GIBS imagery, Terrarium terrain) in the wgpu globe, Bevy + big_space, tuned CesiumJS, MapLibre GL + deck.gl; measure on a low-end Android phone and a laptop | Skeleton globe started |
-| 2 | Core owns the data: port `visualizer/lib/*.mjs` feeds and `router.php` layers to `DataLayer` impls; datapack (pack → cache → network, `OFFLINE=1`); SQLite history | Not started |
-| 3 | Desktop apps: imagery tiles, heightmap terrain, instanced aircraft/ship layers, scheduled checks, notifications, signed installers; Rust API replaces Node on Fly staging | Not started |
-| 4 | Android offline (#16): same binary via `android-activity` (cargo-apk today), PMTiles + DEM offline, GPS, WorkManager and BLE mesh shim (#17) | Globe + pins APK builds (`android_main` in `globe-native`); offline, GPS and mesh not started |
-| 5 | Optional WebGPU/WebGL2 build of the Rust globe, Meshtastic sitrep, Raspberry Pi image, `no_std` core on a microcontroller | Not started |
+| 0 | PR #1 workspace on `feat/globalstatus-prod`; Rust CI; Cesium pin tuning | Workspace and CI done; Cesium tuning skipped (native is the renderer) |
+| 1 | Earth on the sphere; renderer bake-off vs Cesium (20k air/ships, GIBS, Terrarium) on a phone and a laptop | Blue Marble on the sphere. XYZ / terrain / instancing not started |
+| 2 | Core owns the data: port `visualizer/lib/*.mjs` and `router.php` into `DataLayer`; datapack pack → cache → network; one-user poller | Layer names match Cesium. Feeds still stubs |
+| 3 | Desktop: XYZ imagery, heightmap, instanced AIR/AIS, 15-minute grid + spiderweb, notifications, signed installers; Rust API replaces Node on Fly | Not started |
+| 4 | Android offline (#16): PMTiles + DEM, GPS, WorkManager, BLE mesh (#17) | Globe + pins APK builds; offline/GPS/mesh not started |
+| 5 | WebGPU/WebGL2 build of this globe replaces Cesium in production; Meshtastic sitrep; Pi image; `no_std` core | Not started |
 
-## Known gaps
+## Known gaps vs Cesium
 
-- The globe is a shaded sphere with a graticule; no imagery, terrain or coastlines yet.
-- Pins are drawn by egui on the CPU; phase 3 moves them to instanced GPU draws.
-- Only reachability runs in the Rust core; every other layer is a stub.
-- Windows ICMP still spawns `ping`; phase 2 switches to `IcmpSendEcho2`.
+- One baked Blue Marble, not switchable XYZ tiles.
+- No terrain, coastlines as geometry, or 2D mode.
+- Pins are CPU egui dots; phase 3 moves them to GPU instances.
+- Only reachability runs in the core; every other Cesium layer is a named stub.
+- No spiderweb, no live poller in the native process yet.
+- Windows ICMP still spawns `ping`.
