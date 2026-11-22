@@ -51,7 +51,7 @@ Exceed Cesium (the reason we left it):
 
 Cesium → Rust map: [CESIUM_MAP.md](CESIUM_MAP.md) and the inventory in [globe-plan/RUST_PLAN.md](globe-plan/RUST_PLAN.md). CLI: `python3 scripts/globe-re/globe_plan.py`. Apache-2.0 Cesium `Source/` only. Mapbox GL JS is refused. A `Core/` port is a derivative work; `NOTICE-CESIUM` stays at the repo root (Apache-2.0 §4(d)). Binary RE adapters are unimplemented.
 
-Releases: [RELEASING.md](RELEASING.md). PHP→Rust lanes and the speed map: [RUST-ARSENAL.md](RUST-ARSENAL.md).
+Releases: [RELEASING.md](RELEASING.md). PHP→Rust lanes and the speed map: [RUST-ARSENAL.md](RUST-ARSENAL.md). No paid licenses: [NO-PAID-LICENSES.md](NO-PAID-LICENSES.md).
 
 ## Run
 
