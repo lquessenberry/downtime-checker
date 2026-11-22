@@ -33,5 +33,6 @@ python3 scripts/designations/designations.py --ingest zones --out data/designati
 python3 scripts/designations/designations.py --filter zone --out data/designations
 ```
 
-Cesium layers: DESIGNATIONS, ATTRIBUTED VIOLENCE. NUKEMAP is an external
-link, not an iframe. No FTP until Lee says go-live.
+Cesium layers: DESIGNATIONS, ATTRIBUTED VIOLENCE. NUCLEAR is a separate,
+first-party layer (`globalstatus/blast.js`, #39): no NUKEMAP link-out, iframe,
+or copied code. No FTP until Lee says go-live.
