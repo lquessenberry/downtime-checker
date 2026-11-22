@@ -72,10 +72,15 @@ jobs:
           head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .head.sha)
           on_head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews" --paginate \
             --jq "[.[] | select(.user.login == \"copilot-pull-request-reviewer[bot]\" or .user.login == \"Copilot\" or (.is_copilot_code_review // false)) | select(.commit_id == \"$head\")] | length")
-          echo "Copilot reviews on PR: $reviews (on current head $head: $on_head)"
-          if [ "$reviews" -eq 0 ]; then
-            echo "::error::No completed Copilot review yet. Wait for it (or re-run 'Copilot review loop' with workflow_dispatch) before merging."
+          ruckus=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews" --paginate \
+            --jq '[.[] | select(.user.login == "lquessenberry") | select(.state == "APPROVED" or .state == "COMMENTED") | select((.body // "") | test("RUCKUS"; "i"))] | length')
+          echo "Copilot reviews on PR: $reviews (on current head $head: $on_head); RUCKUS fallback: $ruckus"
+          if [ "$reviews" -eq 0 ] && [ "$ruckus" -eq 0 ]; then
+            echo "::error::No Copilot review (quota?) and no RUCKUS fallback review. Comment RUCKUS on an Approve/Comment review, or wait for Copilot quota."
             exit 1
+          fi
+          if [ "$reviews" -eq 0 ]; then
+            echo "::warning::Copilot quota fallback: RUCKUS review accepted."
           fi
           if [ "$on_head" -eq 0 ]; then
             echo "::warning::Copilot reviewed an earlier commit. Re-request if the new commits are more than review fixes."

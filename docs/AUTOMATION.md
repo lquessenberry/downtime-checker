@@ -25,7 +25,7 @@ How bot work moves from an issue to `feat/globalstatus-prod` on
    - The existing `gsa-morning-cycle.yml` still runs on globe paths
 5. **Copilot review** (`.github/workflows/copilot-review.yml`): requested on open, reopen, sync and ready-for-review. Review guidance for Copilot is in `.github/copilot-instructions.md`.
 6. **Address comments**: the authoring bot pushes fixes to the same branch and replies on each thread. Re-request Copilot (run the workflow manually with the PR number) when fixes go beyond the comments.
-7. **Gate**: the `Copilot review gate` check passes only after Copilot has submitted a review.
+7. **Gate**: the `Copilot review gate` check passes after Copilot has submitted a review, **or** after a `RUCKUS` review from `lquessenberry` when Copilot returns `NO_QUOTA_REMAINING`.
 8. **Merge** (squash, matching the repo's history) only when all of these hold:
    - CI is green
    - Copilot has reviewed and its blocking comments are addressed
@@ -35,7 +35,7 @@ How bot work moves from an issue to `feat/globalstatus-prod` on
    Delete the branch after merge only if a bot created it.
 9. **Record**: comment on #75 with `GLOBALSTATUS: pass|fail`, `RUCKUS: pass|fail`, the cycle number, and the PR and merge SHA.
 
-Never: force-push, rewrite published history, push to upstream, merge with red CI, or merge without a Copilot review.
+Never: force-push, rewrite published history, push to upstream, merge with red CI, or merge without Copilot (or RUCKUS quota fallback).
 
 ## Proposed repository settings (Lee applies; bots do not change these)
 
