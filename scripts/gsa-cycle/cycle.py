@@ -4,7 +4,8 @@
 GLOBALSTATUS is the product owner: layers work, pins exist, no FTP.
 RUCKUS is the reviewer: tests pass, licenses hold, no auto-merge to prod.
 
-Max 6 cycles. State lives on the tracking GitHub issue.
+Max 30 cycles on the board (6 + 12 + 12). State lives on the tracking GitHub issue.
+A run that lacks a GLOBALSTATUS+RUCKUS pair on the last cycle only re-tests.
 Does not FTP. Does not merge feat/globalstatus-prod.
 """
 from __future__ import annotations
@@ -19,9 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REPO = os.environ.get("GSA_REPO", "lquessenberry/downtime-checker")
 TRACK_ISSUE = os.environ.get("GSA_CYCLE_ISSUE", "")
-MAX_CYCLES = 6
+MAX_CYCLES = 30
 PRIORITY = [
-    59, 60, 34, 39, 68, 62, 56, 55, 54, 53, 52, 51, 50,
+    39, 18, 41, 48, 34, 59, 60, 68, 63, 17, 67, 64, 58,
 ]
 
 
@@ -120,7 +121,7 @@ def main() -> int:
     ruckus = [
         "- SPLC jsonl stays gitignored",
         "- Nominatim 1.05s when used",
-        "- NUKEMAP is a new-tab link",
+        "- NUCLEAR is first-party cube-root rings on the globe",
         "- no auto-merge of feat/globalstatus-prod",
         f"- reviewer tests: {'happy' if ok else 'blocked'}",
     ]

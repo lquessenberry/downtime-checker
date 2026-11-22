@@ -1,0 +1,14 @@
+{
+  "hate_chapters": [
+    {
+      "name": "Example Chapter",
+      "ideology_name": "Anti-Immigrant",
+      "state": "CA",
+      "state_name": "California",
+      "city_name": "Ventura",
+      "longitude": "-119.290383",
+      "latitude": "34.279938"
+    }
+  ],
+  "hate_state_years": []
+}

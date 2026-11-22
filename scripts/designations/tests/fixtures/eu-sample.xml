@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<export>
+  <sanctionEntity euReferenceNumber="EU.1.1">
+    <subjectType code="enterprise"/>
+    <nameAlias wholeName="EXAMPLE GROUP"/>
+    <address street="Rue de la Loi 1" city="Bruxelles" zipCode="1000" countryDescription="Belgium" countryIso2Code="BE"/>
+  </sanctionEntity>
+  <sanctionEntity euReferenceNumber="EU.2.1">
+    <subjectType code="person"/>
+    <nameAlias wholeName="JANE DOE"/>
+    <address city="Tehran" countryDescription="Iran" countryIso2Code="IR"/>
+  </sanctionEntity>
+</export>

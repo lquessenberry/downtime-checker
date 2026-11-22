@@ -126,14 +126,16 @@ def main() -> int:
             "expression": """(() => {
               const toggles = [...document.querySelectorAll('[data-layer-toggle]')]
                 .map((el) => el.getAttribute('data-layer-toggle'));
-              const nukemap = document.getElementById('nukemap-link');
+              const nukemap = document.getElementById('nuke-hud');
               return JSON.stringify({
                 title: document.title,
                 toggles,
                 designations: toggles.includes('designations'),
                 violence: toggles.includes('violence'),
                 conflicts: toggles.includes('conflicts'),
-                nukemap: Boolean(nukemap) && (nukemap.href || '').includes('nukemap'),
+                nuke: toggles.includes('nuke'),
+                streets3d: toggles.includes('streets3d'),
+                nukemap: Boolean(nukemap),
               });
             })()""",
             "returnByValue": True,

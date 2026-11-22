@@ -36,6 +36,10 @@ const state = {
     disease: { source: null, points: [] },
     animal: { source: null, points: [] },
     amfm: { source: null, points: [] },
+    designations: { source: null, points: [] },
+    violence: { source: null, points: [] },
+    nuke: { source: null, points: [] },
+    streets3d: { source: null, points: [] },
   },
   layers: {
     outages: false,
@@ -49,7 +53,12 @@ const state = {
     disease: false,
     animal: false,
     amfm: false,
+    designations: false,
+    violence: false,
+    nuke: false,
+    streets3d: false,
   },
+  nuke: { shots: [], yieldIdx: 0, airburst: true },
   openKind: "",
   openId: "",
   feedMode: "outages",
@@ -289,7 +298,7 @@ function setPanel(which) {
 }
 
 async function startGlobe() {
-  let startupMap = "streets";
+  let startupMap = "osm";
   let imagery;
   try {
     imagery = await imageryProvider(startupMap);
@@ -341,7 +350,7 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "streets3d"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
@@ -371,10 +380,15 @@ async function startGlobe() {
   // Cesium then inserts a temporary imagery entity; that is not a layer pin either.
   const popupClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   popupClicks.setInputAction((click) => {
+    if (state.layers.nuke && placeNukeAt(click.position)) return;
     if (pickedMapPin(click.position)) return;
     closeMapPopups();
     if (viewer.selectedEntity) viewer.selectedEntity = undefined;
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  bindNukeHud();
+  viewer.camera.moveEnd.addEventListener(() => {
+    if (state.layers.streets3d) loadStreets3d().catch(() => {});
+  });
   viewer.selectedEntityChanged.addEventListener((entity) => {
     if (!entity || !isMapPin(entity)) {
       closeMapPopups();
@@ -1093,6 +1107,32 @@ function setLayer(layer, on) {
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
   if (layer === "disease" && state.layers.disease) scheduleDisease();
   if (layer === "animal" && state.layers.animal) scheduleAnimal();
+  if (layer === "designations") {
+    if (state.layers.designations) {
+      loadDesignations().catch((error) => statusLive(error.message || String(error)));
+    }
+  }
+  if (layer === "violence") {
+    if (state.layers.violence) {
+      loadViolence().catch((error) => statusLive(error.message || String(error)));
+    }
+  }
+  if (layer === "nuke") {
+    const hud = document.getElementById("nuke-hud");
+    if (hud) hud.hidden = !state.layers.nuke;
+    if (state.layers.nuke) {
+      applyTerrain("elevation");
+      syncNukeHud();
+    }
+  }
+  if (layer === "streets3d") {
+    if (state.layers.streets3d) {
+      applyTerrain("elevation");
+      loadStreets3d().catch((error) => statusLive(error.message || String(error)));
+    } else if (state.live.streets3d.source) {
+      state.live.streets3d.source.entities.removeAll();
+    }
+  }
   if (layer === "amfm") {
     if (state.layers.amfm) {
       loadAmfm().catch((error) => statusLive(error.message || String(error)));
@@ -1126,12 +1166,16 @@ const LAYER_LABEL = {
   disease: "DISEASE OUTBREAK",
   animal: "ANIMAL DISEASE OUTBREAK",
   amfm: "AM FM TOWERS",
+  designations: "DESIGNATIONS",
+  violence: "ATTRIBUTED VIOLENCE",
+  nuke: "NUCLEAR",
+  streets3d: "STREETS 3D",
 };
 
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "streets3d"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -1989,6 +2033,10 @@ const LIVE_STYLE = {
   disease: { color: "#ff4d6a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DISEASE OUTBREAK" },
   animal: { color: "#e2b340", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ANIMAL DISEASE OUTBREAK" },
   amfm: { color: "#7aa2ff", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "AM FM TOWERS" },
+  designations: { color: "#f0c14a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DESIGNATION" },
+  violence: { color: "#c44b4b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ATTRIBUTED VIOLENCE" },
+  nuke: { color: "#7cff6b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "NUCLEAR" },
+  streets3d: { color: "#c4a574", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "STREETS 3D" },
 };
 
 function aircraftOnGround(point) {
@@ -2545,6 +2593,10 @@ function cullAircraftHorizon() {
     state.live.disease.source,
     state.live.animal.source,
     state.live.amfm.source,
+    state.live.designations.source,
+    state.live.violence.source,
+    state.live.nuke.source,
+    state.live.streets3d.source,
     state.outageSource,
     state.hungerSource,
   ];
@@ -2625,6 +2677,88 @@ async function loadAmfm() {
   }
 }
 
+function designationColor(point) {
+  if (point.designator_kind === "ngo") return "#c084fc";
+  if (point.person) return "#e8a54b";
+  return "#f0c14a";
+}
+
+function designationSize(point) {
+  const precision = String(point.precision || "");
+  if (precision === "street") return MARKER_SIZE;
+  if (precision === "city" || precision === "county") return 14;
+  if (precision === "state") return 12;
+  return 10;
+}
+
+function mapPackedPoints(body, extra) {
+  return (Array.isArray(body.points) ? body.points : [])
+    .filter((point) => point.lat != null && point.lon != null)
+    .map((point) => extra(point));
+}
+
+let designationsLoading = null;
+
+async function loadDesignations() {
+  if (state.live.designations.points.length) {
+    setCount("designations", state.live.designations.points.length);
+    placeLiveLayer("designations", state.live.designations.points);
+    return;
+  }
+  if (designationsLoading) return designationsLoading;
+  designationsLoading = (async () => {
+    const response = await fetch("/api/designations");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Designations failed");
+    state.live.designations.points = mapPackedPoints(body, (point) => ({
+      ...point,
+      color: designationColor(point),
+      size: designationSize(point),
+      kind: point.person ? "LISTED PERSON" : "DESIGNATION",
+      url: point.url,
+    }));
+    setCount("designations", state.live.designations.points.length);
+    placeLiveLayer("designations", state.live.designations.points);
+    statusLive();
+  })();
+  try {
+    await designationsLoading;
+  } finally {
+    designationsLoading = null;
+  }
+}
+
+let violenceLoading = null;
+
+async function loadViolence() {
+  if (state.live.violence.points.length) {
+    setCount("violence", state.live.violence.points.length);
+    placeLiveLayer("violence", state.live.violence.points);
+    return;
+  }
+  if (violenceLoading) return violenceLoading;
+  violenceLoading = (async () => {
+    const response = await fetch("/api/violence");
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Violence overlay failed");
+    state.live.violence.points = mapPackedPoints(body, (point) => ({
+      ...point,
+      color: "#c44b4b",
+      size: 12,
+      kind: "UCDP EVENT",
+      url: point.url || "https://ucdp.uu.se/",
+    }));
+    setCount("violence", state.live.violence.points.length);
+    placeLiveLayer("violence", state.live.violence.points);
+    statusLive();
+  })();
+  try {
+    await violenceLoading;
+  } finally {
+    violenceLoading = null;
+  }
+}
+
 function placeLiveLayer(key, points) {
   const layer = state.live[key];
   if (!layer?.source) return;
@@ -2660,10 +2794,10 @@ function placeLiveLayer(key, points) {
       kind = "ADS-B";
     } else {
       const style = key === "aircraft" ? aircraftStyle(point) : {
-        color: base.color,
+        color: point.color || base.color,
         outline: base.outline,
-        size: MARKER_SIZE,
-        kind: base.kind,
+        size: point.size || MARKER_SIZE,
+        kind: point.kind || base.kind,
       };
       kind = style.kind;
       entityOptions.point = key === "aircraft"
@@ -2674,7 +2808,7 @@ function placeLiveLayer(key, points) {
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         }
-        : markerPoint(style.color);
+        : markerPoint(style.color, style.size);
     }
     const entity = layer.source.entities.add(entityOptions);
     entity._live = { ...point, kind, layer: key };
@@ -2781,6 +2915,23 @@ function showLive(item) {
     extra = item.country ? `<br>${esc(item.country)}` : "";
     if (shown.length) extra += `<br>${shown.join("<br>")}`;
     if (names.length > shown.length) extra += `<br>and ${names.length - shown.length} more`;
+  }
+  else if (item.layer === "designations") {
+    const bits = [
+      item.designator,
+      item.legal_status,
+      item.claim_type,
+      item.precision,
+      item.address,
+    ].filter(Boolean).map((part) => esc(part));
+    extra = bits.length ? `<br>${bits.join("<br>")}` : "";
+    if (item.url) extra += `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">source list</a>`;
+  }
+  else if (item.layer === "violence") {
+    const bits = [item.year, item.deaths != null ? `${item.deaths} deaths` : "", item.address]
+      .filter(Boolean).map((part) => esc(String(part)));
+    extra = bits.length ? `<br>${bits.join(" · ")}` : "";
+    extra += `<br><a href="https://ucdp.uu.se/" target="_blank" rel="noreferrer">ucdp.uu.se</a>`;
   }
   else if (item.sog != null) extra = `<br>${esc(shipTypeLabel(item))} · ${esc(item.sog)} kn`;
   box.innerHTML = `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
@@ -2915,9 +3066,169 @@ function statusLive(error) {
     state.amfmReady
       ? `AM FM TOWERS ${amfmVisibleCount(state.live.amfm.points)}`
       : "AM FM TOWERS",
+    state.live.designations.points.length
+      ? `DESIGNATIONS ${state.live.designations.points.length}`
+      : "DESIGNATIONS",
+    state.live.violence.points.length
+      ? `ATTRIBUTED VIOLENCE ${state.live.violence.points.length}`
+      : "ATTRIBUTED VIOLENCE",
+    state.layers.nuke ? `NUCLEAR ${state.nuke.shots.length}` : "NUCLEAR",
+    state.layers.streets3d ? `STREETS 3D ${state.live.streets3d.points.length}` : "STREETS 3D",
   ];
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
+}
+
+function currentYieldKt() {
+  const presets = (window.GsaBlast && window.GsaBlast.KT_PRESETS) || [15, 100, 300, 1000, 5000];
+  return presets[state.nuke.yieldIdx] || 15;
+}
+
+function bindNukeHud() {
+  const yieldEl = document.getElementById("nuke-yield");
+  const burst = document.getElementById("nuke-burst");
+  if (yieldEl) {
+    yieldEl.addEventListener("input", () => {
+      state.nuke.yieldIdx = Number(yieldEl.value) || 0;
+      syncNukeHud();
+    });
+  }
+  if (burst) {
+    burst.addEventListener("click", () => {
+      state.nuke.airburst = !state.nuke.airburst;
+      burst.textContent = state.nuke.airburst ? "AIR" : "GROUND";
+      burst.setAttribute("aria-pressed", state.nuke.airburst ? "true" : "false");
+      syncNukeHud();
+    });
+  }
+}
+
+function syncNukeHud() {
+  const kt = currentYieldKt();
+  const label = document.getElementById("nuke-yield-label");
+  if (label) label.textContent = `${kt} kt`;
+  const level = (window.GsaBlast && window.GsaBlast.defcon(state.nuke.shots)) || 5;
+  const lamp = document.getElementById("defcon-lamp");
+  const strong = document.getElementById("defcon-level");
+  if (lamp) lamp.dataset.defcon = String(level);
+  if (strong) strong.textContent = String(level);
+  setCount("nuke", state.nuke.shots.length);
+  const last = state.nuke.shots[state.nuke.shots.length - 1];
+  const card = document.getElementById("nuke-card");
+  if (card) {
+    if (last && window.GsaBlast) {
+      card.hidden = false;
+      card.textContent = window.GsaBlast.card(last);
+    } else {
+      card.hidden = true;
+    }
+  }
+}
+
+function placeNukeAt(position) {
+  const viewer = state.viewer;
+  if (!viewer || !window.GsaBlast) return false;
+  const cartesian = viewer.camera.pickEllipsoid(position, viewer.scene.globe.ellipsoid);
+  if (!cartesian) return false;
+  const carto = Cesium.Cartographic.fromCartesian(cartesian);
+  const shot = {
+    lat: Cesium.Math.toDegrees(carto.latitude),
+    lon: Cesium.Math.toDegrees(carto.longitude),
+    yieldKt: currentYieldKt(),
+    airburst: state.nuke.airburst,
+  };
+  state.nuke.shots.push(shot);
+  drawNukeShot(shot);
+  syncNukeHud();
+  fetch(`/api/blast?kt=${shot.yieldKt}&air=${shot.airburst ? 1 : 0}&lat=${shot.lat}&lon=${shot.lon}`).catch(() => {});
+  statusLive();
+  return true;
+}
+
+function drawNukeShot(shot) {
+  const source = state.live.nuke.source;
+  if (!source) return;
+  const rings = window.GsaBlast.rings(shot.yieldKt, shot.airburst);
+  const center = Cesium.Cartesian3.fromDegrees(shot.lon, shot.lat);
+  const bands = [
+    { m: rings.fireballM, color: "#ffdc50", name: "FIREBALL" },
+    { m: rings.heavyM, color: "#dc281e", name: "HEAVY" },
+    { m: rings.mediumM, color: "#e67828", name: "MEDIUM" },
+    { m: rings.lightM, color: "#50b45a", name: "LIGHT" },
+    { m: rings.thermalM, color: "#ffa03c", name: "THERMAL" },
+  ];
+  if (rings.falloutM) bands.push({ m: rings.falloutM, color: "#c8f54c", name: "FALLOUT" });
+  source.entities.add({
+    position: center,
+    point: { pixelSize: 10, color: Cesium.Color.fromCssColorString("#7cff6b"), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 },
+    label: {
+      text: `${shot.yieldKt} kt`,
+      font: "12px IBM Plex Mono, monospace",
+      fillColor: Cesium.Color.fromCssColorString("#9aff8a"),
+      pixelOffset: new Cesium.Cartesian2(0, -16),
+    },
+  });
+  for (const band of bands) {
+    source.entities.add({
+      position: center,
+      ellipse: {
+        semiMinorAxis: band.m,
+        semiMajorAxis: band.m,
+        material: Cesium.Color.fromCssColorString(band.color).withAlpha(0.12),
+        outline: true,
+        outlineColor: Cesium.Color.fromCssColorString(band.color).withAlpha(0.85),
+        height: 0,
+      },
+      name: band.name,
+    });
+  }
+  source.show = true;
+}
+
+async function loadStreets3d() {
+  const viewer = state.viewer;
+  const source = state.live.streets3d.source;
+  if (!viewer || !source) return;
+  const height = viewer.camera.positionCartographic.height;
+  if (height > 4000) {
+    setCount("streets3d", source.entities.values.length);
+    return;
+  }
+  const center = viewer.camera.positionCartographic;
+  const lon = Cesium.Math.toDegrees(center.longitude);
+  const lat = Cesium.Math.toDegrees(center.latitude);
+  const z = 15;
+  const n = 2 ** z;
+  const x = Math.floor(((lon + 180) / 360) * n);
+  const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+  const url = `https://a.data.osmbuildings.org/0.2/anonymous/tile/${z}/${x}/${y}.json`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("OSM buildings unavailable");
+  const body = await response.json();
+  const features = Array.isArray(body.features) ? body.features : [];
+  source.entities.removeAll();
+  let count = 0;
+  for (const feature of features.slice(0, 400)) {
+    const geom = feature.geometry;
+    if (!geom || geom.type !== "Polygon" || !geom.coordinates) continue;
+    const ring = geom.coordinates[0];
+    if (!ring || ring.length < 3) continue;
+    const heights = Number(feature.properties && (feature.properties.height || feature.properties.levels * 3)) || 12;
+    const hierarchy = ring.map((pair) => Cesium.Cartesian3.fromDegrees(pair[0], pair[1]));
+    source.entities.add({
+      polygon: {
+        hierarchy,
+        extrudedHeight: heights,
+        material: Cesium.Color.fromCssColorString("#c4a574").withAlpha(0.85),
+        outline: true,
+        outlineColor: Cesium.Color.fromCssColorString("#6a4e2e"),
+      },
+    });
+    count += 1;
+  }
+  state.live.streets3d.points = new Array(count);
+  source.show = true;
+  setCount("streets3d", count);
 }
 
 boot().catch((error) => setStatus(error.message || String(error)));

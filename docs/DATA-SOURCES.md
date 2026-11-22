@@ -60,12 +60,35 @@ sample hammers nothing useful and the file is large.
 | Fly `downtime-globe` | Node `visualizer/server.mjs` uses pack → cache → network (`datapack.mjs`). |
 | Local `:4173` / `:4174` | Same Node path. `OFFLINE=1` stops at pack/cache. |
 
+## Designation claims
+
+Issue [#60](https://github.com/lquessenberry/downtime-checker/issues/60).
+Ingest: `python3 scripts/designations/designations.py --ingest un` (people included).
+Geocode: `python3 scripts/designations/geocode_designations.py --contact you@example.com`.
+Globe: `GET /api/designations`, `GET /api/violence`. Layers default off.
+
+| Source | Kind | Access | Notes |
+| --- | --- | --- | --- |
+| UN Security Council consolidated list | government | XML feed | Entities and individuals. Street/city/country stay on the record. |
+| US State FTO | government | HTML table (Chrome UA) | Name + date; no published address. |
+| UK Home Office proscribed | government | accessible HTML | Name + proscription date. |
+| EU FSF | government | XML bulk | Street/city when the file has them. EU persons stay in jsonl; globe pack is entities unless `--eu-people`. |
+| SPLC Hate Map | ngo | public `/wp-json/splc/v1/hatemap` | Local jsonl only. No bulk redistribution. |
+| UCDP GED | violence | CSV zip with lat/lon | Separate layer. Cap 8000, year >= 2020. |
+| ACLED | violence | API key / local CSV | Same violence layer if a file or key is present. |
+
+Shared schema is `claims.jsonl` (#59): `claimant`, `basis`, `asserted_date`, `status`, `geometry` or `location.county_fips`, `class` in `designation` | `violence` | `zone`. Filter with `--filter`. CFR theaters ingest as `class=zone`; CONFLICT TRACKER remains the zone renderer. `GET /api/claims` is the class index.
+
+Do not cron designation dumps into git. Source addresses stay on the claim. NUCLEAR is a first-party cube-root blast layer on the globe (#39). Math lives in `downtime-core` and `globalstatus/blast.js`. The multithreaded server is `downtime-server` (tokio). PHP is legacy.
+
 ## Credit / license reminders
 
 - gpsjam.org: credit John Wiseman; underlying aircraft from ADS-B Exchange and airplanes.live.
 - CFR: conflict tracker page, theater markers, not ACLED dots.
 - FAO Hunger Map / SOFI: undernourishment prevalence.
-- EOX 2018–2025 mosaics are CC BY-NC-SA; ads need a commercial license or the 2016 CC BY mosaic.
+- EOX 2018–2025 mosaics are CC BY-NC-SA; ads need a commercial license or the 2016 CC BY mosaic. We do not buy the commercial license; the shipped SAT path is NASA GIBS / EOX 2016 CC BY / OSM.
+- Esri World Imagery, Street Map, and Terrain3D are not required defaults (cycles 11 and 14). Terrarium + OSM replace them.
+- No Cesium ion key. No Mapbox GL JS v2+. See `docs/NO-PAID-LICENSES.md`.
 - Uniden HPDB is the public BT885 Update Manager dump.
 - HealthMap: credit Boston Children's Hospital / healthmap.org. Aggregates news, ProMED, WHO, etc.
 - GIDEON: credit gideononline.com. Public events feed is free to view; bulk licensed API is not. Do not scrape the paid app UI.

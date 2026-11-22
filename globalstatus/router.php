@@ -55,6 +55,10 @@ $files = array(
     '/api/streams' => 'api/streams.json',
     '/api/feeds' => 'api/feeds.json',
     '/api/amfm' => 'api/amfm.json',
+    '/api/designations' => 'api/designations.json',
+    '/api/violence' => 'api/violence.json',
+    '/api/zones' => 'api/zones.json',
+    '/api/claims' => 'api/claims.json',
 );
 if (isset($files[$path]) && $method === 'GET') {
     $file = $root . '/' . $files[$path];
