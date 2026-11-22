@@ -1,0 +1,14 @@
+{
+  "note": "URLs only. fetch.sh --lidar-portals copies this into data/map-assets/. Do not git LiDAR grids, COP-DEM GeoTIFFs, or swissALTI3D tiles.",
+  "license": "Open Government / CC BY / Copernicus per portal",
+  "items": [
+    {"id": "uk-ea-lidar", "homepage": "https://environment.data.gov.uk/dataset/13787b9a-26a4-4775-8523-806d13af58fc", "license": "OGL v3.0"},
+    {"id": "linz", "homepage": "https://data.linz.govt.nz/", "license": "CC BY 4.0"},
+    {"id": "nrcan-hrdem", "homepage": "https://open.canada.ca/data/en/dataset/957782bf-847c-4644-a757-e383c0057995", "license": "OGL-Canada"},
+    {"id": "copernicus-dem", "homepage": "https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model", "license": "Copernicus"},
+    {"id": "swissalti3d", "homepage": "https://www.swisstopo.admin.ch/en/height-model-swissalti3d", "license": "opendata.swiss"},
+    {"id": "aus-elvis", "homepage": "https://elevation.fsdf.org.au/", "license": "CC BY per jurisdiction"},
+    {"id": "nls-finland-dtm", "homepage": "https://www.maanmittauslaitos.fi/en/maps-and-spatial-data/expert-users/product-descriptions/elevation-model-2-m", "license": "CC BY 4.0"},
+    {"id": "dk-dhm", "homepage": "https://dataforsyningen.dk/", "license": "Danish open data"}
+  ]
+}
