@@ -6,6 +6,7 @@
 pub mod cartographic;
 pub mod ellipsoid;
 pub mod imagery;
+pub mod map_assets;
 pub mod primitives;
 pub mod quadtree;
 pub mod scene;
@@ -14,6 +15,7 @@ pub mod terrain;
 pub use cartographic::Cartographic;
 pub use ellipsoid::{Ellipsoid, WGS84_RADII_M};
 pub use imagery::{Basemap, ImageryLayer};
+pub use map_assets::{xyz_for_basemap, xyz_for_terrain, MapAsset, CATALOG};
 pub use primitives::PointPrimitive;
 pub use quadtree::QuadtreeTile;
 pub use scene::SceneMode;
@@ -36,6 +38,10 @@ mod smoke {
         let _ = QuadtreeTile::root();
         let _ = SceneMode::Scene3D;
         let _ = TerrainKind::Ellipsoid;
+        let _ = TerrainKind::Terrarium;
+        let _ = Basemap::OpenTopo;
+        let _ = xyz_for_basemap(Basemap::Osm, 0, 0, 0);
+        assert!(!CATALOG.is_empty());
         let _ = WGS84_RADII_M;
     }
 }

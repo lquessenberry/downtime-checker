@@ -10,8 +10,8 @@ Native wins when a visitor (or a phone) can do everything the Cesium globe does,
 
 | Cesium today | Native must |
 | --- | --- |
-| Street / satellite / Sentinel / Blue Marble / night / OSM / plain | Same basemaps, switchable. Blue Marble is on the sphere now; XYZ tiles and night lights next. |
-| Esri terrain | Heightmap / Terrarium DEM on the mesh |
+| Street / satellite / Sentinel / Blue Marble / night / OSM / plain | Same basemaps, switchable. Blue Marble is on the sphere now; free XYZ registry in `engine/map_assets.rs` (OSM, OpenTopo, GIBS). |
+| Esri terrain | **Refused.** Mapzen Terrarium / SRTM. See `docs/MAP-ASSETS.md`. |
 | 3D / 2D / Columbus | Orbit globe plus a flat map that does not tear on Android |
 | Power outages, AIR, JAM, AIS, mesh, disease, animal, scanners, AM/FM, hunger, conflict | Real `DataLayer` impls, same sources and credits |
 | Country grid + spiderweb | 15-minute saved pass, replayed as arcs from Jonesboro |

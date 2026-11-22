@@ -17,6 +17,7 @@ mod globe_math;
 pub mod pins;
 mod render;
 
+use crate::engine::{Basemap, ImageryLayer, TerrainKind};
 use downtime_core::{blast_card, blast_defcon, blast_rings, builtin_layers, BlastShot, LayerKind, KT_PRESETS};
 use eframe::egui;
 use glam::Vec3;
@@ -74,6 +75,8 @@ struct GlobeApp {
     yield_idx: usize,
     airburst: bool,
     shots: Vec<BlastShot>,
+    basemap: Basemap,
+    terrain: TerrainKind,
 }
 
 impl GlobeApp {
@@ -88,6 +91,8 @@ impl GlobeApp {
             yield_idx: 0,
             airburst: true,
             shots: Vec::new(),
+            basemap: Basemap::BlueMarble,
+            terrain: TerrainKind::Ellipsoid,
         }
     }
 
@@ -97,7 +102,22 @@ impl GlobeApp {
             ui.label(egui::RichText::new(concat!("Native globe alpha ", env!("CARGO_PKG_VERSION"))).weak());
             ui.separator();
             ui.label(&self.data.status);
-            ui.label("Earth: NASA Blue Marble (public domain)");
+            ui.label(ImageryLayer::for_basemap(self.basemap).credit);
+            ui.label("Basemap (free only)");
+            egui::ComboBox::from_id_salt("basemap")
+                .selected_text(self.basemap.label())
+                .show_ui(ui, |ui| {
+                    for b in Basemap::ALL {
+                        ui.selectable_value(&mut self.basemap, b, b.label());
+                    }
+                });
+            ui.label("Terrain");
+            egui::ComboBox::from_id_salt("terrain")
+                .selected_text(self.terrain.label())
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.terrain, TerrainKind::Ellipsoid, TerrainKind::Ellipsoid.label());
+                    ui.selectable_value(&mut self.terrain, TerrainKind::Terrarium, TerrainKind::Terrarium.label());
+                });
             ui.checkbox(&mut self.show_pins, format!("Capital pins ({})", self.data.pins.len()));
             ui.checkbox(&mut self.show_grid, "Graticule");
             ui.separator();

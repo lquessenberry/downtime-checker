@@ -1,5 +1,6 @@
 //! Imagery providers. Cesium splits `ImageryProvider` / `ImageryLayer`.
-//! Native today: one compiled Blue Marble tile. XYZ/WMTS come next.
+//! Native: Blue Marble is compiled in. XYZ URLs for OSM / OpenTopo / GIBS
+//! live in `map_assets` (no Mapbox, ion, or Esri).
 
 #![allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -9,8 +10,34 @@ pub enum Basemap {
     Satellite,
     Sentinel,
     Osm,
+    OpenTopo,
     Night,
     Plain,
+}
+
+impl Basemap {
+    pub const ALL: [Basemap; 8] = [
+        Basemap::BlueMarble,
+        Basemap::Osm,
+        Basemap::OpenTopo,
+        Basemap::Streets,
+        Basemap::Satellite,
+        Basemap::Sentinel,
+        Basemap::Night,
+        Basemap::Plain,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Basemap::BlueMarble => "NASA Blue Marble",
+            Basemap::Osm | Basemap::Streets => "OpenStreetMap",
+            Basemap::OpenTopo => "OpenTopoMap",
+            Basemap::Satellite => "NASA GIBS Blue Marble tiles",
+            Basemap::Sentinel => "NASA GIBS MODIS",
+            Basemap::Night => "Night (plain dark)",
+            Basemap::Plain => "Plain ellipsoid",
+        }
+    }
 }
 
 pub struct ImageryLayer {
@@ -20,9 +47,17 @@ pub struct ImageryLayer {
 
 impl ImageryLayer {
     pub fn blue_marble() -> Self {
-        Self {
-            basemap: Basemap::BlueMarble,
-            credit: "NASA Visible Earth / Blue Marble",
-        }
+        Self::for_basemap(Basemap::BlueMarble)
+    }
+
+    pub fn for_basemap(basemap: Basemap) -> Self {
+        let credit = match basemap {
+            Basemap::BlueMarble | Basemap::Satellite => "NASA Visible Earth / GIBS",
+            Basemap::Osm | Basemap::Streets => "© OpenStreetMap contributors",
+            Basemap::OpenTopo => "OpenTopoMap (CC-BY-SA) · OSM · SRTM",
+            Basemap::Sentinel => "NASA GIBS / Worldview",
+            Basemap::Night | Basemap::Plain => "ellipsoid",
+        };
+        Self { basemap, credit }
     }
 }
