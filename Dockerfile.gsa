@@ -13,7 +13,8 @@ COPY globalstatus/ /app/
 COPY nginx.gsa.conf /etc/nginx/conf.d/gsa.conf
 COPY scripts/gsa-php-fpm.conf /usr/local/etc/php-fpm.d/zz-gsa.conf
 COPY scripts/gsa-start.sh /usr/local/bin/gsa-start.sh
-RUN chmod -R a+rwX /app/data \
+RUN rm -f /app/dev-router.php \
+  && chmod -R a+rwX /app/data \
   && chmod +x /usr/local/bin/gsa-start.sh \
   && sed -i 's/^user /# user /' /etc/nginx/nginx.conf \
   && sed -i 's/worker_processes .*/worker_processes auto;/' /etc/nginx/nginx.conf

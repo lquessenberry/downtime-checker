@@ -2,7 +2,7 @@
 // One synthetic user (#34). Polls upstream, writes cache, visitors read /api.
 //
 //   php poll-runner.php status
-//   php poll-runner.php outages|mesh|disease|animal|mil|jamming|aircraft|grid
+//   php poll-runner.php outages|mesh|disease|animal|mil|jamming|aircraft|aircraft-detail|grid
 //   php poll-runner.php once
 //   php poll-runner.php loop
 //   php poll-runner.php grid --slice=16
@@ -27,6 +27,7 @@ foreach ($argv as $arg) {
 $ttls = array(
     'jamming' => 180,
     'aircraft' => 180,
+    'aircraft-detail' => 15,
     'outages' => 180,
     'mil' => 180,
     'mesh' => 90,
@@ -123,6 +124,11 @@ function runner_run($name, $slice = 0)
             return aircraft_refresh();
         });
     }
+    if ($name === 'aircraft-detail') {
+        return runner_timed('aircraft-detail', function () {
+            return aircraft_detail_refresh();
+        });
+    }
     if ($name === 'grid') {
         return runner_timed('grid', function () use ($slice) {
             return run_scheduled_scan('everything', '', $slice);
@@ -130,7 +136,7 @@ function runner_run($name, $slice = 0)
     }
     if ($name === 'once') {
         $out = array();
-        foreach (array('outages', 'mesh', 'disease', 'animal', 'mil', 'jamming', 'aircraft') as $job) {
+        foreach (array('outages', 'mesh', 'disease', 'animal', 'mil', 'jamming', 'aircraft', 'aircraft-detail') as $job) {
             $out[$job] = runner_run($job);
         }
         return $out;

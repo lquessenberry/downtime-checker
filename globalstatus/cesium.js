@@ -1019,7 +1019,7 @@ function setCount(key, value) {
 }
 
 function resetMap() {
-  fetch("/api/stop", { method: "POST" });
+  // Local UI only. Do not POST /api/stop: that flag can abort the shared runner grid pass.
   state.running = false;
   state.scanWanted = false;
   state.scanLive = false;
