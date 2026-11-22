@@ -155,6 +155,18 @@ DESIGNATORS = {
         "access": "API key; local CSV ingest if DNS/key fail",
         "terms": "acled-terms",
     },
+    "cfr_conflicts": {
+        "name": "Council on Foreign Relations",
+        "list": "Global Conflict Tracker",
+        "kind": "research",
+        "orientation": "academic",
+        "basis": "editorial theater assessment",
+        "legal_status": "none",
+        "appeal": "CFR page corrections",
+        "url": "https://www.cfr.org/global-conflict-tracker",
+        "access": "packed conflicts.json (theater markers, not event dots)",
+        "terms": "cfr-attribution",
+    },
 }
 
 RESTRICTED_TERMS = frozenset({"no-bulk-redistribution"})
@@ -262,16 +274,20 @@ def designation_record(
         "city": loc_city,
         "zip": loc_zip,
     }
+    geometry = None
     if lat is not None and lon is not None:
         loc["lat"] = float(lat)
         loc["lon"] = float(lon)
+        geometry = {"type": "Point", "coordinates": [float(lon), float(lat)]}
+    claimant = meta.get("name", designator)
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "class": rec_class,
+        "claimant": claimant,
         "org_key": re.sub(r"[^a-z0-9]+", "-", (org_name or "").lower()).strip("-"),
         "org_name": org_name,
         "designator_id": designator,
-        "designator_name": meta.get("name", designator),
+        "designator_name": claimant,
         "designator_kind": meta.get("kind"),
         "claim_type": claim_type,
         "basis": basis or meta.get("basis"),
@@ -281,6 +297,7 @@ def designation_record(
         "ref": ref,
         "person": is_person,
         "location": loc,
+        "geometry": geometry,
         "source_url": source_url or meta.get("url"),
         "retrieved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "raw_sha256": hashlib.sha256(
@@ -289,6 +306,36 @@ def designation_record(
         if raw
         else None,
     }
+
+
+def normalize_claim(rec: dict) -> dict:
+    """Fill 1.1 fields on older jsonl rows so a reader can filter by class."""
+    loc = rec.get("location") or {}
+    rec.setdefault("schema_version", "1.1")
+    rec.setdefault("class", "designation")
+    rec.setdefault("claimant", rec.get("designator_name") or rec.get("designator_id"))
+    rec.setdefault("asserted_date", rec.get("asserted_date"))
+    rec.setdefault("status", rec.get("status") or "active")
+    rec.setdefault("basis", rec.get("basis"))
+    if rec.get("geometry") is None:
+        lat, lon = loc.get("lat"), loc.get("lon")
+        try:
+            rec["geometry"] = {
+                "type": "Point",
+                "coordinates": [float(lon), float(lat)],
+            }
+        except (TypeError, ValueError):
+            rec["geometry"] = None
+    rec.setdefault("location", loc)
+    rec["location"].setdefault("county_fips", loc.get("county_fips"))
+    return rec
+
+
+def filter_claims(records: list[dict], rec_class: str | None = None) -> list[dict]:
+    out = [normalize_claim(dict(r)) for r in records]
+    if rec_class:
+        out = [r for r in out if r.get("class") == rec_class]
+    return out
 
 
 def fetch(url: str, timeout: float = 180, browser: bool = False) -> bytes:
@@ -813,6 +860,63 @@ def ingest_acled() -> tuple[list, dict]:
     return records, {"designator": "acled", "records": len(records)}
 
 
+def ingest_cfr_zones(blob: bytes | str | dict) -> tuple[list, dict]:
+    """Contested-zone claims from packed CFR Global Conflict Tracker JSON."""
+    if isinstance(blob, dict):
+        doc = blob
+    else:
+        text = blob.decode("utf-8", "replace") if isinstance(blob, (bytes, bytearray)) else blob
+        doc = json.loads(text)
+    conflicts = doc.get("conflicts") or []
+    records = []
+    skipped = 0
+    for row in conflicts:
+        try:
+            lat = float(row.get("lat"))
+            lon = float(row.get("lon"))
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+        countries = row.get("countries") or []
+        country = countries[0] if countries else None
+        rec = designation_record(
+            "cfr_conflicts",
+            (row.get("name") or row.get("slug") or "unnamed theater").strip(),
+            country=country,
+            claim_type="contested_zone",
+            basis=row.get("types") or DESIGNATORS["cfr_conflicts"]["basis"],
+            asserted=None,
+            status=row.get("status") or "active",
+            source_url=row.get("url"),
+            raw={
+                "id": row.get("id"),
+                "slug": row.get("slug"),
+                "region": row.get("region"),
+                "types": row.get("types"),
+            },
+            ref=row.get("id") or row.get("slug"),
+            lat=lat,
+            lon=lon,
+            rec_class="zone",
+        )
+        rec["location"]["region"] = row.get("region")
+        records.append(rec)
+    return records, {
+        "designator": "cfr_conflicts",
+        "class": "zone",
+        "records": len(records),
+        "skipped": skipped,
+    }
+
+
+def ingest_zones(path: Path | None = None) -> tuple[list, dict]:
+    default = Path("globalstatus/api/conflicts.json")
+    src = path or default
+    if not src.is_file():
+        return [], {"designator": "cfr_conflicts", "error": f"missing {src}"}
+    return ingest_cfr_zones(src.read_bytes())
+
+
 def _cell(row: dict, col: str | None) -> str | None:
     if not col:
         return None
@@ -1003,6 +1107,12 @@ def compact_point(rec: dict, geo: dict | None = None) -> dict | None:
         "status": rec.get("status"),
         "deaths": rec.get("deaths"),
         "year": rec.get("year"),
+        "class": rec.get("class", "designation"),
+        "claimant": rec.get("claimant") or rec.get("designator_name"),
+        "basis": rec.get("basis"),
+        "geometry": rec.get("geometry")
+        or {"type": "Point", "coordinates": [lon_f, lat_f]},
+        "county_fips": loc.get("county_fips"),
     }
 
 
@@ -1075,20 +1185,25 @@ def _include_people(args) -> bool:
 
 
 def _write_split(outdir: Path, records: list[dict], append: bool) -> None:
-    designations = [r for r in records if r.get("class", "designation") == "designation"]
+    records = [normalize_claim(r) for r in records]
+    designations = [r for r in records if r.get("class") == "designation"]
     violence = [r for r in records if r.get("class") == "violence"]
+    zones = [r for r in records if r.get("class") == "zone"]
+    if records:
+        write_jsonl(outdir / "claims.jsonl", records, append=append)
     if designations:
         write_jsonl(outdir / "designations.jsonl", designations, append=append)
-        write_jsonl(outdir / "claims.jsonl", designations, append=append)
     if violence:
         write_jsonl(outdir / "violence.jsonl", violence, append=append)
+    if zones:
+        write_jsonl(outdir / "zones.jsonl", zones, append=append)
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument(
         "--ingest",
-        choices=["un", "csv", "fto", "uk", "eu", "ucdp", "splc", "acled", "all"],
+        choices=["un", "csv", "fto", "uk", "eu", "ucdp", "splc", "acled", "zones", "all"],
     )
     ap.add_argument("--csv")
     ap.add_argument("--designator", default=None)
@@ -1115,6 +1230,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--list-designators", action="store_true")
     ap.add_argument("--out", default="data/designations")
     ap.add_argument("--append", action="store_true")
+    ap.add_argument("--conflicts-json", help="Packed CFR conflicts.json for --ingest zones")
+    ap.add_argument(
+        "--filter",
+        choices=["designation", "violence", "zone"],
+        help="Print matching rows from claims.jsonl (shared schema reader)",
+    )
     args = ap.parse_args(argv)
 
     outdir = Path(args.out)
@@ -1160,6 +1281,9 @@ def main(argv: list[str] | None = None) -> int:
             if args.csv:
                 return ingest_acled_csv(Path(args.csv).read_bytes(), cap=args.cap)
             return ingest_acled()
+        if kind == "zones":
+            path = Path(args.conflicts_json) if args.conflicts_json else None
+            return ingest_zones(path)
         return [], {"error": f"unknown ingest {kind}"}
 
     if args.ingest == "csv":
@@ -1194,7 +1318,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.ingest:
-        kinds = ["un", "fto", "uk", "eu", "ucdp", "splc", "acled"] if args.ingest == "all" else [args.ingest]
+        kinds = (
+            ["un", "fto", "uk", "eu", "ucdp", "splc", "acled", "zones"]
+            if args.ingest == "all"
+            else [args.ingest]
+        )
         metas = []
         first = not args.append
         for kind in kinds:
@@ -1207,6 +1335,13 @@ def main(argv: list[str] | None = None) -> int:
         if first:
             return 1
         return 0 if any(m.get("records") for m in metas) else 1
+
+    if args.filter:
+        rows = filter_claims(load_jsonl(outdir / "claims.jsonl"), args.filter)
+        for rec in rows:
+            print(json.dumps(rec, ensure_ascii=False))
+        print(json.dumps({"class": args.filter, "count": len(rows)}), file=sys.stderr)
+        return 0 if rows else 1
 
     if args.report:
         records = load_jsonl(jsonl)
@@ -1223,7 +1358,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.pack:
-        records = load_jsonl(jsonl) + load_jsonl(outdir / "violence.jsonl")
+        records = (
+            load_jsonl(outdir / "claims.jsonl")
+            or (load_jsonl(jsonl) + load_jsonl(outdir / "violence.jsonl") + load_jsonl(outdir / "zones.jsonl"))
+        )
+        records = filter_claims(records)
         if not records:
             print("no records; ingest something first", file=sys.stderr)
             return 1
@@ -1241,7 +1380,35 @@ def main(argv: list[str] | None = None) -> int:
             include_restricted=args.include_restricted,
             rec_class="violence",
         )
-        print(json.dumps({"designations": des, "violence": vio}))
+        zones = pack_globe(
+            records,
+            api / "zones.json",
+            rec_class="zone",
+        )
+        class_counts = Counter(r.get("class") for r in records)
+        claims_doc = {
+            "source": "scripts/designations/designations.py",
+            "schema_version": "1.1",
+            "class": "claims",
+            "count": sum(class_counts.values()),
+            "classes": dict(class_counts),
+            "layers": {
+                "designation": "/api/designations",
+                "violence": "/api/violence",
+                "zone": "/api/zones",
+            },
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "policy": "claims.jsonl is the shared schema; filter by class. Distinct globe renderers stay split.",
+        }
+        claims_path = api / "claims.json"
+        claims_path.parent.mkdir(parents=True, exist_ok=True)
+        claims_path.write_text(json.dumps(claims_doc, ensure_ascii=False), encoding="utf-8")
+        print(json.dumps({
+            "designations": des,
+            "violence": vio,
+            "zones": zones,
+            "claims": {"path": str(claims_path), "count": claims_doc["count"], "classes": claims_doc["classes"]},
+        }))
         return 0
 
     ap.print_help()

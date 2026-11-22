@@ -132,6 +132,7 @@ def main() -> int:
                 toggles,
                 designations: toggles.includes('designations'),
                 violence: toggles.includes('violence'),
+                conflicts: toggles.includes('conflicts'),
                 nukemap: Boolean(nukemap) && (nukemap.href || '').includes('nukemap'),
               });
             })()""",

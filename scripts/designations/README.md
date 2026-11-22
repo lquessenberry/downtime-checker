@@ -23,5 +23,15 @@ NGO dumps (SPLC hatemap JSON) stay local. SPLC grants no bulk redistribution
 license; do not commit that jsonl. Government gold pins and NGO purple pins
 are different marks. UCDP/ACLED is the violence layer.
 
+Shared `claims.jsonl` (#59) holds designation, violence, and contested-zone
+rows. Same fields: claimant, basis, asserted_date, status, geometry or
+county_fips. Distinct globe renderers: DESIGNATIONS, ATTRIBUTED VIOLENCE,
+CONFLICT TRACKER (zones).
+
+```bash
+python3 scripts/designations/designations.py --ingest zones --out data/designations
+python3 scripts/designations/designations.py --filter zone --out data/designations
+```
+
 Cesium layers: DESIGNATIONS, ATTRIBUTED VIOLENCE. NUKEMAP is an external
 link, not an iframe. No FTP until Lee says go-live.

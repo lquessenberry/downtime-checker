@@ -152,6 +152,53 @@ class GovListTests(unittest.TestCase):
         self.assertEqual(packed["skipped"]["restricted"], 1)
 
 
+class UnifiedClaimsTests(unittest.TestCase):
+    def test_schema_has_claimant_geometry_and_filter(self):
+        rec = designations.designation_record(
+            "un_sanctions", "ADF", country="CD", lat=-1.68, lon=29.23
+        )
+        self.assertEqual(rec["schema_version"], "1.1")
+        self.assertEqual(rec["claimant"], "UN Security Council")
+        self.assertEqual(rec["class"], "designation")
+        self.assertEqual(rec["geometry"]["type"], "Point")
+        self.assertEqual(rec["geometry"]["coordinates"], [29.23, -1.68])
+        zone = designations.designation_record(
+            "cfr_conflicts",
+            "Civil War in Sudan",
+            lat=12.86,
+            lon=30.22,
+            rec_class="zone",
+            claim_type="contested_zone",
+            status="Worsening",
+        )
+        mixed = designations.filter_claims([rec, zone], "zone")
+        self.assertEqual(len(mixed), 1)
+        self.assertEqual(mixed[0]["org_name"], "Civil War in Sudan")
+        self.assertEqual(mixed[0]["claimant"], "Council on Foreign Relations")
+
+    def test_cfr_zones_fixture_and_claims_jsonl(self):
+        blob = (HERE / "tests" / "fixtures" / "cfr-sample.json").read_bytes()
+        records, meta = designations.ingest_cfr_zones(blob)
+        self.assertEqual(meta["records"], 1)
+        self.assertEqual(records[0]["class"], "zone")
+        self.assertEqual(records[0]["claim_type"], "contested_zone")
+        self.assertEqual(records[0]["status"], "Worsening")
+        self.assertTrue(records[0]["geometry"])
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            un, _ = designations.ingest_un_xml(FIXTURE.read_bytes())
+            designations._write_split(out, un + records, append=False)
+            claims = [
+                json.loads(line)
+                for line in (out / "claims.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            classes = {row["class"] for row in claims}
+            self.assertEqual(classes, {"designation", "zone"})
+            packed = designations.pack_globe(records, out / "zones.json", rec_class="zone")
+            self.assertEqual(packed["count"], 1)
+
+
 class GeocodeTests(unittest.TestCase):
     def test_source_coords_and_country_centroid(self):
         import geocode_designations as geo

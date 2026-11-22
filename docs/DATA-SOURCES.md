@@ -77,6 +77,8 @@ Globe: `GET /api/designations`, `GET /api/violence`. Layers default off.
 | UCDP GED | violence | CSV zip with lat/lon | Separate layer. Cap 8000, year >= 2020. |
 | ACLED | violence | API key / local CSV | Same violence layer if a file or key is present. |
 
+Shared schema is `claims.jsonl` (#59): `claimant`, `basis`, `asserted_date`, `status`, `geometry` or `location.county_fips`, `class` in `designation` | `violence` | `zone`. Filter with `--filter`. CFR theaters ingest as `class=zone`; CONFLICT TRACKER remains the zone renderer. `GET /api/claims` is the class index.
+
 Do not cron designation dumps into git. Source addresses stay on the claim. NUKEMAP is a new-tab link to https://nuclearsecrecy.com/nukemap/ (#39).
 
 ## Credit / license reminders

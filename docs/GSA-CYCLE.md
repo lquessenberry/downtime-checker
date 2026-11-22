@@ -9,7 +9,7 @@ Bounded to **6 cycles**. Does not FTP. Does not merge `feat/globalstatus-prod`.
 
 ## GitHub Actions
 
-`.github/workflows/gsa-morning-cycle.yml` fires `20 12-17 * * 1-5` (six weekday morning hours, UTC). Each run tests designations, PHP, and `cesium.js`, then comments the tracking issue.
+`.github/workflows/gsa-morning-cycle.yml` fires `20 12-17 * * 1-5` (six weekday morning hours, UTC) **once the file exists on the default branch** (`feat/globalstatus-prod`). Each run tests designations when present, PHP, and `cesium.js`, then comments the tracking issue. Pull requests that touch globe or cycle paths also run it.
 
 Set repository variable `GSA_CYCLE_ISSUE` to the tracking issue number.
 

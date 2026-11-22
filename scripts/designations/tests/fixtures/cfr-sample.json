@@ -1,0 +1,19 @@
+{
+  "source": "https://www.cfr.org/global-conflict-tracker",
+  "count": 1,
+  "conflicts": [
+    {
+      "id": "cfr-14744",
+      "kind": "conflict",
+      "name": "Civil War in Sudan",
+      "slug": "power-struggle-sudan",
+      "lat": 12.8628,
+      "lon": 30.2176,
+      "region": "Sub-Saharan Africa",
+      "status": "Worsening",
+      "types": "Civil War",
+      "url": "https://www.cfr.org/global-conflict-tracker/conflict/power-struggle-sudan",
+      "countries": ["SDN"]
+    }
+  ]
+}

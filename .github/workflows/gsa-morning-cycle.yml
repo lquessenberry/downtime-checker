@@ -7,6 +7,12 @@ name: GSA morning cycle
 on:
   schedule:
     - cron: "20 12-17 * * 1-5"
+  pull_request:
+    paths:
+      - "globalstatus/**"
+      - "scripts/designations/**"
+      - "scripts/gsa-cycle/**"
+      - ".github/workflows/gsa-morning-cycle.yml"
   workflow_dispatch:
     inputs:
       cdp:
@@ -42,8 +48,13 @@ jobs:
           GSA_CYCLE_ISSUE: ${{ vars.GSA_CYCLE_ISSUE }}
         run: |
           set -euo pipefail
-          python3 -m unittest scripts/designations/tests/test_designations.py
+          if [ -f scripts/designations/tests/test_designations.py ]; then
+            python3 -m unittest scripts/designations/tests/test_designations.py
+          else
+            echo "designations tests not on this branch; php/js still run"
+          fi
           php -l globalstatus/router.php
+          if [ -f globalstatus/poll-runner.php ]; then php -l globalstatus/poll-runner.php; fi
           node --check globalstatus/cesium.js
 
       - name: Comment GLOBALSTATUS / RUCKUS
@@ -59,7 +70,7 @@ jobs:
           - unit tests ran on Actions
           - no FTP
           - no merge to production
-          - next: designations (#60), claims (#59), poll-runner (#34)
+          - next: claims (#59), poll-runner (#34), NUKEMAP link (#39)
 
           ### RUCKUS
           - SPLC dumps stay gitignored

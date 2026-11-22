@@ -21,7 +21,7 @@ REPO = os.environ.get("GSA_REPO", "lquessenberry/downtime-checker")
 TRACK_ISSUE = os.environ.get("GSA_CYCLE_ISSUE", "")
 MAX_CYCLES = 6
 PRIORITY = [
-    60, 59, 34, 39, 68, 62, 56, 55, 54, 53, 52, 51, 50,
+    59, 60, 34, 39, 68, 62, 56, 55, 54, 53, 52, 51, 50,
 ]
 
 
