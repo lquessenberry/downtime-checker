@@ -32,6 +32,7 @@ pub enum AssetKind {
     Bathymetry,
     Geophysical,
     Boundaries,
+    OfflineTool,
 }
 
 pub const CATALOG: &[MapAsset] = &[
@@ -518,6 +519,105 @@ pub const CATALOG: &[MapAsset] = &[
         xyz: None,
         credit: "REJECTED — no ion",
     },
+    MapAsset {
+        id: "qgis",
+        title: "QGIS desktop GIS",
+        kind: AssetKind::OfflineTool,
+        license: "GPL-2.0-or-later",
+        homepage: "https://qgis.org/",
+        xyz: None,
+        credit: "QGIS.org",
+    },
+    MapAsset {
+        id: "qgis-quickmapservices",
+        title: "QGIS QuickMapServices (OSM/GIBS)",
+        kind: AssetKind::OfflineTool,
+        license: "GPL-2.0-or-later",
+        homepage: "https://plugins.qgis.org/plugins/quick_map_services/",
+        xyz: None,
+        credit: "NextGIS QuickMapServices",
+    },
+    MapAsset {
+        id: "kde-marble",
+        title: "KDE Marble virtual globe",
+        kind: AssetKind::OfflineTool,
+        license: "LGPL-2.1-or-later",
+        homepage: "https://marble.kde.org/",
+        xyz: None,
+        credit: "KDE Marble",
+    },
+    MapAsset {
+        id: "pmtiles-cli",
+        title: "protomaps go-pmtiles CLI",
+        kind: AssetKind::OfflineTool,
+        license: "BSD-3-Clause",
+        homepage: "https://github.com/protomaps/go-pmtiles",
+        xyz: None,
+        credit: "Protomaps",
+    },
+    MapAsset {
+        id: "tippecanoe",
+        title: "tippecanoe (Felt) vector tiles",
+        kind: AssetKind::OfflineTool,
+        license: "BSD-2-Clause",
+        homepage: "https://github.com/felt/tippecanoe",
+        xyz: None,
+        credit: "Felt / Mapbox tippecanoe",
+    },
+    MapAsset {
+        id: "mbtiles-spec",
+        title: "MBTiles spec",
+        kind: AssetKind::Portal,
+        license: "CC0 (spec)",
+        homepage: "https://github.com/mapbox/mbtiles-spec",
+        xyz: None,
+        credit: "MBTiles spec",
+    },
+    MapAsset {
+        id: "gdal",
+        title: "GDAL/OGR",
+        kind: AssetKind::OfflineTool,
+        license: "MIT (X/MIT)",
+        homepage: "https://gdal.org/",
+        xyz: None,
+        credit: "OSGeo GDAL",
+    },
+    MapAsset {
+        id: "atak-civ",
+        title: "ATAK-CIV local MBTiles (no TAK server)",
+        kind: AssetKind::OfflineTool,
+        license: "ATAK-CIV (DoD OSS); local tiles only",
+        homepage: "https://github.com/deptofdefense/AndroidTacticalAssaultKit-CIV",
+        xyz: None,
+        credit: "ATAK-CIV",
+    },
+    MapAsset {
+        id: "tak-server-rejected",
+        title: "TAK Server (rejected as required)",
+        kind: AssetKind::Portal,
+        license: "paid / TAK Server license — do not require",
+        homepage: "https://tak.gov/",
+        xyz: None,
+        credit: "REJECTED — no TAK Server",
+    },
+    MapAsset {
+        id: "organic-maps",
+        title: "Organic Maps (viewer, not vendored)",
+        kind: AssetKind::OfflineTool,
+        license: "Apache-2.0",
+        homepage: "https://organicmaps.app/",
+        xyz: None,
+        credit: "Organic Maps · OSM",
+    },
+    MapAsset {
+        id: "osmand",
+        title: "OsmAnd (viewer, not vendored)",
+        kind: AssetKind::OfflineTool,
+        license: "GPL-3.0-or-later",
+        homepage: "https://osmand.net/",
+        xyz: None,
+        credit: "OsmAnd · OSM",
+    },
 ];
 
 pub fn asset(id: &str) -> Option<&'static MapAsset> {
@@ -599,6 +699,18 @@ mod tests {
         assert!(asset("kenney-terrain").is_some());
         assert!(asset("nasa-svs").is_some());
         assert!(asset("cesium-ion-rejected").unwrap().license.contains("do not use"));
+        assert!(CATALOG.len() >= 60);
+        assert!(asset("qgis").is_some());
+        assert!(asset("qgis-quickmapservices").is_some());
+        assert!(asset("kde-marble").is_some());
+        assert!(asset("pmtiles-cli").is_some());
+        assert!(asset("tippecanoe").is_some());
+        assert!(asset("atak-civ").is_some());
+        assert!(asset("tak-server-rejected")
+            .unwrap()
+            .license
+            .contains("do not require"));
+        assert_eq!(asset("qgis").unwrap().kind, AssetKind::OfflineTool);
     }
 
     #[test]

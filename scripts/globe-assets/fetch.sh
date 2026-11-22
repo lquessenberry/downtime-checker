@@ -22,6 +22,7 @@ wmm=0
 tz=0
 iss=0
 pbr=0
+offline=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ne110) ne110=1 ;;
@@ -29,12 +30,14 @@ while [[ $# -gt 0 ]]; do
     --tz) tz=1 ;;
     --iss-tle) iss=1 ;;
     --pbr-manifest) pbr=1 ;;
+    --offline-tools) offline=1 ;;
     --help|-h)
-      echo "Usage: $0 [--ne110] [--wmm] [--tz] [--iss-tle] [--pbr-manifest]"
+      echo "Usage: $0 [--ne110] [--wmm] [--tz] [--iss-tle] [--pbr-manifest] [--offline-tools]"
       echo "  --wmm      NOAA WMM coefficient file (tiny). Tries several mirrors."
       echo "  --tz       Copy the UTC sample polygon (fixture). Not the world file."
       echo "  --iss-tle  CelesTrak stations TLE (small text)."
       echo "  --pbr-manifest  Copy CC0/NASA PBR URL list (no 8K files)."
+      echo "  --offline-tools Copy QGIS/Marble/pmtiles/tippecanoe/ATAK URL list (no APKs)."
       echo "Never downloads GEBCO grids, planet PMTiles, Landsat, or ion tiles."
       exit 0
       ;;
@@ -83,6 +86,14 @@ if [[ "$pbr" -eq 1 ]]; then
   if [[ -f "$src" ]]; then
     cp "$src" "$DEST/pbr-manifest.json"
     echo "PBR manifest $DEST/pbr-manifest.json (URLs only)"
+  fi
+fi
+
+if [[ "$offline" -eq 1 ]]; then
+  src="$ROOT/scripts/globe-assets/offline-tools-manifest.json"
+  if [[ -f "$src" ]]; then
+    cp "$src" "$DEST/offline-tools-manifest.json"
+    echo "offline-tools manifest $DEST/offline-tools-manifest.json (URLs only, no APKs)"
   fi
 fi
 

@@ -1,0 +1,17 @@
+{
+  "note": "URLs only. fetch.sh --offline-tools copies this into data/map-assets/. Do not git QGIS installers, Marble packages, planet PMTiles, or ATAK APKs.",
+  "license": "GPL/LGPL/BSD/Apache/MIT per tool; ATAK-CIV is local MBTiles only",
+  "items": [
+    {"id": "qgis", "homepage": "https://qgis.org/", "license": "GPL-2.0-or-later"},
+    {"id": "qgis-quickmapservices", "homepage": "https://plugins.qgis.org/plugins/quick_map_services/", "license": "GPL-2.0-or-later"},
+    {"id": "kde-marble", "homepage": "https://marble.kde.org/", "license": "LGPL-2.1-or-later"},
+    {"id": "pmtiles-cli", "homepage": "https://github.com/protomaps/go-pmtiles", "license": "BSD-3-Clause"},
+    {"id": "tippecanoe", "homepage": "https://github.com/felt/tippecanoe", "license": "BSD-2-Clause"},
+    {"id": "mbtiles-spec", "homepage": "https://github.com/mapbox/mbtiles-spec", "license": "CC0 (spec)"},
+    {"id": "gdal", "homepage": "https://gdal.org/", "license": "MIT"},
+    {"id": "atak-civ", "homepage": "https://github.com/deptofdefense/AndroidTacticalAssaultKit-CIV", "license": "ATAK-CIV; local MBTiles only"},
+    {"id": "tak-server-rejected", "homepage": "https://tak.gov/", "license": "do not require TAK Server"},
+    {"id": "organic-maps", "homepage": "https://organicmaps.app/", "license": "Apache-2.0"},
+    {"id": "osmand", "homepage": "https://osmand.net/", "license": "GPL-3.0-or-later"}
+  ]
+}

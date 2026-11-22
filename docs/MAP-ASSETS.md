@@ -41,8 +41,11 @@ USGS 3DEP, NOAA Digital Coast, OpenTopography, UK Environment Agency LiDAR, LINZ
 **Batch 4 — more CC0 PBR / 3D**  
 Poly Haven HDRIs, Kenney terrain, OpenGameArt height, NASA SVS stills, Cesium ion **rejected**.
 
-**Batch 5 — offline desktop/mobile**  
+**Batch 5 — offline desktop/mobile** (this PR)  
 QGIS + QuickMapServices (OSM/GIBS), Marble, `pmtiles` CLI, `tippecanoe`, ATAK with local MBTiles (no TAK server license).
+
+**Batch 6 — leftover country LiDAR portals**  
+UK Environment Agency LiDAR, LINZ, NRCan HRDEM, EUCOP DEM (USGS 3DEP / NOAA Digital Coast / OpenTopography already in batch 3).
 
 ## Batch 2 — orbital, bathymetry, borders, factoids
 
@@ -105,6 +108,24 @@ scripts/globe-assets/fetch.sh --pbr-manifest
 ```
 
 Does not download 8K textures. Copilot is out of the review loop until 2026-12-01.
+
+## Batch 5 — offline desktop/mobile (no TAK Server)
+
+| id | What | Git |
+| --- | --- | --- |
+| qgis, qgis-quickmapservices | Desktop GIS + OSM/GIBS plugin | URLs |
+| kde-marble | KDE virtual globe | URL |
+| pmtiles-cli, tippecanoe, gdal | Build local PMTiles / MBTiles | URLs |
+| mbtiles-spec | Spec only | URL |
+| atak-civ | ATAK-CIV with **local** MBTiles | URL, **no APK** |
+| organic-maps, osmand | Viewers, not vendored | URL |
+| tak-server-rejected | **do not require** a TAK Server license | catalog row |
+
+```bash
+scripts/globe-assets/fetch.sh --offline-tools
+```
+
+Does not download QGIS installers, Marble packages, planet PMTiles, or ATAK APKs. Copilot is out of the review loop until 2026-12-01.
 
 Open a new PR per batch. Each PR only adds registry rows + a fetch script target. Never a multi-GB blob.
 
