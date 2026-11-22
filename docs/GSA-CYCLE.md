@@ -23,7 +23,7 @@ Laptop Chrome CDP (`127.0.0.1:9222`, profile `~/.chrome-cdp`) is optional via a 
 
 `fly deploy -c fly.cycle.toml --ha=false` publishes `gsa-agile-cycle` (`GET /healthz`, `GET /cycle`). 256mb, auto-stop.
 
-Staging wrap for the overnight sprint is already done: `globalstatus-stage` v7 at `37eca1a` (2026-11-22 07:31 CT). Do not deploy again unless Lee says so.
+Default branch is `feat/globalstatus-prod` @ `2e2da14` (docs PR #90 merged). Staging wrap for the overnight sprint is already done: Fly `globalstatus-stage` v7 was built from `37eca1a` (2026-11-22 07:31 CT). Do not deploy again unless Lee says so.
 
 ## Local
 
@@ -43,10 +43,10 @@ Arsenal (see `docs/RUST-ARSENAL.md` on `rust/native-core`): **pure Rust** (`down
 
 | Cycle | Goal | Issues | Done when |
 | --- | --- | --- | --- |
-| 7 | Live USGS QUAKES layer (`quakes.js`, same pattern as `blast.js`) | #81 | Toggle shows live M2.5+ day feed, 60s poll, USGS credit, no key. Pins update by id. |
+| 7 | Live USGS QUAKES layer (`quakes.js`, same pattern as `blast.js`) | #81 | Toggle shows live M2.5+ day feed, polite poll (5 min or more, cached), USGS credit, no key. Pins update by id. |
 | 8 | Mobile pinch-zoom for 3D and 2D; icons scale with zoom; labels under icons | #84 | One-thumb pinch works in Cesium and 2D. Footer dots and `#mobile-pick` do not regress. |
-| 9 | Rename downtime section to **Internet Grid Status**; live-up weather, outages, JAM | #85 #8 #7 #34 | UI copy is "Internet Grid Status". Existing weather / outage / gpsjam layers refresh from cache. |
-| 10 | Live feeds v1: storms, fires, AQI, fireballs, waves/contrails from public feeds | #83 #8 | Layers toggle, polite cache, pause when the tab is hidden. No paid key. |
+| 9 | Rename downtime section to **Internet Grid Status** | #85 | UI copy is "Internet Grid Status" only. Live weather, outages, AQI, and other feeds stay on #83 (`live-layers-83`). The poller is #34. |
+| 10 | Live feeds v1: storms, fires, AQI, fireballs, waves/contrails, outages from public feeds | #83 #8 #7 | Branch `live-layers-83`. Layers toggle, polite cache, pause when the tab is hidden. |
 | 11 | Blast calculator on globe layers + death % by distance and altitude (ground vs air burst) | #39 | Rings and an attributed death-% card use first-party math only. Private sim stays private. |
 | 12 | UNEXPLAINED UFO/cryptid layer, clearly labeled as reports / folklore | #82 | Toggle with source links. No copied third-party code. |
 | 13 | Aviation/ADS-B, ships, traffic cams via one polite proxy (poll-runner continues) | #83 #44 #45 #34 | Browsers hit our cache, not adsb.lol directly. Commercial AIS stays link-only. |
