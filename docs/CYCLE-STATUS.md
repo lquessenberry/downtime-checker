@@ -1,23 +1,42 @@
 # Cycle status (bot handshake)
 
-Grok bots **GLOBALSTATUS** (product) and **RUCKUS** (review) watch this file and #75. Copilot reviews every PR before merge. Overnight contract: `docs/OVERNIGHT.md`.
+Grok bots **GLOBALSTATUS** (product) and **RUCKUS** (review) watch this file and #75. Copilot reviews every PR before merge; while Copilot is out of quota, Lee approved the **RUCKUS review fallback for both agents**. Overnight contract: `docs/OVERNIGHT.md`. Full cycle table: `docs/GSA-CYCLE.md`.
 
 | Field | Value |
 | --- | --- |
 | Board | [#75](https://github.com/lquessenberry/downtime-checker/issues/75) |
-| Default | `feat/globalstatus-prod` |
-| #76 | **Merged** `de12fc6`. Do not re-open. |
-| Native | `rust/native-core` (blast, `/api/blast`, FIRE HUD) |
-| Pace | Overnight: 30 min until 8:30 AM Sunday Central. Then Fly `globalstatus-stage`. |
-| Merge | Copilot on current head, or RUCKUS if Copilot `NO_QUOTA_REMAINING`, plus CI green. No force-push. Not Will's upstream. |
-| Fly wrap | `fly deploy -c fly.gsa.toml --ha=false -a globalstatus-stage` after last morning check. No FTP. |
+| Default | `feat/globalstatus-prod` @ `37eca1a` |
+| Staging | Fly `globalstatus-stage` **v7** already live (2026-11-22 07:31 CT). Do not redeploy unless Lee says so. |
+| Pace | 2-hour feature cycles. Cycles **7–18** are features; **19–30** are catch-up. |
+| Priority | Lee (2026-11-22): anything Will Casey suggests goes to the front of the feature cycles. Label: `will-priority`. |
+| Merge | Copilot on current head, or RUCKUS if Copilot `NO_QUOTA_REMAINING`, plus CI green. No force-push. Not Will's upstream. No FTP. |
+| Blast source | First-party `blast.js` / `downtime-core::blast` is public. Will's calculator / Detonate / `nuke-sim` stays out of the public repo until Will explicitly approves. |
 
 ## Open for review
 
-- **#32** load/freshness — Copilot then CI then merge to prod.
 - **#1** rust-wasm scaffold — wrong base (`feat/node-visualizer`). Do not merge into prod.
-- Cycle **13** poll-runner is **not** green (PHP only).
+- Cycle-plan docs PR for this file and `docs/GSA-CYCLE.md` — RUCKUS review before merge.
+- Cycle **13** in the old plan (PHP poll-runner only) is **not** green; Rust poll work moves with live feeds into cycles 13 and 20–22.
+
+## Cycles 7–18 (Will's items first)
+
+| Cycle | Goal | Issues |
+| --- | --- | --- |
+| 7 | Live USGS QUAKES layer | #81 |
+| 8 | Mobile pinch-zoom, zoom-scaled icons, labels under icons | #84 |
+| 9 | Rename downtime section to Internet Grid Status; live-up weather, outages, JAM | #85 #8 #7 #34 |
+| 10 | Live feeds v1: storms, fires, AQI, fireballs, waves/contrails (public feeds only) | #83 #8 |
+| 11 | Blast calculator on globe layers + death % by distance/altitude (public math only) | #39 |
+| 12 | UNEXPLAINED UFO/cryptid layer | #82 |
+| 13 | Aviation/ADS-B, ships, traffic cams via polite proxy (poll-runner continues) | #83 #44 #45 #34 |
+| 14 | Chem/nuclear disasters, volcanoes, military bases, missile sites | #52 #47 |
+| 15 | Public spending, aid flows, failed projects | #86 |
+| 16 | Mesh node naming, MQTT live updates, P2P sharing | #42 #17 |
+| 17 | Free TV/radio pins, towers, Broadcastify + LiveATC links; desktop maritime watermark | #6 #5 #88 |
+| 18 | Celestial event pins; offline cache / download-and-run; engine checkpoint (Rust server, terrain, STREETS 3D) | #87 #16 #20 #18 #41 #48 |
+
+Radiation registry (#68–#74) and offline RAG are **deferred** behind this twelve, not dropped. Catch-up 19–30 stays review / poll / low-bandwidth / packs, with outbreak simulator #89 on cycle 21.
 
 ## Sign-off
 
-Comment on #75 with `GLOBALSTATUS: pass|fail` and `RUCKUS: pass|fail` plus the cycle number.
+Comment on #75 with `GLOBALSTATUS: pass|fail` and `RUCKUS: pass|fail` plus the cycle number. Do not sign off on the other agent's behalf.
