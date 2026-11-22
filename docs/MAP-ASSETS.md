@@ -89,6 +89,23 @@ scripts/globe-assets/fetch.sh --ne110 --wmm --tz --iss-tle
 
 `--tz` copies the **UTC sample polygon** fixture, not Who's On First world. `--wmm` tries NOAA `.COF` mirrors into `data/map-assets/` (gitignored).
 
+## Batch 4 — CC0 PBR / 3D (no Cesium ion)
+
+| id | What | Git |
+| --- | --- | --- |
+| polyhaven-hdri / models / ground | CC0 HDRI, glTF, terrain albedo | URLs in `pbr-manifest.json` |
+| kenney-terrain | CC0 kits | URL |
+| opengameart-height | per-file CC | portal |
+| nasa-svs, nasa-3d-resources | NASA stills / models | public |
+| texture-ninja, 3dtexel-height | CC0 surfaces / 16-bit height | URL |
+| cesium-ion-rejected | **do not use** | `paid_host()` also flags `ion.cesium.com` |
+
+```bash
+scripts/globe-assets/fetch.sh --pbr-manifest
+```
+
+Does not download 8K textures. Copilot is out of the review loop until 2026-12-01.
+
 Open a new PR per batch. Each PR only adds registry rows + a fetch script target. Never a multi-GB blob.
 
 ## Paid hosts (RUCKUS fail)

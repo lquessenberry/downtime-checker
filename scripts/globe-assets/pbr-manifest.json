@@ -1,0 +1,16 @@
+{
+  "note": "URLs only. fetch.sh --pbr-manifest copies this into data/map-assets/. Do not git 8K textures.",
+  "license": "CC0 or NASA public unless a file says otherwise",
+  "items": [
+    {"id": "polyhaven-hdri", "homepage": "https://polyhaven.com/hdris", "license": "CC0"},
+    {"id": "polyhaven-ground", "homepage": "https://polyhaven.com/textures/terrain", "license": "CC0"},
+    {"id": "polyhaven-models", "homepage": "https://polyhaven.com/models", "license": "CC0"},
+    {"id": "ambientcg", "homepage": "https://ambientcg.com/", "license": "CC0"},
+    {"id": "kenney-terrain", "homepage": "https://kenney.nl/assets", "license": "CC0"},
+    {"id": "texture-ninja", "homepage": "https://texture.ninja/", "license": "CC0"},
+    {"id": "3dtexel-height", "homepage": "https://3dtexel.com/", "license": "CC0"},
+    {"id": "opengameart-height", "homepage": "https://opengameart.org/", "license": "per file"},
+    {"id": "nasa-svs", "homepage": "https://svs.gsfc.nasa.gov/", "license": "NASA public domain"},
+    {"id": "nasa-3d-resources", "homepage": "https://nasa3d.arc.nasa.gov/", "license": "NASA media"}
+  ]
+}

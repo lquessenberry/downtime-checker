@@ -437,6 +437,87 @@ pub const CATALOG: &[MapAsset] = &[
         xyz: None,
         credit: "OpenTopography",
     },
+    MapAsset {
+        id: "polyhaven-hdri",
+        title: "Poly Haven HDRIs",
+        kind: AssetKind::Texture,
+        license: "CC0",
+        homepage: "https://polyhaven.com/hdris",
+        xyz: None,
+        credit: "Poly Haven (CC0)",
+    },
+    MapAsset {
+        id: "kenney-terrain",
+        title: "Kenney terrain / nature kits",
+        kind: AssetKind::Texture,
+        license: "CC0",
+        homepage: "https://kenney.nl/assets",
+        xyz: None,
+        credit: "Kenney (CC0)",
+    },
+    MapAsset {
+        id: "opengameart-height",
+        title: "OpenGameArt height / terrain",
+        kind: AssetKind::Texture,
+        license: "CC0 / CC-BY per file",
+        homepage: "https://opengameart.org/",
+        xyz: None,
+        credit: "OpenGameArt authors",
+    },
+    MapAsset {
+        id: "nasa-svs",
+        title: "NASA SVS stills / animations",
+        kind: AssetKind::Satellite,
+        license: "public domain (NASA)",
+        homepage: "https://svs.gsfc.nasa.gov/",
+        xyz: None,
+        credit: "NASA SVS",
+    },
+    MapAsset {
+        id: "texture-ninja",
+        title: "Texture Ninja CC0 surfaces",
+        kind: AssetKind::Texture,
+        license: "CC0",
+        homepage: "https://texture.ninja/",
+        xyz: None,
+        credit: "Texture Ninja (CC0)",
+    },
+    MapAsset {
+        id: "3dtexel-height",
+        title: "3DTexel landscape heightmaps",
+        kind: AssetKind::Dem,
+        license: "CC0",
+        homepage: "https://3dtexel.com/",
+        xyz: None,
+        credit: "3DTexel (CC0)",
+    },
+    MapAsset {
+        id: "polyhaven-models",
+        title: "Poly Haven CC0 3D models",
+        kind: AssetKind::Texture,
+        license: "CC0",
+        homepage: "https://polyhaven.com/models",
+        xyz: None,
+        credit: "Poly Haven (CC0)",
+    },
+    MapAsset {
+        id: "nasa-3d-resources",
+        title: "NASA 3D resources",
+        kind: AssetKind::Portal,
+        license: "NASA media (public unless noted)",
+        homepage: "https://nasa3d.arc.nasa.gov/",
+        xyz: None,
+        credit: "NASA",
+    },
+    MapAsset {
+        id: "cesium-ion-rejected",
+        title: "Cesium ion 3D Tiles (rejected)",
+        kind: AssetKind::Portal,
+        license: "paid / ion token — do not use",
+        homepage: "https://cesium.com/ion/",
+        xyz: None,
+        credit: "REJECTED — no ion",
+    },
 ];
 
 pub fn asset(id: &str) -> Option<&'static MapAsset> {
@@ -486,6 +567,8 @@ pub fn paid_host(url: &str) -> bool {
         || lower.contains("cesium.com")
         || lower.contains("arcgisonline.com")
         || lower.contains("tiles.mapbox")
+        || lower.contains("ion.cesium.com")
+        || lower.contains("photorealistic")
 }
 
 #[cfg(test)]
@@ -511,7 +594,11 @@ mod tests {
         assert!(asset("overture-geoparquet").is_some());
         assert!(asset("protomaps-builds").is_some());
         assert!(asset("celestrak-gp-iss").is_some());
-        assert!(CATALOG.len() >= 40);
+        assert!(CATALOG.len() >= 50);
+        assert!(asset("polyhaven-hdri").is_some());
+        assert!(asset("kenney-terrain").is_some());
+        assert!(asset("nasa-svs").is_some());
+        assert!(asset("cesium-ion-rejected").unwrap().license.contains("do not use"));
     }
 
     #[test]
@@ -527,7 +614,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn openseamap_xyz_is_free() {
         let url = xyz_url(asset("openseamap").unwrap().xyz.unwrap(), 6, 32, 21, None);
         assert!(url.contains("tiles.openseamap.org/seamark/6/32/21.png"));
@@ -541,9 +627,13 @@ mod tests {
         assert!(raw.len() < 1024);
     }
 
+    #[test]
     fn refuses_paid_hosts() {
         assert!(paid_host("https://api.mapbox.com/v4/mapbox.satellite/1/0/0.png"));
         assert!(paid_host("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"));
+        assert!(paid_host("https://api.ion.cesium.com/v1/assets"));
+        assert!(paid_host("https://tile.googleapis.com/v1/3dtiles/photorealistic"));
         assert!(!paid_host("https://tile.openstreetmap.org/1/0/0.png"));
+        assert!(paid_host(asset("cesium-ion-rejected").unwrap().homepage));
     }
 }
