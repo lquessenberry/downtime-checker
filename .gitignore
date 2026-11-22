@@ -20,3 +20,8 @@ globalstatus/data/*.lock
 globalstatus/data/stop.flag
 globalstatus/.ftpquota
 
+# Designation claims (#60): live jsonl stays local. SPLC exports must never be committed.
+data/designations/*.jsonl
+data/designations/LAYER.md
+data/designations/SYMMETRY.md
+

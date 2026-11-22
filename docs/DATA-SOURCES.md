@@ -60,6 +60,20 @@ sample hammers nothing useful and the file is large.
 | Fly `downtime-globe` | Node `visualizer/server.mjs` uses pack → cache → network (`datapack.mjs`). |
 | Local `:4173` / `:4174` | Same Node path. `OFFLINE=1` stops at pack/cache. |
 
+## Designation claims (not a live globe layer yet)
+
+Issue [#60](https://github.com/lquessenberry/downtime-checker/issues/60).
+Ingest: `python3 scripts/designations/designations.py --ingest un`.
+
+| Source | Kind | Access | Notes |
+| --- | --- | --- | --- |
+| UN Security Council consolidated list | government | XML feed | Entities only by default. Country grain. No street/city. |
+| US State FTO, UK proscribed, EU FSF | government | CSV / later | Legal designation; distinct marks from NGO lists. |
+| SPLC Hate Map, ADL, InfluenceWatch | ngo | manual CSV | Claims, not facts. SPLC: no bulk redistribution. Symmetry report required. |
+| UCDP / ACLED | violence | not ingested here | Different variable from “was designated”. |
+
+Do not cron designation dumps into git. Do not pin street addresses.
+
 ## Credit / license reminders
 
 - gpsjam.org: credit John Wiseman; underlying aircraft from ADS-B Exchange and airplanes.live.

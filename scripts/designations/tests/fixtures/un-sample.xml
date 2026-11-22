@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONSOLIDATED_LIST dateGenerated="2026-01-01T00:00:00Z">
+  <INDIVIDUALS>
+    <INDIVIDUAL>
+      <FIRST_NAME>ERIC</FIRST_NAME>
+      <SECOND_NAME>BADEGE</SECOND_NAME>
+      <REFERENCE_NUMBER>CDi.001</REFERENCE_NUMBER>
+      <LISTED_ON>2012-12-31</LISTED_ON>
+      <UN_LIST_TYPE>DRC</UN_LIST_TYPE>
+      <NATIONALITY><VALUE>Democratic Republic of the Congo</VALUE></NATIONALITY>
+      <INDIVIDUAL_ADDRESS>
+        <STREET>do-not-emit-this-street</STREET>
+        <CITY>do-not-emit-this-city</CITY>
+        <COUNTRY>Rwanda</COUNTRY>
+      </INDIVIDUAL_ADDRESS>
+    </INDIVIDUAL>
+  </INDIVIDUALS>
+  <ENTITIES>
+    <ENTITY>
+      <FIRST_NAME>ADF</FIRST_NAME>
+      <REFERENCE_NUMBER>CDe.001</REFERENCE_NUMBER>
+      <LISTED_ON>2014-06-30</LISTED_ON>
+      <UN_LIST_TYPE>DRC</UN_LIST_TYPE>
+      <ENTITY_ADDRESS>
+        <STREET>do-not-emit-entity-street</STREET>
+        <CITY>Goma</CITY>
+        <STATE_PROVINCE>North Kivu</STATE_PROVINCE>
+        <COUNTRY>Democratic Republic of the Congo</COUNTRY>
+      </ENTITY_ADDRESS>
+    </ENTITY>
+    <ENTITY>
+      <FIRST_NAME>AL-SHABAAB</FIRST_NAME>
+      <REFERENCE_NUMBER>SOe.001</REFERENCE_NUMBER>
+      <LISTED_ON>2010-04-12</LISTED_ON>
+      <UN_LIST_TYPE>Somalia</UN_LIST_TYPE>
+      <ENTITY_ADDRESS>
+        <COUNTRY>Somalia</COUNTRY>
+      </ENTITY_ADDRESS>
+    </ENTITY>
+  </ENTITIES>
+</CONSOLIDATED_LIST>
