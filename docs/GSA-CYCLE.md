@@ -31,6 +31,8 @@ cargo run -p downtime-server -- --root . --static globalstatus --port 4180 --wor
 
 Product rule: **Rust multithreaded runtime**. PHP `php -S` and `router.php` are legacy. Blast math is first-party cube-root scaling in `downtime-core` (not NUKEMAP, not NukeSim). DEFCON one-thumb HUD. Terrain + OSM Buildings. After each cycle: tests green, Chrome CDP on `:9222`, comment on #75 as GLOBALSTATUS / RUCKUS.
 
+Arsenal (see `docs/RUST-ARSENAL.md` on `rust/native-core`): **pure Rust** (`downtime-server` / tokio / wasm / wgpu) is the product. Rapira/Pasir (Zend inside Tokio) is a GoDaddy bridge only. php-rust/rphp stay research — do not run the globe on them.
+
 | Cycle | Goal | Issues | Done when |
 | --- | --- | --- | --- |
 | 7 | Land in-globe NUCLEAR + DEFCON HUD on the Cesium client, served by Rust | #39 | Tap globe drops rings. No outbound NUKEMAP link. CDP sees `nuke` toggle + `#nuke-hud`. |
