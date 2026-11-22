@@ -1,0 +1,15 @@
+CesiumJS
+Copyright 2011-present Cesium GS, Inc. and contributors
+https://github.com/CesiumGS/cesium
+SPDX-License-Identifier: Apache-2.0
+
+The scanned CesiumGS/cesium revision did not ship a NOTICE file.
+LICENSE.md is reproduced in this repository as LICENSE-CESIUM.
+
+A mechanical Rust port of Cesium `packages/core` / `Source/Core` is a
+derivative work under Apache-2.0. Those files stay Apache-2.0; they are
+not relicensed as MIT even though other crates in this repo are dual
+licensed MIT OR Apache-2.0.
+
+Apache-2.0 §4(d): if a future Cesium release adds a NOTICE file, copy it
+here and into distributions that include the ported modules.

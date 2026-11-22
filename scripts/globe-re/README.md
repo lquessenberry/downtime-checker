@@ -1,100 +1,74 @@
 # globe-re
 
-Automation that maps **open-source globe engines** into the native Rust globe
-(`rust/crates/globe-native`). The point is to succeed Cesium, not to decompile
-a proprietary Earth app.
+Source inventory and disposition for a Rust globe. This is **not** a
+disassembly problem. CesiumJS has source. MapLibre has source. The valuable
+automation is: extract the module graph, then decide per module whether to
+**port**, **rewrite**, **defer**, or **delete**.
 
 ```bash
-python3 scripts/globe-re/globe_re.py engines
-python3 scripts/globe-re/globe_re.py policy cesium
-python3 scripts/globe-re/globe_re.py map --target cesium --emit-rust
-python3 scripts/globe-re/globe_re.py plan
-python3 -m unittest scripts/globe-re/tests/test_globe_re.py
+python3 scripts/globe-re/globe_plan.py --list-engines
+python3 scripts/globe-re/globe_plan.py --repo /tmp/cesium-src --engine cesiumjs \
+  --out docs/globe-plan --licenses-out licenses.md --install-notices --notice-dest .
+python3 -m unittest scripts/globe-re/tests/test_globe_plan.py scripts/globe-re/tests/test_globe_re.py
 ```
 
-CesiumJS is Apache-2.0. We read `Source/` from [CesiumGS/cesium](https://github.com/CesiumGS/cesium)
-and write new Rust. We do **not** Ghidra minified `globalstatus/vendor/cesium/Cesium.js`.
+`globe_re.py map --emit-rust` still writes compiling WGS84 stubs. The plan
+comes from `globe_plan.py`.
 
-## Engines (2026)
+## License gate
 
-| Engine | Cost | Use |
+Ingest requires a **permissive SPDX**: Apache-2.0, BSD-2/3, MIT, ISC, 0BSD,
+CC0, Unlicense.
+
+| id | SPDX | ingest |
 | --- | --- | --- |
-| **Ghidra** 12.x + GhidraMCP | free | Default. Headless + decompiler. Native / WASM. |
-| **IDA Pro** + mrexodia MCP or Hex-Rays MCP (9.4+) | subscription | Cleanest decompiler. IDA Free: no IDAPython, no commercial. |
-| **Binary Ninja** MCP | Personal $199 / Commercial $1799 | Automation-first. Free edition has no API. |
-| **radare2 / Rizin** + Cutter / r2ai | free | Scripts, triage, embedded. |
-| **Hopper** | paid Mac | ObjC / Swift shells. |
-| **x64dbg** | GPL | Windows debug of a binary we own. |
-| **Frida** MCP | free | Runtime: what the process does. |
-| **jadx** MCP | free | Android. |
-| **Published source** | free | **Preferred for Cesium / MapLibre / WorldWind.** |
+| cesiumjs | Apache-2.0 | yes |
+| cesium-native | Apache-2.0 | yes |
+| maplibre-gl | BSD-3-Clause | yes |
+| openlayers | BSD-2-Clause | yes |
+| deck | MIT | yes |
+| three | MIT | yes |
+| **mapbox-gl** | proprietary (v2+) | **refused** |
+| google-earth, arcgis | proprietary | refused |
+| osgearth | LGPL-3.0 | refused (copyleft) |
 
-Auto-pick: Ghidra if installed, else r2, else Binja, else IDA, else source.
+MapLibre GL JS and Mapbox GL JS are **not** interchangeable. v1 of Mapbox GL
+was BSD-3; v2 switched to Mapbox terms. The scanner will not ingest `mapbox-gl`.
 
-The 2026 layer is an LLM agent talking to whichever engine you picked **through
-an MCP server**, listing functions and following xrefs **one tool call at a
-time**. Agents read and locate well. They do not hold a whole binary in view.
-Do not ask the model to patch until a human has the function on screen.
+A Rust port of Cesium `Core/` is a **derivative work**. Those files stay
+Apache-2.0. Apache-2.0 §4(d) requires reproducing NOTICE. This repo carries
+`NOTICE-CESIUM` and `LICENSE-CESIUM` at the root, next to `LICENSE-APACHE`.
+Dual-license (`MIT OR Apache-2.0`) does not relicense ported Cesium files as MIT.
 
-There is no published head-to-head of IDA MCP vs GhidraMCP. Treat roundup star
-counts as suspect.
+`licenses.md` lives at the repo root, where a compliance reviewer looks.
 
-## MCP endpoints this CLI probes
+## Dispositions
 
-Override with env vars. Defaults:
+| disposition | meaning |
+| --- | --- |
+| **port** | Renderer-independent logic. Mechanical translation. Stays upstream SPDX. |
+| **rewrite** | Concept survives, plumbing dies. Globe surface, camera, workers, **shaders**. GLSL→WGSL is not mechanical. |
+| **defer** | Product call (DataSources/ entities). Cost is flagged; need is not. |
+| **delete** | Replaced by wgpu (`Renderer/`) or egui (`Widgets/`). Work avoided. |
 
-| server | env | default |
-| --- | --- | --- |
-| ghidra | `GHIDRA_MCP_URL` | `http://127.0.0.1:8080/mcp` |
-| ida | `IDA_MCP_URL` | `http://127.0.0.1:13337/mcp` |
-| hexrays | `HEXRAYS_MCP_URL` | `http://127.0.0.1:11337/mcp` |
-| binja | `BINJA_MCP_URL` | `http://127.0.0.1:9009/mcp` |
-| r2 | `R2_MCP_URL` | `http://127.0.0.1:9393/mcp` |
-| frida | `FRIDA_MCP_URL` | `http://127.0.0.1:27042/mcp` |
-| jadx | `JADX_MCP_URL` | `http://127.0.0.1:8650/mcp` |
-| rea | `REA_MCP_URL` | `http://127.0.0.1:8750/mcp` |
+LOC ranks estimation. A 200-line transform is easier than a 2,000-line tile
+walker. `unmapped.txt` is where the classifier failed.
 
-Zero-cost start: Ghidra + GhidraMCP. Example Cursor/Claude config:
-`templates/mcp.example.json`.
+The **external dependency surface** table is the shopping list (earcut →
+triangulator crate; mersenne-twister → drop).
 
-```bash
-python3 scripts/globe-re/globe_re.py probe
-python3 scripts/globe-re/globe_re.py follow --function Ellipsoid
-```
+## Binary backends
 
-## Allowed targets
+Declared in `globe_plan.BACKENDS` (`list_functions` / `decompile` / `xrefs`).
+**Unimplemented by design.** There is no Cesium binary. Do not build a Ghidra
+adapter until a proprietary tile/terrain decoder with no source appears.
+`--binary` exits 2.
 
-`cesium` (Apache-2.0), `worldwind`, `maplibre`, `osgearth` (LGPL — read, do not
-link), `magnum`, `self` (our `downtime-globe`).
+## Cesium checkout
 
-Refused: Google Earth, ArcGIS Pro, Apple Maps, Bing, Mapbox GL JS.
-
-## Surrounding tools
-
-binwalk, FLOSS, capa, tshark, angr, CAPE, GhidrAssist. `engines` prints which
-are on PATH. Templates:
-
-- `templates/ghidra_headless.py` — function/string dump after `analyzeHeadless`
-- `templates/r2_triage.r2` — `r2 -i … downtime-globe`
-- `templates/frida_hooks.js` — log `connect()` on our process
-
-## Cesium source
+Do not scan minified `globalstatus/vendor/cesium/Cesium.js`.
 
 ```bash
-python3 scripts/globe-re/globe_re.py inventory --clone-cesium /tmp/cesium-src
-# or
-git clone --depth 1 https://github.com/CesiumGS/cesium.git ~/src/cesium
-CESIUM_SRC=~/src/cesium python3 scripts/globe-re/globe_re.py map --target cesium
+git clone --depth 1 --filter=blob:none --sparse https://github.com/CesiumGS/cesium.git /tmp/cesium-src
+git -C /tmp/cesium-src sparse-checkout set Source packages/engine/Source LICENSE.md NOTICE.md NOTICE package.json
 ```
-
-## What `map --emit-rust` writes
-
-Under `rust/crates/globe-native/src/engine/`:
-
-`ellipsoid.rs` (WGS84 + ECEF + native-frame unit), `cartographic.rs`,
-`imagery.rs`, `quadtree.rs`, `terrain.rs`, `primitives.rs`, `scene.rs`.
-
-Live draw path stays `render.rs` + `globe_math.rs`. Engine modules fill in
-one Cesium type at a time. Report: `docs/CESIUM_MAP.md`.
-
-Do not port Cesium ion.

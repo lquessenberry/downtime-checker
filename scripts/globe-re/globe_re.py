@@ -49,26 +49,17 @@ def _die(msg: str, code: int = 2) -> None:
 
 
 def cmd_engines(_args: argparse.Namespace) -> None:
-    print("Analysis engines\n")
-    print(f"{'id':10} {'present':8} {'cost':28} mcp")
-    for eng in engines.catalog():
-        flag = "yes" if eng.present else "no"
-        print(f"{eng.id:10} {flag:8} {eng.cost[:28]:28} {eng.mcp}")
-        print(f"           {eng.title}")
-        print(f"           {eng.when}")
-        if eng.found:
-            print(f"           PATH: {', '.join(eng.found)}")
-        print()
-    print("Surrounding workflow\n")
-    for tool in surrounding.catalog():
-        flag = "yes" if tool.present else "no"
-        print(f"{tool.id:12} {flag:8} {tool.job}")
-    print()
-    picked = engines.pick("auto")
-    print(f"auto pick → {picked.id} ({picked.title})")
+    import globe_plan
+    print("Permissive source engines (the ingest gate)\n")
+    print(f"{'id':16} {'spdx':16} label")
+    for key, meta in globe_plan.ENGINES.items():
+        print(f"{key:<16}{meta['spdx']:<16}{meta['label']}")
+    print("\nRefused:")
+    for key, why in globe_plan.REFUSE.items():
+        print(f"  {key}: {why}")
     print(
-        "MCP default URLs: "
-        + ", ".join(f"{k}={v}" for k, v in mcp_bridge.DEFAULT_ENDPOINTS.items())
+        "\nBinary backends are declared and unimplemented. "
+        "`globe_plan.py --binary` exits 2 until a target with no source appears."
     )
 
 
@@ -95,42 +86,16 @@ def _guard(target: str) -> str:
     return target.strip().lower()
 
 
-def cmd_probe(args: argparse.Namespace) -> None:
-    session = mcp_bridge.Session(engine=args.engine or "auto")
-    servers = (
-        [args.engine]
-        if args.engine in mcp_bridge.DEFAULT_ENDPOINTS
-        else list(mcp_bridge.DEFAULT_ENDPOINTS)
-    )
-    print("Probing MCP endpoints (tools/list). Timeout 2.5s each.\n")
-    for server in servers:
-        call = mcp_bridge.probe(session, server)
-        mark = "UP" if call.ok else "down"
-        print(f"  [{mark:4}] {server:8} {call.detail}")
-    print()
-    up = sum(1 for c in session.calls if c.ok)
-    print(f"{up}/{len(session.calls)} listening.")
-    print(
-        "Agents are strong at one function and weak at whole-binary context. "
-        "Use `follow --function NAME` next."
-    )
-    if args.json:
-        Path(args.json).write_text(json.dumps(session.as_dict(), indent=2) + "\n", encoding="utf-8")
+def cmd_probe(_args: argparse.Namespace) -> None:
+    import globe_plan
+    raise SystemExit(globe_plan.binary_mode(REPO))
 
 
 def cmd_follow(args: argparse.Namespace) -> None:
     name = args.function
     if not name:
         _die("follow needs --function NAME")
-    session = mcp_bridge.Session(engine=args.engine or "auto")
-    server = args.engine if args.engine in mcp_bridge.DEFAULT_ENDPOINTS else "ghidra"
-    calls = mcp_bridge.follow_function(session, server, name)
-    mcp_hit = any(c.ok for c in calls)
-    print(f"Follow {name!r} via {server} MCP ({'hit' if mcp_hit else 'no listener'})\n")
-    for call in calls:
-        mark = "ok" if call.ok else "—"
-        print(f"  [{mark}] {call.method}: {call.detail}")
-
+    print("Source follow only. Binary MCP is unimplemented; use globe_plan.py.\n")
     source = cesium_source.locate(args.cesium_src, REPO)
     if source:
         extracted = cesium_source.extract_symbol(source, name)
@@ -149,9 +114,7 @@ def cmd_follow(args: argparse.Namespace) -> None:
         "and re-run `map --emit-rust` only if the stub is still missing."
     )
     if args.json:
-        payload = session.as_dict()
-        payload["function"] = name
-        Path(args.json).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        Path(args.json).write_text(json.dumps({"function": name}, indent=2) + "\n", encoding="utf-8")
 
 
 def cmd_inventory(args: argparse.Namespace) -> None:
@@ -175,21 +138,13 @@ def cmd_inventory(args: argparse.Namespace) -> None:
 
 def cmd_map(args: argparse.Namespace) -> None:
     target = _guard(args.target)
-    engine = engines.pick(args.engine)
-    print(f"target={target}  engine={engine.id} ({engine.title})")
-    if not engine.present and engine.id != "source":
-        print(f"warning: {engine.id} is not on PATH; source-map still runs.")
-
-    session = mcp_bridge.Session(engine=engine.id)
-    mcp_lines = []
-    for server in mcp_bridge.DEFAULT_ENDPOINTS:
-        call = mcp_bridge.probe(session, server)
-        url = mcp_bridge.DEFAULT_ENDPOINTS[server]
-        if call.ok:
-            mcp_lines.append(f"- `{server}`: listening — {call.detail}")
-        else:
-            mcp_lines.append(f"- `{server}`: down (`{url}`)")
-    mcp_summary = "## MCP this run\n\n" + "\n".join(mcp_lines)
+    engine = engines.pick("source")
+    print(f"target={target}  inventory via globe_plan.py; this command emits stubs")
+    mcp_summary = (
+        "## Binary backends\n\n"
+        "Unimplemented by design. CesiumJS has source. "
+        "`python3 scripts/globe-re/globe_plan.py --binary` exits 2.\n"
+    )
 
     cesium_inv = None
     if target == "cesium":
@@ -253,7 +208,7 @@ def cmd_plan(_args: argparse.Namespace) -> None:
     for row in steps:
         print("| " + " | ".join(row) + " |")
     print("\nSkip: Cesium ion, Entity convenience API for AIR/AIS, minified Cesium.js.")
-    print("Do not Ghidra vendor/cesium/Cesium.js — clone Source/.")
+    print("Inventory: python3 scripts/globe-re/globe_plan.py --repo <cesium> --engine cesiumjs")
 
 
 def build_parser() -> argparse.ArgumentParser:

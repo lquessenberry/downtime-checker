@@ -49,7 +49,7 @@ Exceed Cesium (the reason we left it):
 - `src/main.rs`: `--root`, `--summary`, `--version`.
 - Catalogs and Earth texture are compiled in so the app runs with no data folder.
 
-Cesium → Rust map and the RE/MCP automation: [CESIUM_MAP.md](CESIUM_MAP.md), CLI `python3 scripts/globe-re/globe_re.py`. Apache-2.0 Cesium `Source/` only; proprietary Earth apps are refused.
+Cesium → Rust map: [CESIUM_MAP.md](CESIUM_MAP.md) and the inventory in [globe-plan/RUST_PLAN.md](globe-plan/RUST_PLAN.md). CLI: `python3 scripts/globe-re/globe_plan.py`. Apache-2.0 Cesium `Source/` only. Mapbox GL JS is refused. A `Core/` port is a derivative work; `NOTICE-CESIUM` stays at the repo root (Apache-2.0 §4(d)). Binary RE adapters are unimplemented.
 
 Releases: [RELEASING.md](RELEASING.md).
 

@@ -27,8 +27,9 @@ class PolicyTests(unittest.TestCase):
         self.assertIsNone(policy.refuse_reason("cesium"))
         self.assertEqual(policy.ALLOWED_TARGETS["cesium"]["license"], "Apache-2.0")
 
-    def test_self_allowed(self):
-        self.assertIsNone(policy.refuse_reason("self"))
+    def test_maplibre_not_mapbox(self):
+        self.assertIsNone(policy.refuse_reason("maplibre-gl"))
+        self.assertIsNotNone(policy.refuse_reason("mapbox-gl"))
 
     def test_google_earth_refused(self):
         reason = policy.refuse_reason("Google Earth Pro")

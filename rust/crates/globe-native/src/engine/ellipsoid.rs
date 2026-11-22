@@ -1,5 +1,6 @@
-//! WGS84 ellipsoid matching Cesium `Ellipsoid.WGS84` (Source/Core/Ellipsoid.js).
-//! Radii are meters. The live mesh is still a unit sphere; phase 1 switches it.
+//! WGS84 ellipsoid matching published Cesium `Ellipsoid.WGS84` radii.
+//! Radii are public geodetic constants (meters), not a copy of Ellipsoid.js.
+//! A later mechanical port of `packages/core/Source/Ellipsoid.js` stays Apache-2.0.
 //!
 //! Cesium ECEF: +X (0°N, 0°E), +Y (0°N, 90°E), +Z north pole.
 //! Native wgpu: +X (0°N, 0°E), +Y north pole, +Z (0°N, 90°W).

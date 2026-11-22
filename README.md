@@ -123,7 +123,7 @@ Wiki index: [wiki/Home.md](wiki/Home.md).
 
 ## Rust native apps (alpha)
 
-The native wgpu globe is the product renderer and has to **succeed Cesium in every way**. Cesium (`globalstatus/`) stays the live web globe until that bar is met; then the web target is the same Rust globe. Native Android, Linux, macOS and Windows apps live under [`rust/`](rust/): shared core, `downtime` CLI, SSE server, wgpu + egui globe (`cargo run -p downtime-globe-native`). Phases and the Cesium-parity bar: [docs/rust-native.md](docs/rust-native.md). Module map and Ghidra/IDA/Binja/r2 MCP automation: [docs/CESIUM_MAP.md](docs/CESIUM_MAP.md), `python3 scripts/globe-re/globe_re.py`.
+The native wgpu globe is the product renderer and has to **succeed Cesium in every way**. Cesium (`globalstatus/`) stays the live web globe until that bar is met; then the web target is the same Rust globe. Native Android, Linux, macOS and Windows apps live under [`rust/`](rust/): shared core, `downtime` CLI, SSE server, wgpu + egui globe (`cargo run -p downtime-globe-native`). Phases and the Cesium-parity bar: [docs/rust-native.md](docs/rust-native.md). Source inventory (port / rewrite / defer / delete): [docs/globe-plan/RUST_PLAN.md](docs/globe-plan/RUST_PLAN.md), `python3 scripts/globe-re/globe_plan.py`. Mapbox GL JS is refused; Cesium `Core/` ports stay Apache-2.0 with [NOTICE-CESIUM](NOTICE-CESIUM).
 
 ![Native globe alpha on Linux](docs/assets/screenshot-desktop.png)
 
