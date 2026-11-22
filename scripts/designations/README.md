@@ -1,7 +1,7 @@
 # Designation claims (#60)
 
 Government lists first. Every record is a **claim by a named designator**, not
-a fact about the organization. County or country only — never a street or city.
+a fact about the organization. Addresses the source published stay on the record.
 
 ```bash
 python3 scripts/designations/designations.py --list-designators

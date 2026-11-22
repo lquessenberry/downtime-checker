@@ -2,7 +2,7 @@
 """Designation claims: named designator, never a fact about the org.
 
 Government lists first. NGO lists are optional CSV imports and must not ship
-without a symmetry report. Street addresses and city fields are dropped.
+without a symmetry report. Addresses the source published stay on the record.
 UN individuals are omitted unless --include-individuals.
 
 Every record is a CLAIM. legal_status is first-class so FTO/sanctions and
@@ -146,6 +146,33 @@ def nested_text(el: ET.Element, parent: str, child: str) -> str:
     return ""
 
 
+def address_block(el: ET.Element, parent: str) -> dict:
+    """Keep every address field the source published."""
+    out = {"street": None, "city": None, "state": None, "country": None, "note": None, "zip": None}
+    for node in el:
+        if local_tag(node) != parent:
+            continue
+        for g in node:
+            tag = local_tag(g)
+            text = (g.text or "").strip()
+            if not text:
+                continue
+            if tag in ("STREET", "ADDRESS1", "ADDRESS"):
+                out["street"] = text
+            elif tag == "CITY":
+                out["city"] = text
+            elif tag in ("STATE_PROVINCE", "STATE"):
+                out["state"] = text
+            elif tag == "COUNTRY":
+                out["country"] = text
+            elif tag in ("ZIP_CODE", "POSTAL_CODE", "ZIP"):
+                out["zip"] = text
+            elif tag == "NOTE":
+                out["note"] = text
+        break
+    return out
+
+
 def designation_record(
     designator: str,
     org_name: str,
@@ -153,6 +180,9 @@ def designation_record(
     county_fips: str | None = None,
     state: str | None = None,
     country: str | None = None,
+    street: str | None = None,
+    city: str | None = None,
+    zip_code: str | None = None,
     claim_type: str = "hate_group",
     basis: str | None = None,
     asserted: str | None = None,
@@ -165,7 +195,14 @@ def designation_record(
     loc_country = country or None
     loc_state = state or None
     loc_fips = county_fips or None
-    if loc_fips:
+    loc_street = street or None
+    loc_city = city or None
+    loc_zip = zip_code or None
+    if loc_street:
+        grain = "street"
+    elif loc_city:
+        grain = "city"
+    elif loc_fips:
         grain = "county"
     elif loc_state:
         grain = "state"
@@ -190,8 +227,9 @@ def designation_record(
             "state": loc_state,
             "country": loc_country,
             "granularity": grain,
-            "street": None,
-            "city": None,
+            "street": loc_street,
+            "city": loc_city,
+            "zip": loc_zip,
         },
         "source_url": source_url or meta.get("url"),
         "retrieved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -228,18 +266,22 @@ def ingest_un_xml(blob: bytes, include_individuals: bool = False) -> tuple[list,
             skipped_empty += 1
             continue
         if tag == "ENTITY":
-            country = nested_text(el, "ENTITY_ADDRESS", "COUNTRY")
+            addr = address_block(el, "ENTITY_ADDRESS")
             claim = "sanctions_entity"
         else:
-            country = nested_text(el, "NATIONALITY", "VALUE") or nested_text(
-                el, "INDIVIDUAL_ADDRESS", "COUNTRY"
-            )
+            addr = address_block(el, "INDIVIDUAL_ADDRESS")
+            if not addr.get("country"):
+                addr["country"] = nested_text(el, "NATIONALITY", "VALUE")
             claim = "sanctions_individual"
         records.append(
             designation_record(
                 "un_sanctions",
                 name,
-                country=country or "UN",
+                country=addr.get("country") or "UN",
+                state=addr.get("state"),
+                street=addr.get("street"),
+                city=addr.get("city"),
+                zip_code=addr.get("zip"),
                 claim_type=claim,
                 asserted=child_text(el, "LISTED_ON") or None,
                 status="listed",
@@ -267,6 +309,13 @@ def ingest_un(include_individuals: bool = False) -> tuple[list, dict]:
         return [], {"designator": "un_sanctions", "error": f"parse: {err}"}
 
 
+def _cell(row: dict, col: str | None) -> str | None:
+    if not col:
+        return None
+    val = (row.get(col) or "").strip()
+    return val or None
+
+
 def ingest_csv_rows(path: Path, designator: str, cols: dict) -> tuple[list, dict]:
     meta = DESIGNATORS.get(designator)
     if not meta:
@@ -281,17 +330,19 @@ def ingest_csv_rows(path: Path, designator: str, cols: dict) -> tuple[list, dict
             if not name:
                 bad += 1
                 continue
-            # Drop any address-looking columns even if the operator passed them.
             records.append(
                 designation_record(
                     designator,
                     name,
-                    state=(row.get(cols["state"]) or "").strip() or None if cols.get("state") else None,
-                    county_fips=(row.get(cols["county"]) or "").strip() or None if cols.get("county") else None,
-                    country="US" if cols.get("state") else None,
+                    state=_cell(row, cols.get("state")),
+                    county_fips=_cell(row, cols.get("county")),
+                    country=_cell(row, cols.get("country")) or ("US" if cols.get("state") else None),
+                    street=_cell(row, cols.get("street")),
+                    city=_cell(row, cols.get("city")),
+                    zip_code=_cell(row, cols.get("zip")),
                     claim_type="ngo_designation" if meta["kind"] == "ngo" else "legal_designation",
-                    source_url=(row.get(cols["url"]) or "").strip() or None if cols.get("url") else None,
-                    raw={"name": name, "state": row.get(cols.get("state") or "", "")},
+                    source_url=_cell(row, cols.get("url")),
+                    raw={"name": name, "state": _cell(row, cols.get("state"))},
                 )
             )
     return records, {"designator": designator, "records": len(records), "skipped": bad}
@@ -381,8 +432,8 @@ def render_map_layers(records: list[dict]) -> list[str]:
     lines = [
         "# Designation layer",
         "",
-        "Every line names the designating body. County or country only; "
-        "no street addresses, no city fields.",
+        "Every line names the designating body. Addresses the source published "
+        "are kept on the record.",
         "",
     ]
     for key in sorted(by_key):
@@ -395,9 +446,21 @@ def render_map_layers(records: list[dict]) -> list[str]:
         )
         lines.append("")
         for rec in sorted(group, key=lambda x: x["org_name"] or "")[:40]:
+            loc = rec.get("location") or {}
+            addr = ", ".join(
+                p
+                for p in (
+                    loc.get("street"),
+                    loc.get("city"),
+                    loc.get("state"),
+                    loc.get("country"),
+                )
+                if p
+            )
+            suffix = f" — {addr}" if addr else ""
             lines.append(
                 f"- {rec['org_name']} — *{rec['designator_name']}*, "
-                f"{rec['claim_type']}, {rec.get('status') or '?'}"
+                f"{rec['claim_type']}, {rec.get('status') or '?'}{suffix}"
             )
         lines.append("")
     return lines
@@ -408,10 +471,6 @@ def write_jsonl(path: Path, records: list[dict], append: bool = True) -> None:
     mode = "a" if append and path.exists() else "w"
     with path.open(mode, encoding="utf-8") as fh:
         for rec in records:
-            # Belt: never persist street/city even if a caller stuffed them.
-            loc = rec.setdefault("location", {})
-            loc["street"] = None
-            loc["city"] = None
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
@@ -430,6 +489,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--name-col", default="Organization Name")
     ap.add_argument("--state-col", default="State")
     ap.add_argument("--county-col", default=None)
+    ap.add_argument("--street-col", default="Street")
+    ap.add_argument("--city-col", default="City")
+    ap.add_argument("--zip-col", default="ZIP")
+    ap.add_argument("--country-col", default="Country")
     ap.add_argument("--url-col", default=None)
     ap.add_argument("--include-individuals", action="store_true")
     ap.add_argument("--xml", help="Local UN XML instead of the live feed")
@@ -481,6 +544,10 @@ def main(argv: list[str] | None = None) -> int:
             "name": args.name_col,
             "state": args.state_col,
             "county": args.county_col,
+            "street": args.street_col,
+            "city": args.city_col,
+            "zip": args.zip_col,
+            "country": args.country_col,
             "url": args.url_col,
         }
         records, meta = ingest_csv_rows(Path(args.csv), args.designator, cols)

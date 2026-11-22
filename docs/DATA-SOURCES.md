@@ -67,12 +67,12 @@ Ingest: `python3 scripts/designations/designations.py --ingest un`.
 
 | Source | Kind | Access | Notes |
 | --- | --- | --- | --- |
-| UN Security Council consolidated list | government | XML feed | Entities only by default. Country grain. No street/city. |
+| UN Security Council consolidated list | government | XML feed | Entities only by default. Street/city/country from the list stay on the record. |
 | US State FTO, UK proscribed, EU FSF | government | CSV / later | Legal designation; distinct marks from NGO lists. |
 | SPLC Hate Map, ADL, InfluenceWatch | ngo | manual CSV | Claims, not facts. SPLC: no bulk redistribution. Symmetry report required. |
 | UCDP / ACLED | violence | not ingested here | Different variable from “was designated”. |
 
-Do not cron designation dumps into git. Do not pin street addresses.
+Do not cron designation dumps into git. Source addresses stay on the claim.
 
 ## Credit / license reminders
 

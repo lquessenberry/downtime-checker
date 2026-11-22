@@ -25,15 +25,13 @@ class UnIngestTests(unittest.TestCase):
         self.assertTrue(all(r["designator_kind"] == "government" for r in records))
         self.assertTrue(all(r["legal_status"] != "none" for r in records))
 
-    def test_never_emits_street_or_city(self):
-        records, _ = designations.ingest_un_xml(FIXTURE.read_bytes(), include_individuals=True)
-        blob = json.dumps(records)
-        self.assertNotIn("do-not-emit", blob)
-        self.assertNotIn("Goma", blob)
-        for rec in records:
-            self.assertIsNone(rec["location"]["street"])
-            self.assertIsNone(rec["location"]["city"])
-            self.assertIn(rec["location"]["granularity"], ("country", "state", "county"))
+    def test_keeps_source_street_and_city(self):
+        records, _ = designations.ingest_un_xml(FIXTURE.read_bytes())
+        adf = next(r for r in records if r["org_name"] == "ADF")
+        self.assertEqual(adf["location"]["street"], "North Kivu office")
+        self.assertEqual(adf["location"]["city"], "Goma")
+        self.assertEqual(adf["location"]["state"], "North Kivu")
+        self.assertEqual(adf["location"]["granularity"], "street")
 
     def test_include_individuals(self):
         records, meta = designations.ingest_un_xml(
@@ -42,7 +40,9 @@ class UnIngestTests(unittest.TestCase):
         self.assertEqual(meta["skipped_individuals"], 0)
         people = [r for r in records if r["claim_type"] == "sanctions_individual"]
         self.assertEqual(people[0]["org_name"], "ERIC BADEGE")
-        self.assertEqual(people[0]["location"]["country"], "Democratic Republic of the Congo")
+        self.assertEqual(people[0]["location"]["country"], "Rwanda")
+        self.assertEqual(people[0]["location"]["street"], "Avenue de la Paix")
+        self.assertEqual(people[0]["location"]["city"], "Kigali")
 
 
 class CsvAndSymmetryTests(unittest.TestCase):
@@ -71,26 +71,27 @@ class CsvAndSymmetryTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             claims = (out / "claims.jsonl").read_text(encoding="utf-8")
             self.assertIn('"class": "designation"', claims)
-            self.assertNotIn("do-not-emit", claims)
+            self.assertIn("North Kivu office", claims)
             rc = designations.main(["--report", "--out", str(out)])
             self.assertEqual(rc, 0)
             self.assertTrue((out / "SYMMETRY.md").is_file())
             layer = (out / "LAYER.md").read_text(encoding="utf-8")
             self.assertIn("UN Security Council", layer)
             self.assertIn("ADF", layer)
+            self.assertIn("Goma", layer)
 
 
 class SafetyTests(unittest.TestCase):
-    def test_write_jsonl_strips_street(self):
-        rec = designations.designation_record("un_sanctions", "X", country="SO")
-        rec["location"]["street"] = "123 Target St"
-        rec["location"]["city"] = "Mogadishu"
+    def test_write_jsonl_keeps_street(self):
+        rec = designations.designation_record(
+            "un_sanctions", "X", country="SO", street="Via Roma 1", city="Mogadishu"
+        )
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "claims.jsonl"
             designations.write_jsonl(path, [rec], append=False)
             saved = json.loads(path.read_text(encoding="utf-8"))
-            self.assertIsNone(saved["location"]["street"])
-            self.assertIsNone(saved["location"]["city"])
+            self.assertEqual(saved["location"]["street"], "Via Roma 1")
+            self.assertEqual(saved["location"]["city"], "Mogadishu")
 
 
 if __name__ == "__main__":

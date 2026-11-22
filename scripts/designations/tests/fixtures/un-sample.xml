@@ -9,8 +9,8 @@
       <UN_LIST_TYPE>DRC</UN_LIST_TYPE>
       <NATIONALITY><VALUE>Democratic Republic of the Congo</VALUE></NATIONALITY>
       <INDIVIDUAL_ADDRESS>
-        <STREET>do-not-emit-this-street</STREET>
-        <CITY>do-not-emit-this-city</CITY>
+        <STREET>Avenue de la Paix</STREET>
+        <CITY>Kigali</CITY>
         <COUNTRY>Rwanda</COUNTRY>
       </INDIVIDUAL_ADDRESS>
     </INDIVIDUAL>
@@ -22,7 +22,7 @@
       <LISTED_ON>2014-06-30</LISTED_ON>
       <UN_LIST_TYPE>DRC</UN_LIST_TYPE>
       <ENTITY_ADDRESS>
-        <STREET>do-not-emit-entity-street</STREET>
+        <STREET>North Kivu office</STREET>
         <CITY>Goma</CITY>
         <STATE_PROVINCE>North Kivu</STATE_PROVINCE>
         <COUNTRY>Democratic Republic of the Congo</COUNTRY>
