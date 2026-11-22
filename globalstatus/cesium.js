@@ -39,6 +39,7 @@ const state = {
     designations: { source: null, points: [] },
     violence: { source: null, points: [] },
     nuke: { source: null, points: [] },
+    quakes: { source: null, points: [] },
     streets3d: { source: null, points: [] },
   },
   layers: {
@@ -56,6 +57,7 @@ const state = {
     designations: false,
     violence: false,
     nuke: false,
+    quakes: false,
     streets3d: false,
   },
   nuke: { shots: [], yieldIdx: 0, airburst: true },
@@ -350,7 +352,7 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "streets3d"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
@@ -371,6 +373,12 @@ async function startGlobe() {
   setInterval(() => {
     if (state.layers.animal) loadAnimal();
   }, 600000);
+  setInterval(() => {
+    if (state.layers.quakes && !document.hidden) loadQuakes();
+  }, (window.GsaQuakes && window.GsaQuakes.POLL_MS) || 300000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && state.layers.quakes) scheduleQuakes();
+  });
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
@@ -1133,6 +1141,7 @@ function setLayer(layer, on) {
       state.live.streets3d.source.entities.removeAll();
     }
   }
+  if (layer === "quakes" && state.layers.quakes) scheduleQuakes();
   if (layer === "amfm") {
     if (state.layers.amfm) {
       loadAmfm().catch((error) => statusLive(error.message || String(error)));
@@ -1169,13 +1178,14 @@ const LAYER_LABEL = {
   designations: "DESIGNATIONS",
   violence: "ATTRIBUTED VIOLENCE",
   nuke: "NUCLEAR",
+  quakes: "QUAKES",
   streets3d: "STREETS 3D",
 };
 
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "streets3d"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -2036,6 +2046,7 @@ const LIVE_STYLE = {
   designations: { color: "#f0c14a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DESIGNATION" },
   violence: { color: "#c44b4b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ATTRIBUTED VIOLENCE" },
   nuke: { color: "#7cff6b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "NUCLEAR" },
+  quakes: { color: "#f08a24", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "QUAKES" },
   streets3d: { color: "#c4a574", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "STREETS 3D" },
 };
 
@@ -2759,6 +2770,30 @@ async function loadViolence() {
   }
 }
 
+let quakesLoading = null;
+
+function scheduleQuakes() {
+  loadQuakes().catch((error) => statusLive(error.message || String(error)));
+}
+
+async function loadQuakes() {
+  if (!window.GsaQuakes) return;
+  if (document.hidden) return;
+  if (quakesLoading) return quakesLoading;
+  quakesLoading = (async () => {
+    const result = await window.GsaQuakes.fetchFeed();
+    state.live.quakes.points = result.points || [];
+    setCount("quakes", state.live.quakes.points.length);
+    placeLiveLayer("quakes", state.live.quakes.points);
+    statusLive();
+  })();
+  try {
+    await quakesLoading;
+  } finally {
+    quakesLoading = null;
+  }
+}
+
 function placeLiveLayer(key, points) {
   const layer = state.live[key];
   if (!layer?.source) return;
@@ -2892,7 +2927,13 @@ function showLive(item) {
   const box = document.getElementById("selected");
   box.hidden = false;
   let extra = "";
-  if (item.url) extra = `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">CFR briefing</a>`;
+  if (item.layer === "quakes") {
+    const mag = item.mag != null ? `Magnitude ${item.mag}` : "";
+    const bits = [mag, item.place, item.timeText].filter(Boolean).map((part) => esc(String(part)));
+    extra = bits.length ? `<br>${bits.join("<br>")}` : "";
+    if (item.url) extra += `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">USGS event</a>`;
+  }
+  else if (item.url) extra = `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">CFR briefing</a>`;
   else if (item.pct != null) extra = `<br>${item.pct}% bad NACp · ${item.bad || 0} degraded`;
   else if (item.layer === "mesh") {
     const bits = [item.short, item.hw, item.role].filter(Boolean).map((part) => esc(part));
@@ -3073,6 +3114,9 @@ function statusLive(error) {
       ? `ATTRIBUTED VIOLENCE ${state.live.violence.points.length}`
       : "ATTRIBUTED VIOLENCE",
     state.layers.nuke ? `NUCLEAR ${state.nuke.shots.length}` : "NUCLEAR",
+    state.live.quakes.points.length
+      ? `QUAKES ${state.live.quakes.points.length}`
+      : "QUAKES",
     state.layers.streets3d ? `STREETS 3D ${state.live.streets3d.points.length}` : "STREETS 3D",
   ];
   if (error) parts.push(error);

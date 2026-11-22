@@ -669,6 +669,7 @@ button:hover { border-color: #9fd4e2; }
 .swatch.designations { background: #f0c14a; }
 .swatch.violence { background: #c44b4b; }
 .swatch.nuke { background: #7cff6b; }
+.swatch.quakes { background: #f08a24; }
 .swatch.streets3d { background: #c4a574; }
 .nuke-hud {
   position: absolute;
