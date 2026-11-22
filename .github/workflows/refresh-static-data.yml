@@ -2,6 +2,8 @@ name: Refresh static data
 
 # Cron only runs from the repository default branch.
 # github.event.schedule is the cron expression that fired.
+# The default branch is protected (GH013), so this workflow opens a PR
+# instead of pushing commits directly.
 on:
   schedule:
     - cron: "17 5,17 * * *"
@@ -20,12 +22,13 @@ on:
           - all
         default: overlays
       commit:
-        description: Commit changed JSON back to this branch
+        description: Open a PR if JSON packs changed
         type: boolean
         default: true
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: refresh-static-data
@@ -68,8 +71,10 @@ jobs:
           HPDB_CACHE: ${{ runner.temp }}/hpdb
         run: node scripts/refresh_static_data.mjs
 
-      - name: Commit if changed
+      - name: Open PR if changed
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.commit }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -93,5 +98,14 @@ jobs:
             echo "No data changes"
             exit 0
           fi
-          git commit -m "Refresh static data (${{ steps.pick.outputs.datasets }})."
-          git push
+          base="${{ github.event.repository.default_branch }}"
+          ds="${{ steps.pick.outputs.datasets }}"
+          branch="bot/refresh-static-${ds}-$(date -u +%Y%m%dT%H%M%SZ)"
+          git checkout -b "$branch"
+          git commit -m "Refresh static data (${ds})."
+          git push origin "$branch"
+          gh pr create \
+            --base "$base" \
+            --head "$branch" \
+            --title "Refresh static data (${ds})" \
+            --body "Automated refresh of static JSON packs (${ds}). Opens a PR because the default branch is protected (GH013). Please review before merge. No deploy."
