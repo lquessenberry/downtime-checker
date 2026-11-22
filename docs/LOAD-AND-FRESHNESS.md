@@ -1,12 +1,17 @@
 # Load and freshness review
 
+**Snapshot 2026-11-20.** Do not treat this as current runbook.
+
+Later work supersedes parts of it: one-user poll-runner and cache (#34),
+Rust `downtime-server` workers, AIR unkeyed 3-minute cache (not a 1.7 MB
+file every 8 seconds), OSM default instead of Esri. Merging this PR only
+keeps the 11-20 notes. It does not ship those old “fixes” and it does not
+close #23–#31.
+
 Checked on the live globe https://globalstatus.app on 2026-11-20.
-Nothing in this note is built yet. It is the same list as
+It is the same list as
 https://github.com/lquessenberry/downtime-checker/issues/23 through #31,
 linked from the backlog tracker #2.
-
-Check an issue off when that item is actually done. Merging this pull
-request does not finish the work.
 
 ## Down check
 
