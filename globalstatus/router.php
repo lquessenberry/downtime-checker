@@ -1697,12 +1697,13 @@ function feeds_pack()
     $hit = gsa_cache_serve($dataDir . '/feeds-cache.json', 180);
     if ($hit) {
         $hit['aircraft'] = gsa_aircraft_snapshot();
+        $hit['jamming'] = gsa_jamming_snapshot();
         return $hit;
     }
     $file = $root . '/api/feeds.json';
     if (!is_file($file)) {
         return array(
-            'jamming' => gsa_awaiting('gpsinterference.com', 'https://api.gpsinterference.com/', 'Awaiting poller'),
+            'jamming' => gsa_jamming_snapshot(),
             'aircraft' => gsa_aircraft_snapshot(),
             'ships' => array('points' => array(), 'count' => 0),
             'conflicts' => array('points' => array(), 'count' => 0),
@@ -1711,6 +1712,7 @@ function feeds_pack()
     $decoded = json_decode((string) file_get_contents($file), true);
     $pack = is_array($decoded) ? $decoded : array();
     $pack['aircraft'] = gsa_aircraft_snapshot();
+    $pack['jamming'] = gsa_jamming_snapshot();
     return $pack;
 }
 
@@ -1718,6 +1720,7 @@ function feeds_snapshot()
 {
     $pack = feeds_pack();
     $pack['aircraft'] = gsa_aircraft_snapshot();
+    $pack['jamming'] = gsa_jamming_snapshot();
     return $pack;
 }
 
@@ -1759,46 +1762,20 @@ function jamming_sample($jammed)
     return array_slice($picked, 0, 1400);
 }
 
-function jamming_refresh()
+function jamming_refresh($opts = array())
 {
-    $raw = outage_fetch('https://api.gpsinterference.com/v1/interference/latest', browser_agent());
-    $jammed = array();
-    foreach ((is_array($raw) ? ($raw['hexes'] ?? array()) : array()) as $hex) {
-        if (!is_array($hex) || ($hex['c'] ?? '') === 'g' || !isset($hex['poly']) || !is_array($hex['poly']) || count($hex['poly']) < 3) {
-            continue;
-        }
-        $lat = 0;
-        $lon = 0;
-        foreach ($hex['poly'] as $pt) {
-            $lat += (float) $pt[0];
-            $lon += (float) $pt[1];
-        }
-        $n = count($hex['poly']);
-        $band = (string) ($hex['c'] ?? 'y');
-        $jammed[] = array(
-            'lat' => $lat / $n,
-            'lon' => $lon / $n,
-            'band' => $band,
-            'bad' => (float) ($hex['b'] ?? 0),
-            'good' => (float) ($hex['g'] ?? 0),
-            'pct' => (float) ($hex['p'] ?? 0),
-            'name' => 'GPS ' . ($band === 'p' ? 'severe' : ($band === 'r' ? 'heavy' : 'degraded')),
-        );
-    }
-    $points = jamming_sample($jammed);
-    $layer = array(
-        'points' => $points,
-        'count' => count($jammed),
-        'updated' => is_array($raw) ? ($raw['updated'] ?? gmdate('Y-m-d\TH:i:s\Z')) : gmdate('Y-m-d\TH:i:s\Z'),
-        'source' => 'GPSInterference.com',
-        'error' => $raw ? null : 'GPSInterference did not answer',
-        'at' => (int) round(microtime(true) * 1000),
-    );
+    // Runner entry point. The cron cache in poll-lib.php is the only
+    // writer that calls api.gpsinterference.com. Keep feeds-cache
+    // jamming in sync for anything still reading /api/feeds.
+    $info = gsa_jamming_refresh($opts);
     $pack = feeds_pack();
-    $pack['jamming'] = $layer;
-    $put = feeds_write($pack);
-    $put['count'] = $layer['count'];
-    return $put;
+    $pack['jamming'] = gsa_jamming_snapshot();
+    $pack['aircraft'] = gsa_aircraft_snapshot();
+    feeds_write($pack);
+    if (is_array($info)) {
+        return $info;
+    }
+    return array('ok' => false, 'error' => 'jamming refresh failed');
 }
 
 function aircraft_refresh($opts = array())

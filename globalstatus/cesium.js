@@ -1273,7 +1273,13 @@ function setLayer(layer, on) {
     tickAircraft();
     if (!state.aircraftFeed.length) pollAircraft().catch((error) => statusLive(error.message || String(error)));
   }
-  if (layer === "jamming" && state.layers.jamming) pollJamming().catch((error) => statusLive(error.message || String(error)));
+  if (layer === "jamming") {
+    const jamCreditLine = document.querySelector(".jam-credit");
+    if (jamCreditLine) jamCreditLine.hidden = !state.layers.jamming;
+    if (state.layers.jamming && !(state.live.jamming.points || []).length) {
+      pollJamming().catch((error) => statusLive(error.message || String(error)));
+    }
+  }
   if (layer === "ships" && state.layers.ships) scheduleShips();
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
   if (layer === "disease" && state.layers.disease) scheduleDisease();
@@ -1378,6 +1384,8 @@ function syncTrafficBars() {
   if (shipCreditLine) shipCreditLine.hidden = !shipOn;
   const airCreditLine = document.querySelector(".air-credit");
   if (airCreditLine) airCreditLine.hidden = !airOn;
+  const jamCreditLine = document.querySelector(".jam-credit");
+  if (jamCreditLine) jamCreditLine.hidden = !state.layers.jamming;
   for (const button of document.querySelectorAll("[data-traffic-pane]")) {
     const on = button.dataset.trafficPane === pane;
     button.classList.toggle("on", on);

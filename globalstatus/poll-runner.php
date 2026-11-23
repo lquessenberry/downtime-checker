@@ -6,12 +6,15 @@
 //   php poll-runner.php once
 //   php poll-runner.php loop
 //   php poll-runner.php grid --slice=16
-//   php poll-runner.php aircraft [--force-mil|--skip-mil|--mock=PATH]
+//   php poll-runner.php aircraft [--force-mil|--skip-mil|--mock=PATH|--force-jam|--skip-jam|--skip-aircraft|--mock-jam=PATH]
+//   php poll-runner.php jamming [--force-jam|--mock-jam=PATH]
 //
 // Aircraft on globalstatus.app (cPanel cron, every 5 minutes): one civilian
 // adsb.lol pull each run, plus /v2/mil only when the last mil pull is at least
 // 15 minutes old (~384 requests/day, under the 500/day unkeyed cap).
-// Visitors read the cache. Jamming stays on its own TTL. Grid is ~10 minutes.
+// Visitors read the cache. The same aircraft cron also refreshes
+// GPSInterference.com when the last jamming pull is at least 15 minutes
+// old (96 requests/day worst case). No third cron is needed. Grid is ~10 minutes.
 //
 // Live cPanel crons:
 //   /usr/local/bin/php -q /home/<user>/public_html/globalstatus.app/poll-runner.php grid
@@ -36,6 +39,9 @@ $job = $argv ? array_shift($argv) : 'status';
 $slice = 0;
 $forceMil = false;
 $skipMil = false;
+$forceJam = false;
+$skipJam = false;
+$skipAircraft = false;
 foreach ($argv as $arg) {
     if (strpos($arg, '--slice=') === 0) {
         $slice = (int) substr($arg, 8);
@@ -43,13 +49,21 @@ foreach ($argv as $arg) {
         $forceMil = true;
     } elseif ($arg === '--skip-mil') {
         $skipMil = true;
+    } elseif ($arg === '--force-jam') {
+        $forceJam = true;
+    } elseif ($arg === '--skip-jam') {
+        $skipJam = true;
+    } elseif ($arg === '--skip-aircraft') {
+        $skipAircraft = true;
     } elseif (strpos($arg, '--mock=') === 0) {
         $GLOBALS['GSA_ADSB_MOCK'] = substr($arg, 7);
+    } elseif (strpos($arg, '--mock-jam=') === 0) {
+        $GLOBALS['GSA_JAM_MOCK'] = substr($arg, 11);
     }
 }
 
 $ttls = array(
-    'jamming' => 180,
+    'jamming' => 900,
     'aircraft' => 300,
     'outages' => 180,
     'mesh' => 90,
@@ -143,8 +157,8 @@ function runner_run($name, $slice = 0)
         });
     }
     if ($name === 'jamming') {
-        return runner_timed('jamming', function () {
-            return jamming_refresh();
+        return runner_timed('jamming', function () use ($forceJam) {
+            return jamming_refresh(array('force' => $forceJam));
         });
     }
     if ($name === 'aircraft') {
@@ -209,6 +223,25 @@ if ($job === 'loop') {
         }
         sleep(5);
     }
+}
+
+// The live cPanel cron is `poll-runner.php aircraft`. Piggyback jamming
+// on that same run (15-minute throttle inside gsa_jamming_refresh).
+if ($job === 'aircraft') {
+    $out = array();
+    if ($skipAircraft) {
+        $info = array('ok' => true, 'skipped' => true, 'ms' => 0);
+    } else {
+        $info = runner_run('aircraft', $slice);
+    }
+    $out['aircraft'] = $info;
+    if (!$skipJam) {
+        $out['jamming'] = runner_run('jamming', $slice);
+    }
+    runner_print($out);
+    $airOk = !empty($info['ok']) || !empty($info['busy']) || !empty($info['skipped']);
+    $jamOk = $skipJam || !empty($out['jamming']['ok']) || !empty($out['jamming']['busy']) || !empty($out['jamming']['skipped']);
+    exit($airOk && $jamOk ? 0 : 2);
 }
 
 runner_print(runner_run($job, $slice));
