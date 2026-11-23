@@ -35,6 +35,24 @@ function gsa_cache_serve($file, $ttl)
     return $cached;
 }
 
+// Web servers may read cache files directly (FrankenPHP serves them as static
+// JSON), so write to a temp file and rename: a reader never sees half a file.
+function gsa_write_atomic($file, $body)
+{
+    $tmp = $file . '.' . getmypid() . '.tmp';
+    if (file_put_contents($tmp, $body) === false) {
+        return false;
+    }
+    // A gzip twin lets the web server send the cache without compressing it per request.
+    if (function_exists('gzencode') && substr($file, -5) === '.json') {
+        $gz = gzencode($body, 6);
+        if ($gz !== false && file_put_contents($tmp . '.gz', $gz) !== false) {
+            rename($tmp . '.gz', $file . '.gz');
+        }
+    }
+    return rename($tmp, $file);
+}
+
 function gsa_cache_put($file, $payload)
 {
     $prev = null;
@@ -48,7 +66,7 @@ function gsa_cache_put($file, $payload)
         $prev['fetchedAt'] = $now;
         $prev['updated'] = $payload['updated'] ?? gmdate('Y-m-d\TH:i:s\Z');
         $prev['stale'] = false;
-        file_put_contents($file, json_encode($prev), LOCK_EX);
+        gsa_write_atomic($file, json_encode($prev));
         return array(
             'changed' => false,
             'bytes' => filesize($file),
@@ -58,7 +76,7 @@ function gsa_cache_put($file, $payload)
     }
     $payload['fetchedAt'] = $now;
     $payload['stale'] = false;
-    file_put_contents($file, json_encode($payload), LOCK_EX);
+    gsa_write_atomic($file, json_encode($payload));
     return array(
         'changed' => true,
         'bytes' => filesize($file),

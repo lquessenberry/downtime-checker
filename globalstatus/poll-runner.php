@@ -7,7 +7,7 @@
 //   php poll-runner.php loop
 //   php poll-runner.php grid --slice=16
 //
-// 3 minutes is the max for AIR/JAM. Grid is ~15 minutes.
+// Every source waits at least 5 minutes between polls. Grid is 30 minutes.
 
 define('GSA_RUNNER', true);
 
@@ -24,15 +24,20 @@ foreach ($argv as $arg) {
     }
 }
 
+// Lee's rule: no source is polled more often than every 5 minutes.
+// adsb.lol allows about 500 requests a day per IP: aircraft (288/day at
+// 300 s) plus mil (96/day at 900 s) stays under it. Override for testing
+// with GSA_POLL_MIN_SEC (never below 300).
+$gsaPollMin = max(300, (int) (getenv('GSA_POLL_MIN_SEC') ?: 300));
 $ttls = array(
-    'jamming' => 180,
-    'aircraft' => 180,
-    'outages' => 180,
-    'mil' => 180,
-    'mesh' => 90,
-    'disease' => 180,
-    'animal' => 600,
-    'grid' => 900,
+    'jamming' => $gsaPollMin,
+    'aircraft' => $gsaPollMin,
+    'outages' => $gsaPollMin,
+    'mil' => max(900, $gsaPollMin),
+    'mesh' => $gsaPollMin,
+    'disease' => $gsaPollMin,
+    'animal' => max(600, $gsaPollMin),
+    'grid' => 1800,
 );
 
 function runner_timed($name, $fn)

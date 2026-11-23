@@ -39,6 +39,7 @@ const state = {
     designations: { source: null, points: [] },
     violence: { source: null, points: [] },
     nuke: { source: null, points: [] },
+    effects: { source: null, points: [] },
     quakes: { source: null, points: [] },
     streets3d: { source: null, points: [] },
   },
@@ -57,6 +58,7 @@ const state = {
     designations: false,
     violence: false,
     nuke: false,
+    effects: false,
     quakes: false,
     streets3d: false,
   },
@@ -149,12 +151,12 @@ async function boot() {
   fillCountries(catalog.countries);
   hookUi();
   tickClock();
+  // Scanners (1.5 MB) and the aircraft/GPS-jamming feed (1.7 MB) load when
+  // their layer or list is opened, not at startup.
   Promise.allSettled([
     loadOutages(),
     loadHunger(),
-    loadStreams(),
     loadConflicts(),
-    pollLiveFeeds(),
   ]).then((results) => {
     const failed = results.find((result) => result.status === "rejected");
     if (failed) statusLive(failed.reason?.message || String(failed.reason));
@@ -178,7 +180,7 @@ function tuneQuality(basemapId) {
   const sharp = basemapId === "satellite" || basemapId === "sentinel" || basemapId === "streets" || basemapId === "osm";
   viewer.scene.globe.maximumScreenSpaceError = sharp ? 2 : 4;
   const dpr = window.devicePixelRatio || 1;
-  const cap = sharp ? (phoneLayout() ? 1.25 : 2) : (phoneLayout() ? 1 : 1.5);
+  const cap = sharp ? (phoneLayout() ? 1 : 2) : (phoneLayout() ? 0.85 : 1.5);
   // Pixel ratio is devicePixelRatio times resolutionScale only when this is false.
   viewer.useBrowserRecommendedResolution = false;
   viewer.resolutionScale = Math.min(dpr, cap) / dpr;
@@ -338,6 +340,14 @@ async function startGlobe() {
   viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#070b10");
   viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10202c");
   viewer.scene.globe.enableLighting = false;
+  // Draw only when something changes (camera, tiles, entities). Saves phone battery.
+  viewer.scene.requestRenderMode = true;
+  viewer.scene.maximumRenderTimeChange = Infinity;
+  if (phoneLayout()) {
+    viewer.scene.globe.preloadSiblings = false;
+    viewer.scene.fog.enabled = true;
+    viewer.scene.fog.screenSpaceErrorFactor = 4;
+  }
   state.viewer = viewer;
   state.basemap = startupMap;
   tuneQuality(startupMap);
@@ -354,10 +364,16 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "effects", "quakes", "streets3d"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
+  // With requestRenderMode, redraw whenever any layer adds or removes pins.
+  for (let i = 0; i < viewer.dataSources.length; i += 1) {
+    viewer.dataSources.get(i).entities.collectionChanged.addEventListener(kickRender);
+  }
+  viewer.entities.collectionChanged.addEventListener(kickRender);
+  viewer.selectedEntityChanged.addEventListener(kickRender);
   viewer.scene.preRender.addEventListener(cullAircraftHorizon);
   viewer.scene.preRender.addEventListener(keepFlatMapIntact);
   viewer.camera.moveEnd.addEventListener(() => {
@@ -390,12 +406,14 @@ async function startGlobe() {
   // Cesium then inserts a temporary imagery entity; that is not a layer pin either.
   const popupClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   popupClicks.setInputAction((click) => {
+    if (state.layers.effects && window.GsaEffectsRadius && window.GsaEffectsRadius.handleClick(click.position)) return;
     if (state.layers.nuke && placeNukeAt(click.position)) return;
     if (pickedMapPin(click.position)) return;
     closeMapPopups();
     if (viewer.selectedEntity) viewer.selectedEntity = undefined;
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   bindNukeHud();
+  bindEffectsHud();
   viewer.camera.moveEnd.addEventListener(() => {
     if (state.layers.streets3d) scheduleStreets3d();
   });
@@ -713,6 +731,7 @@ function replayScan(snap) {
       i += 1;
     }
     state.done = i;
+    kickRender();
     updateHud();
     syncGridResultsButton();
     if (i < n) {
@@ -893,6 +912,7 @@ function upsertArc(result) {
 }
 
 function upsertPoint(result) {
+  kickRender();
   if (!state.viewer || !state.scanSource || result.lat == null || result.lon == null) return;
   const color = COLORS[result.status] || COLORS.pending;
   const pixelSize = result.status === "down" ? 16 : 12;
@@ -986,6 +1006,7 @@ function tickClock() {
 function setFeedMode(mode) {
   const allowed = ["outages", "hunger", "stream", "conflicts", "returns"];
   state.feedMode = allowed.includes(mode) ? mode : "outages";
+  if (state.feedMode === "stream") ensureStreams();
   for (const name of allowed) {
     const pane = document.getElementById(`${name}-pane`);
     if (!pane) continue;
@@ -1014,6 +1035,7 @@ function sourceFor(layer) {
 }
 
 function setCount(key, value) {
+  kickRender();
   const text = String(value);
   for (const el of document.querySelectorAll(`[data-count="${key}"]`)) el.textContent = text;
 }
@@ -1184,6 +1206,7 @@ function setLayer(layer, on) {
     }
     syncTrafficBars();
   }
+  if (layer === "stream" && state.layers.stream) ensureStreams();
   if (layer === "ships" && state.layers.ships) scheduleShips();
   if ((layer === "aircraft" || layer === "jamming") && state.layers[layer]) pollLiveFeeds();
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
@@ -1206,6 +1229,9 @@ function setLayer(layer, on) {
       applyTerrain("elevation");
       syncNukeHud();
     }
+  }
+  if (layer === "effects") {
+    if (window.GsaEffectsRadius) window.GsaEffectsRadius.setActive(state.layers.effects);
   }
   if (layer === "streets3d") {
     if (state.layers.streets3d) {
@@ -1235,6 +1261,11 @@ function setLayer(layer, on) {
     loadHunger().catch((error) => statusLive(error.message || String(error)));
   }
   syncMobilePick(layer);
+  kickRender();
+}
+
+function kickRender() {
+  if (state.viewer) state.viewer.scene.requestRender();
 }
 
 const LAYER_LABEL = {
@@ -1252,6 +1283,7 @@ const LAYER_LABEL = {
   designations: "DESIGNATIONS",
   violence: "ATTRIBUTED VIOLENCE",
   nuke: "NUCLEAR",
+  effects: "NUKE SIMULATOR",
   quakes: "QUAKES",
   streets3d: "STREETS 3D",
 };
@@ -1259,7 +1291,7 @@ const LAYER_LABEL = {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "effects", "quakes", "streets3d"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -1911,6 +1943,17 @@ function closePin() {
   renderStreamList();
 }
 
+let streamsLoading = null;
+function ensureStreams() {
+  if (!streamsLoading) {
+    streamsLoading = loadStreams().catch((error) => {
+      streamsLoading = null;
+      statusLive(error.message || String(error));
+    });
+  }
+  return streamsLoading;
+}
+
 async function loadStreams() {
   const response = await fetch("/api/streams");
   const body = await response.json();
@@ -2120,6 +2163,7 @@ const LIVE_STYLE = {
   designations: { color: "#f0c14a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DESIGNATION" },
   violence: { color: "#c44b4b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ATTRIBUTED VIOLENCE" },
   nuke: { color: "#7cff6b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "NUCLEAR" },
+  effects: { color: "#ff8f1f", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "NUKE SIMULATOR" },
   quakes: { color: "#f08a24", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "QUAKES" },
   streets3d: { color: "#c4a574", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "STREETS 3D" },
 };
@@ -2927,6 +2971,7 @@ function placeLiveLayer(key, points) {
 }
 
 function hideFilteredShips() {
+  kickRender();
   const selected = state.viewer && state.viewer.selectedEntity;
   if (!selected || !selected._live || selected._live.layer !== "ships") return;
   if (shipMatches(selected._live)) return;
@@ -2936,6 +2981,7 @@ function hideFilteredShips() {
 }
 
 function hideFilteredAircraft(points) {
+  kickRender();
   const card = document.getElementById("aircraft-card");
   if (!card || card.hidden) return;
   const hex = (document.getElementById("ac-hex").textContent || "").trim().toLowerCase();
@@ -3188,6 +3234,9 @@ function statusLive(error) {
       ? `ATTRIBUTED VIOLENCE ${state.live.violence.points.length}`
       : "ATTRIBUTED VIOLENCE",
     state.layers.nuke ? `NUCLEAR ${state.nuke.shots.length}` : "NUCLEAR",
+    state.layers.effects && window.GsaEffectsRadius && window.GsaEffectsRadius.hasResult()
+      ? "NUKE SIMULATOR 1"
+      : "NUKE SIMULATOR",
     state.live.quakes.points.length
       ? `QUAKES ${state.live.quakes.points.length}`
       : "QUAKES",
@@ -3200,6 +3249,17 @@ function statusLive(error) {
 function currentYieldKt() {
   const presets = (window.GsaBlast && window.GsaBlast.KT_PRESETS) || [15, 100, 300, 1000, 5000];
   return presets[state.nuke.yieldIdx] || 15;
+}
+
+function bindEffectsHud() {
+  if (window.GsaEffectsRadius && state.viewer) {
+    window.GsaEffectsRadius.bind({
+      viewer: state.viewer,
+      source: state.live.effects && state.live.effects.source,
+      setCount,
+      statusLive,
+    });
+  }
 }
 
 function bindNukeHud() {
