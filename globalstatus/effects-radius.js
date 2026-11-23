@@ -1,0 +1,598 @@
+/* Global Status effects-radius layer.
+ * Will Casey's CEX-62.2 / Glasstone & Dolan calculator, drawn on the
+ * existing Cesium globe. Not NUKEMAP, and not the NUCLEAR layer in blast.js.
+ */
+(function (root) {
+  "use strict";
+
+// Published CEX-62.2 coefficients. Input and output units are the report's.
+var CEX = {
+  surfaceScaledMiles: [-0.1307982, -0.6836211, 0.1091296, -0.0167348],
+  airScaledMiles: [0.1292768, -0.7227471, 0.0147366, 0.0135239],
+  scaledHeightFeet: [3.2015016, -0.3263444],
+  thermalMilesFromQOverW: [-0.0193419, -0.4804553, -0.0055685, 0.0002013],
+  firstDegreeCal: [0.3141555, 0.059904, 0.0007636, -0.0002015],
+  secondDegreeCal: [0.6025982, 0.0201394, 0.0139640, 0.0008559]
+};
+var MILES_TO_KM = 1.609344;
+var FEET_PER_MILE = 5280;
+// 7.06 cal/cm² at 1 kt is the third-degree exposure that equation 2.108
+// places at 0.37 miles, the usual tabulated 1 kt radius. Yield dependence
+// follows the report's second-degree curve.
+var THIRD_DEGREE_AT_1KT = 7.06;
+
+// log10 polynomial used by the CEX-62.2 curve fits: 10^(a0 + a1 log10 x + ...).
+function logPoly(x, coeffs) {
+  var lx = Math.log(x) / Math.LN10;
+  var sum = 0;
+  var power = 1;
+  for (var i = 0; i < coeffs.length; i++) {
+    sum += coeffs[i] * power;
+    power *= lx;
+  }
+  return Math.pow(10, sum);
+}
+
+function referenceYield(kt) {
+  if (kt > 20000) return { kt: kt / 1000, scale: 10 };
+  if (kt < 1) return { kt: kt * 1000, scale: 0.1 };
+  return { kt: kt, scale: 1 };
+}
+
+function blastMiles(kt, psi, airburst) {
+  var ref = referenceYield(kt);
+  var coeffs = airburst ? CEX.airScaledMiles : CEX.surfaceScaledMiles;
+  var scaled = logPoly(psi, coeffs);
+  return scaled * Math.pow(ref.kt, 1 / 3) * ref.scale;
+}
+
+function optimumHeightFeet(kt, psi) {
+  var ref = referenceYield(kt);
+  return logPoly(psi, CEX.scaledHeightFeet) * Math.pow(ref.kt, 1 / 3) * ref.scale;
+}
+
+function exposureCal(kt, kind) {
+  var ref = referenceYield(kt);
+  if (kind === "first") return logPoly(ref.kt, CEX.firstDegreeCal);
+  var second = logPoly(ref.kt, CEX.secondDegreeCal);
+  if (kind === "second") return second;
+  var secondAt1 = logPoly(1, CEX.secondDegreeCal);
+  return THIRD_DEGREE_AT_1KT * (second / secondAt1);
+}
+
+function thermalSlantMiles(kt, calories, airburst) {
+  var ref = referenceYield(kt);
+  var divisor = airburst ? ref.kt : 0.7 * ref.kt;
+  var ratio = calories / divisor;
+  if (!(ratio > 0)) return null;
+  return logPoly(ratio, CEX.thermalMilesFromQOverW) * ref.scale;
+}
+
+// CEX-62.2 equation 2.116. Slant range in miles from yield (kt) and dose (rem).
+function promptSlantMiles(kt, rem) {
+  var a = 0.1237561, a_ = 0.0143624;
+  var b = 0.0994027, b_ = -0.0000816;
+  var c = 0.0011878, c_ = -0.0000014;
+  var d = -0.0002481, d_ = 0.0054734;
+  var e = 0.0000096, e_ = -0.0003272;
+  var f = -0.1308215, f_ = 0.0000106;
+  var g = 0.0009881, g_ = -0.0001220;
+  var h = -0.0032363, h_ = 0.0000217;
+  var i = 0.0000111, i_ = -0.0000006;
+  var logI = Math.log(rem) / Math.LN10;
+  var logI2 = logI * logI;
+  var logI3 = logI2 * logI;
+  var logW = Math.log(kt) / Math.LN10;
+  var distance = a + (b + a_ * logI + d_ * logI2 + g_ * logI3) * logW;
+  distance += (c + b_ * logI + e_ * logI2 + h_ * logI3) * Math.pow(logW, 3);
+  distance += (d + c_ * logI + f_ * logI2 + i_ * logI3) * Math.pow(logW, 5);
+  distance += e * Math.pow(logW, 7) + f * logI + g * logI2 + h * logI3;
+  distance += i * Math.pow(logI, 5);
+  return Math.pow(10, distance);
+}
+
+// Glasstone & Dolan 2.127. Maximum radius is about twice the breakaway radius.
+function fireballMiles(kt, surface) {
+  var breakawayFeet = (surface ? 145 : 110) * Math.pow(kt, 0.4);
+  return (2 * breakawayFeet) / FEET_PER_MILE;
+}
+
+// Glasstone & Dolan 6.09. Apparent crater radius in dry soil, contact burst.
+function craterMiles(kt) {
+  return (60 * Math.pow(kt, 1 / 3)) / FEET_PER_MILE;
+}
+
+function groundFromSlant(slantMiles, heightFeet) {
+  var heightMiles = heightFeet / FEET_PER_MILE;
+  if (slantMiles <= heightMiles) return 0;
+  return Math.sqrt(slantMiles * slantMiles - heightMiles * heightMiles);
+}
+
+function formatRadius(miles) {
+  if (miles === 0) return "Does not reach the ground";
+  if (!(miles > 0) || !isFinite(miles)) return "Outside the published curve";
+  var km = miles * MILES_TO_KM;
+  var feet = miles * FEET_PER_MILE;
+  if (km < 1) {
+    return round(km * 1000) + " m  ·  " + round(feet) + " ft";
+  }
+  return round(km) + " km  ·  " + round(miles) + " mi";
+}
+
+function round(n) {
+  var abs = Math.abs(n);
+  var digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
+  return n.toFixed(digits);
+}
+
+function formatYield(kt) {
+  var amount = kt;
+  var unit = " kilotons";
+  if (kt < 1) {
+    amount = kt * 1000;
+    unit = " tons";
+  } else if (kt >= 1000) {
+    amount = kt / 1000;
+    unit = " megatons";
+  }
+  var text = Math.abs(amount - Math.round(amount)) < 1e-8 ? String(Math.round(amount)) : round(amount).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+  return text + unit;
+}
+
+
+  var M_PER_MILE = 1609.344;
+
+  function formatRadiusMiKm(miles) {
+    if (miles === 0) return "Does not reach the ground";
+    if (!(miles > 0) || !isFinite(miles)) return "Outside the published curve";
+    var km = miles * MILES_TO_KM;
+    var text = round(miles) + " mi  ·  " + round(km) + " km";
+    if (km < 1) text += "  (" + round(km * 1000) + " m)";
+    return text;
+  }
+
+  function row(name, meaning, miles, group, color) {
+    var cls = group ? "group" : "";
+    var value = (typeof miles === "string") ? miles : formatRadiusMiKm(miles);
+    var swatch = color ? "<span class=\"swatch\" style=\"background:" + color + "\"></span>" : "";
+    return "<tr><td class=\"" + cls + "\">" + swatch + name + "</td><td>" + meaning + "</td><td class=\"num\">" + value + "</td></tr>";
+  }
+
+  function el(id) {
+    return document.getElementById(id);
+  }
+
+  function weaponLabelIfCurrent() {
+    var select = el("effects-weapon");
+    if (!select) return "";
+    var opt = select.options[select.selectedIndex];
+    if (!opt || !opt.value) return "";
+    if (opt.getAttribute("data-amount") !== el("effects-yield").value.trim()) return "";
+    if (opt.getAttribute("data-unit") !== el("effects-unit").value) return "";
+    return opt.textContent;
+  }
+
+  function applyWeapon() {
+    var select = el("effects-weapon");
+    if (!select) return;
+    var opt = select.options[select.selectedIndex];
+    if (!opt || !opt.value) return;
+    el("effects-yield").value = opt.getAttribute("data-amount");
+    el("effects-unit").value = opt.getAttribute("data-unit");
+  }
+
+  function markPreset(kt) {
+    document.querySelectorAll("#effects-presets .chip").forEach(function (button) {
+      var match = Math.abs(Number(button.getAttribute("data-kt")) - kt) < 1e-9;
+      button.setAttribute("aria-pressed", match ? "true" : "false");
+    });
+  }
+
+  function readYieldKt() {
+    var raw = Number(el("effects-yield").value);
+    var unit = Number(el("effects-unit").value);
+    if (!(raw > 0) || !isFinite(raw)) return null;
+    return raw * unit;
+  }
+
+  function computeEffects(kt, air) {
+    var hob = air ? optimumHeightFeet(kt, 5) : 0;
+    var weapon = weaponLabelIfCurrent();
+    var lead = weapon ? weapon + ". " : "";
+    var note;
+    if (air) {
+      note = lead + "Optimum height for the 5 psi ring is " +
+        round(hob * 0.3048) + " m (" + round(hob) + " ft). Blast radii below are already ground ranges at that height. Thermal and radiation radii are ground ranges from the slant range.";
+    } else {
+      note = lead + "Contact surface burst. Early fallout is a plume, not one of these circles, so it is not listed.";
+    }
+    var burstLabel = air ? "Airburst, optimum height" : "Contact surface burst";
+    var yieldText = formatYield(kt) + " · " + burstLabel;
+    var yieldLine = weapon ? weapon + " · " + yieldText : yieldText;
+
+    var html = "";
+    var rings = [];
+    function addGroup(name, meaning) {
+      html += row(name, meaning || "", "", true, "");
+    }
+    function addRing(name, meaning, miles, color, opacity, stroke) {
+      html += row(name, meaning, miles, false, color);
+      if (typeof miles === "number" && miles > 0 && isFinite(miles)) {
+        rings.push({
+          name: name,
+          meaning: meaning,
+          miles: miles,
+          color: color,
+          opacity: opacity,
+          stroke: stroke || color
+        });
+      }
+    }
+
+    addRing("Fireball", "Maximum luminous fireball. About twice the breakaway radius.", fireballMiles(kt, !air), "#ffe014", 0.92, "#e0b800");
+    if (!air) {
+      addRing("Crater", "Apparent crater radius in dry soil. Real craters vary with the ground.", craterMiles(kt), "#8d5a32", 0.55, "#6b3f22");
+    }
+
+    addGroup("Blast");
+    addRing("20 psi", "Heavy damage. Reinforced concrete buildings are destroyed.", blastMiles(kt, 20, air), "#e10600", 0.5, "#b00000");
+    addRing("5 psi", "Medium damage. Most houses collapse. This is the usual “blast radius.”", blastMiles(kt, 5, air), "#7a7a7a", 0.42, "#4e4e4e");
+    addRing("1 psi", "Light damage. Windows break.", blastMiles(kt, 1, air), "#d0d0d0", 0.72, "#6a6a6a");
+
+    addGroup("Thermal, on the ground", "Clear-air radiant heat. A wall or the curve of the earth blocks it.");
+    [
+      ["third", "3rd-degree burns", "About a 50% chance of a third-degree burn on bare skin.", "#ff8f1f", 0.48, "#e06a00"],
+      ["second", "2nd-degree burns", "About a 50% chance of a second-degree burn on bare skin.", "#ffb04a", 0.4, "#e08920"],
+      ["first", "1st-degree burns", "About a 50% chance of a first-degree burn on bare skin.", "#ffd27a", 0.55, "#e0a040"]
+    ].forEach(function (item) {
+      var slant = thermalSlantMiles(kt, exposureCal(kt, item[0]), air);
+      var ground = slant == null ? null : groundFromSlant(slant, hob);
+      addRing(item[1], item[2], ground, item[3], item[4], item[5]);
+    });
+
+    addGroup("Prompt radiation, on the ground", "Neutrons and gamma rays in the first minute. Not fallout.");
+    [
+      [1000, "Usually lethal even with medical care.", "#146b2e", 0.5, "#0d4a1f"],
+      [500, "Often lethal without medical care.", "#2bd15a", 0.55, "#14913a"],
+      [100, "Radiation sickness is likely. Cancer risk rises.", "#8fe7a8", 0.6, "#3aaa62"]
+    ].forEach(function (item) {
+      var rem = item[0];
+      var slant = promptSlantMiles(kt, rem);
+      var ground = groundFromSlant(slant, hob);
+      addRing(rem + " rem", rem + " rem slant dose. " + item[1], ground, item[2], item[3], item[4]);
+    });
+
+    return { kt: kt, air: air, hob: hob, note: note, yieldLine: yieldLine, html: html, rings: rings };
+  }
+
+  var viewer = null;
+  var source = null;
+  var hooks = {};
+  var bound = false;
+  var active = false;
+  var groundZero = null;
+  var markerEntity = null;
+  var ringEntities = [];
+  var lastEffects = null;
+  var positioned = false;
+
+  function isMobile() {
+    return window.matchMedia && window.matchMedia("(max-width: 800px)").matches;
+  }
+
+  function setNote(text) {
+    var note = el("effects-note");
+    if (note) note.textContent = text;
+  }
+
+  function updateLede() {
+    var lede = el("effects-lede");
+    if (!lede) return;
+    if (!groundZero) {
+      lede.textContent = "Tap the globe to choose ground zero, then pick a weapon or type a yield and press Submit.";
+    } else {
+      lede.textContent = "Ground zero set. Adjust the settings and press Submit. Tap a new spot to move it.";
+    }
+  }
+
+  function hidePopup() {
+    var popup = el("effects-results");
+    if (!popup) return;
+    popup.hidden = true;
+    popup.classList.remove("mobile-sheet");
+    var hud = el("effects-hud");
+    if (hud && active) hud.hidden = false;
+  }
+
+  function clearRings() {
+    if (source) {
+      ringEntities.forEach(function (entity) {
+        try { source.entities.remove(entity); } catch (err) {}
+      });
+    }
+    ringEntities = [];
+    lastEffects = null;
+    if (typeof hooks.setCount === "function") hooks.setCount("effects", 0);
+  }
+
+  function clearMarker() {
+    if (source && markerEntity) {
+      try { source.entities.remove(markerEntity); } catch (err) {}
+    }
+    markerEntity = null;
+    groundZero = null;
+  }
+
+  function clearAll() {
+    clearRings();
+    clearMarker();
+    hidePopup();
+    updateLede();
+    if (typeof hooks.statusLive === "function") hooks.statusLive();
+  }
+
+  function colorMaterial(css, opacity) {
+    var color = Cesium.Color.fromCssColorString(css);
+    return color.withAlpha(opacity);
+  }
+
+  function setGroundZero(lon, lat) {
+    if (!active || !source || typeof Cesium === "undefined") return;
+    groundZero = { lon: lon, lat: lat };
+    var position = Cesium.Cartesian3.fromDegrees(lon, lat);
+    if (markerEntity) {
+      markerEntity.position = position;
+    } else {
+      markerEntity = source.entities.add({
+        id: "effects-ground-zero",
+        position: position,
+        point: {
+          pixelSize: 14,
+          color: Cesium.Color.fromCssColorString("#d31212"),
+          outlineColor: Cesium.Color.fromCssColorString("#7a1010"),
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY
+        },
+        label: {
+          text: "Ground zero",
+          font: "14px IBM Plex Mono, monospace",
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -22),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY
+        }
+      });
+    }
+    updateLede();
+  }
+
+  function drawRingsOnGlobe(effects) {
+    clearRings();
+    if (!groundZero || !source || typeof Cesium === "undefined") return;
+    var ordered = effects.rings.slice().sort(function (a, b) { return b.miles - a.miles; });
+    var position = Cesium.Cartesian3.fromDegrees(groundZero.lon, groundZero.lat);
+    ordered.forEach(function (ring) {
+      var meters = ring.miles * M_PER_MILE;
+      if (!(meters > 0) || !isFinite(meters)) return;
+      var entity = source.entities.add({
+        name: ring.name,
+        position: position,
+        ellipse: {
+          semiMajorAxis: meters,
+          semiMinorAxis: meters,
+          height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          material: colorMaterial(ring.color, ring.opacity),
+          outline: true,
+          outlineColor: colorMaterial(ring.stroke, 0.95),
+          outlineWidth: 2.5
+        }
+      });
+      ringEntities.push(entity);
+    });
+    lastEffects = effects;
+    if (typeof hooks.setCount === "function") hooks.setCount("effects", 1);
+    if (ordered.length && viewer) {
+      var largestMiles = ordered[0].miles;
+      var latRad = groundZero.lat * Math.PI / 180;
+      var pad = largestMiles * 1.2;
+      var dLat = pad / 69;
+      var dLon = pad / (69 * Math.max(0.2, Math.cos(latRad)));
+      viewer.camera.flyTo({
+        destination: Cesium.Rectangle.fromDegrees(
+          groundZero.lon - dLon * 1.25,
+          groundZero.lat - dLat * 1.2,
+          groundZero.lon + dLon * 1.55,
+          groundZero.lat + dLat * 1.2
+        ),
+        duration: 1.35
+      });
+    }
+    if (typeof hooks.statusLive === "function") hooks.statusLive();
+  }
+
+  function positionPopup() {
+    var popup = el("effects-results");
+    if (!popup || popup.hidden || !viewer) return;
+    if (isMobile()) {
+      popup.classList.add("mobile-sheet");
+      popup.style.left = "";
+      popup.style.top = "";
+      popup.style.transform = "";
+      return;
+    }
+    popup.classList.remove("mobile-sheet");
+    var host = document.getElementById("cesium") || document.querySelector(".stage");
+    var rect = host ? host.getBoundingClientRect() : { left: 12, top: 12, right: window.innerWidth - 12, bottom: window.innerHeight - 12, width: window.innerWidth, height: window.innerHeight };
+    var w = popup.offsetWidth || 420;
+    var h = popup.offsetHeight || 280;
+    var pad = 12;
+    var maxY = rect.bottom - Math.min(h, rect.height - 24) - pad;
+    var x = rect.right - w - pad;
+    var y = rect.top + pad;
+    if (groundZero) {
+      var cartesian = Cesium.Cartesian3.fromDegrees(groundZero.lon, groundZero.lat);
+      var pos = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
+      if (pos && isFinite(pos.x) && isFinite(pos.y)) {
+        y = Math.max(rect.top + pad, Math.min(pos.y - 36, maxY));
+      }
+    }
+    x = Math.max(rect.left + pad, Math.min(x, rect.right - w - pad));
+    y = Math.max(rect.top + pad, Math.min(y, maxY));
+    popup.style.left = Math.round(x) + "px";
+    popup.style.top = Math.round(y) + "px";
+    popup.style.transform = "none";
+  }
+
+  function showResults(effects) {
+    var yieldLine = el("effects-yield-line");
+    var popupNote = el("effects-popup-note");
+    var rows = el("effects-rows");
+    var popup = el("effects-results");
+    if (yieldLine) yieldLine.textContent = effects.yieldLine;
+    if (popupNote) popupNote.textContent = effects.note;
+    if (rows) rows.innerHTML = effects.html;
+    if (!popup) return;
+    popup.hidden = false;
+    if (isMobile()) {
+      popup.classList.add("mobile-sheet");
+      var hud = el("effects-hud");
+      if (hud) hud.hidden = true;
+    }
+    positionPopup();
+  }
+
+  function submitCalc() {
+    var kt = readYieldKt();
+    var burst = el("effects-burst");
+    var air = !burst || burst.value === "air";
+    if (kt === null) {
+      setNote("Enter a yield greater than zero.");
+      hidePopup();
+      clearRings();
+      if (typeof hooks.statusLive === "function") hooks.statusLive();
+      return false;
+    }
+    if (!groundZero) {
+      setNote("Tap the globe to choose ground zero first.");
+      return false;
+    }
+    var effects = computeEffects(kt, air);
+    setNote(effects.note);
+    markPreset(kt);
+    drawRingsOnGlobe(effects);
+    showResults(effects);
+    return true;
+  }
+
+  function handleClick(position) {
+    if (!active || !viewer) return false;
+    var cartesian = viewer.camera.pickEllipsoid(position, viewer.scene.globe.ellipsoid);
+    if (!cartesian) return false;
+    var carto = Cesium.Cartographic.fromCartesian(cartesian);
+    setGroundZero(
+      Cesium.Math.toDegrees(carto.longitude),
+      Cesium.Math.toDegrees(carto.latitude)
+    );
+    return true;
+  }
+
+  function setActive(on) {
+    active = Boolean(on);
+    var hud = el("effects-hud");
+    if (hud) hud.hidden = !active;
+    if (!active) {
+      clearAll();
+      setNote("Pick a weapon or type a yield, then press Submit.");
+    } else {
+      updateLede();
+    }
+    if (source) source.show = active;
+  }
+
+  function bind(opts) {
+    opts = opts || {};
+    viewer = opts.viewer || viewer;
+    source = opts.source || source;
+    hooks.setCount = opts.setCount || hooks.setCount;
+    hooks.statusLive = opts.statusLive || hooks.statusLive;
+    if (bound) return;
+    bound = true;
+    var weapon = el("effects-weapon");
+    var form = el("effects-calc");
+    var presets = el("effects-presets");
+    var closeBtn = el("effects-close");
+    if (weapon) weapon.addEventListener("change", applyWeapon);
+    if (form) {
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        submitCalc();
+      });
+    }
+    if (presets) {
+      presets.addEventListener("click", function (event) {
+        var button = event.target.closest("button");
+        if (!button) return;
+        el("effects-yield").value = button.getAttribute("data-kt");
+        el("effects-unit").value = "1";
+        el("effects-weapon").value = "";
+        if (groundZero) submitCalc();
+        else markPreset(Number(button.getAttribute("data-kt")));
+      });
+    }
+    if (closeBtn) closeBtn.addEventListener("click", hidePopup);
+    setNote("Pick a weapon or type a yield, then press Submit.");
+    updateLede();
+    window.addEventListener("resize", positionPopup);
+    if (viewer && viewer.scene) {
+      viewer.scene.postRender.addEventListener(positionPopup);
+    }
+  }
+
+  function hasResult() {
+    return Boolean(lastEffects && lastEffects.rings && lastEffects.rings.length);
+  }
+
+  function setInputs(amount, unit, burst) {
+    if (el("effects-yield")) el("effects-yield").value = String(amount);
+    if (el("effects-unit")) el("effects-unit").value = String(unit);
+    if (el("effects-burst")) el("effects-burst").value = burst;
+    if (el("effects-weapon")) el("effects-weapon").value = "";
+  }
+
+  root.GsaEffectsRadius = {
+    logPoly: logPoly,
+    CEX: CEX,
+    MILES_TO_KM: MILES_TO_KM,
+    FEET_PER_MILE: FEET_PER_MILE,
+    THIRD_DEGREE_AT_1KT: THIRD_DEGREE_AT_1KT,
+    referenceYield: referenceYield,
+    blastMiles: blastMiles,
+    optimumHeightFeet: optimumHeightFeet,
+    exposureCal: exposureCal,
+    thermalSlantMiles: thermalSlantMiles,
+    promptSlantMiles: promptSlantMiles,
+    fireballMiles: fireballMiles,
+    craterMiles: craterMiles,
+    groundFromSlant: groundFromSlant,
+    formatRadius: formatRadius,
+    formatYield: formatYield,
+    computeEffects: computeEffects,
+    bind: bind,
+    setActive: setActive,
+    handleClick: handleClick,
+    clear: clearAll,
+    setGroundZero: setGroundZero,
+    submit: submitCalc,
+    setInputs: setInputs,
+    getGroundZero: function () { return groundZero; },
+    getLastEffects: function () { return lastEffects; },
+    getRingEntities: function () { return ringEntities.slice(); },
+    hasResult: hasResult,
+    isActive: function () { return active; }
+  };
+})(typeof window !== "undefined" ? window : globalThis);
