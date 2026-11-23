@@ -8,6 +8,17 @@
 //   php poll-runner.php grid --slice=16
 //
 // 3 minutes is the max for AIR/JAM. Grid is ~15 minutes.
+//
+// Live on globalstatus.app (cPanel cron, every 10 minutes):
+//   /usr/local/bin/php -q /home/<user>/public_html/globalstatus.app/poll-runner.php grid
+// Visitors' LOCK & SCAN replays data/scan-cache.json; it never starts a scan.
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "Not found\n";
+    exit;
+}
 
 define('GSA_RUNNER', true);
 
@@ -45,7 +56,10 @@ function runner_timed($name, $fn)
         }
         $info['ms'] = (int) round((microtime(true) - $t0) * 1000);
         $info['error'] = $info['error'] ?? null;
-        gsa_poll_status_note($name, $info);
+        // A second cron run that finds a pass still going leaves status alone.
+        if (empty($info['busy'])) {
+            gsa_poll_status_note($name, $info);
+        }
         return $info;
     } catch (Throwable $e) {
         $info = array(

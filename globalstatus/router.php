@@ -28,15 +28,19 @@ if ($gsaHttp) {
     }
     if ($path === '/api/scan-state' && $method === 'GET') {
         $id = isset($_GET['id']) ? (string) $_GET['id'] : 'everything';
-        $country = isset($_GET['country']) ? trim((string) $_GET['country']) : '';
+        $country = clean_country($_GET['country'] ?? '');
+        if (!scan_allowed_id($id)) {
+            json_out(400, array('error' => 'Unknown check'));
+        }
         json_out(200, gsa_filter_scan_state(gsa_scan_cache_read(), $id, $country));
     }
     if ($path === '/api/poll-status' && $method === 'GET') {
         json_out(200, gsa_poll_status_read());
     }
     if ($path === '/api/stop' && $method === 'POST') {
-        file_put_contents($stopFile, '1');
-        json_out(200, array('ok' => true));
+        // Stop is local to each visitor now. Visitors can no longer write
+        // data/stop.flag, so nobody can abort the scheduled pass.
+        json_out(200, array('ok' => true, 'local' => true));
     }
     if (preg_match('#^/api/aircraft/([0-9a-fA-F]{6})$#', $path, $match) && $method === 'GET') {
         json_out(200, aircraft_detail(strtolower($match[1]), $_GET));
@@ -268,6 +272,12 @@ function target_matches($row, $id, $country)
     return has_kind($row, $kind);
 }
 
+function clean_country($country)
+{
+    $country = trim((string) $country);
+    return (string) preg_replace('/[^\p{L}\p{N} .()\'’-]/u', '', $country);
+}
+
 function scan_allowed_id($id)
 {
     $allowed = array(
@@ -281,6 +291,7 @@ function scan_allowed_id($id)
     return in_array($id, $allowed, true);
 }
 
+// LOCK & SCAN: serve the last scheduled pass for this test. No new scan.
 function begin_scan()
 {
     $body = json_decode((string) file_get_contents('php://input'), true);
@@ -288,14 +299,13 @@ function begin_scan()
         $body = array();
     }
     $id = isset($body['id']) ? (string) $body['id'] : '';
-    $country = isset($body['country']) ? trim((string) $body['country']) : '';
-    $country = preg_replace('/[^\p{L}\p{N} .()\'’-]/u', '', $country);
+    $country = clean_country($body['country'] ?? '');
     if (!scan_allowed_id($id)) {
         json_out(400, array('error' => 'Unknown check'));
     }
     $snap = gsa_scan_cache_read();
     $filtered = gsa_filter_scan_state($snap, $id, $country);
-    $pending = !$snap || empty($snap['results']);
+    $pending = !empty($filtered['pending']);
     json_out(200, array(
         'ok' => true,
         'replay' => true,
@@ -328,7 +338,7 @@ function close_http($payload, $code)
     flush();
 }
 
-function run_scan($state, $targets, $lock, $halt = true)
+function run_scan($state, $targets, $lock, $halt = true, $deadline = 0)
 {
     global $stopFile;
     @set_time_limit(0);
@@ -336,12 +346,18 @@ function run_scan($state, $targets, $lock, $halt = true)
     $started = microtime(true);
     $mode = probe_mode();
     $batchSize = $mode === 'ping' ? 20 : 16;
+    $state['mode'] = $mode;
+    $state['batchSize'] = $batchSize;
     $count = count($targets);
     $emit = $halt;
     for ($offset = 0; $offset < $count; $offset += $batchSize) {
-        if (is_file($stopFile)) {
+        $late = $deadline > 0 && microtime(true) >= $deadline;
+        if (is_file($stopFile) || $late) {
             $state['running'] = false;
+            $state['stopped'] = !$late;
+            $state['timedOut'] = $late;
             $state['finishedAt'] = (int) round(microtime(true) * 1000);
+            $state['ms'] = (int) round((microtime(true) - $started) * 1000);
             if ($emit) {
                 emit_event($state, array('type' => 'scan-stop', 'scanId' => $state['scanId']));
             } else {
@@ -425,6 +441,10 @@ function run_scan($state, $targets, $lock, $halt = true)
 
 function probe_mode()
 {
+    $forced = getenv('GSA_PROBE_MODE');
+    if ($forced === 'https' || $forced === 'ping') {
+        return $forced;
+    }
     if (!function_exists('proc_open')) {
         return 'https';
     }
@@ -2023,18 +2043,21 @@ function aircraft_refresh()
     return $put;
 }
 
+// Cron only (poll-runner.php grid). Same lock as before, so passes never overlap.
+// A stopped, timed-out, partial or mostly-down pass is not published; visitors
+// keep replaying the last good one.
 function run_scheduled_scan($id = 'everything', $country = '', $slice = 0)
 {
     global $lockFile, $stopFile;
     if (!scan_allowed_id($id)) {
-        return array('error' => 'Unknown check');
+        return array('ok' => false, 'error' => 'Unknown check');
     }
     $lock = fopen($lockFile, 'c');
     if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
         if ($lock) {
             fclose($lock);
         }
-        return array('error' => 'A check is already running');
+        return array('ok' => false, 'busy' => true, 'error' => 'A pass is already running');
     }
     @unlink($stopFile);
     $targets = select_targets($id, $country);
@@ -2051,11 +2074,30 @@ function run_scheduled_scan($id = 'everything', $country = '', $slice = 0)
     $state['startedAt'] = (int) round(microtime(true) * 1000);
     $state['results'] = array_fill(0, count($targets), null);
     write_state($state);
-    $state = run_scan($state, $targets, $lock, false);
+    $state = run_scan($state, $targets, $lock, false, microtime(true) + GSA_GRID_MAX_SEC);
+    $info = array(
+        'up' => $state['up'],
+        'down' => $state['down'],
+        'done' => $state['done'],
+        'total' => $state['total'],
+        'mode' => $state['mode'] ?? '',
+        'ms' => $state['ms'] ?? 0,
+    );
+    $problem = gsa_pass_problem($state);
+    if ($problem === null && $slice > 0) {
+        $problem = 'Test slice, not published';
+    }
+    if ($problem !== null) {
+        $info['ok'] = false;
+        $info['published'] = false;
+        $info['error'] = $problem;
+        $info['kept'] = is_file(gsa_scan_cache_file()) ? 'last good pass' : 'nothing saved yet';
+        return $info;
+    }
     $put = gsa_cache_put(gsa_scan_cache_file(), $state);
-    $put['up'] = $state['up'];
-    $put['down'] = $state['down'];
-    $put['total'] = $state['total'];
-    $put['ms'] = $state['ms'] ?? 0;
-    return $put;
+    $info['ok'] = empty($put['error']);
+    $info['published'] = $info['ok'];
+    $info['bytes'] = $put['bytes'] ?? 0;
+    $info['error'] = $put['error'] ?? null;
+    return $info;
 }
