@@ -1,9 +1,8 @@
-//! Global Status native globe (alpha).
+//! QuietEarth — the native wgpu globe (product renderer).
 //!
-//! A wgpu-rendered globe inside an eframe/egui window, with catalog pins
-//! taken from `downtime-core`. This crate is the product renderer: it has to
-//! succeed Cesium in every way (see `docs/rust-native.md`). NASA Blue Marble
-//! is on the sphere today; XYZ imagery, terrain, and live layers follow.
+//! Same code as the old Desktop `quietearth` folder, in Rust. It has to
+//! succeed Cesium in every way (see `docs/rust-native.md` and `docs/QUIETEARTH.md`).
+//! NASA Blue Marble is the far albedo; OSM / OpenTopo / GIBS stitch onto it.
 //!
 //! The same code runs on Linux, macOS and Windows (`main.rs`) and on Android
 //! (`android_main` below, built as a `cdylib` with cargo-apk).
@@ -20,20 +19,24 @@ mod render;
 use crate::engine::geo_facts::{
     height_on_globe_m, maidenhead, ISS_ALTITUDE_M, NULL_ISLAND,
 };
+use crate::engine::tiles::{mercator_to_equirect, overlay_on_marble, TileLayer};
 use crate::engine::{Basemap, ImageryLayer, TerrainKind};
-use downtime_core::{blast_card, blast_defcon, blast_rings, builtin_layers, BlastShot, LayerKind, KT_PRESETS};
+use downtime_core::{
+    blast_card, blast_defcon, blast_rings, builtin_layers, BlastShot, LayerKind, KT_PRESETS,
+};
 use eframe::egui;
 use glam::Vec3;
+use rustle::{builtin_grove, Bundle, Grove};
 
 use globe_math::{project, OrbitCamera};
 use pins::Pin;
-use render::{GlobeCallback, GlobeResources};
+use render::{marble_rgba, GlobeCallback, GlobeResources};
 
-pub const APP_NAME: &str = "Global Status";
+pub const APP_NAME: &str = "QuietEarth";
 
 fn viewport() -> egui::ViewportBuilder {
     egui::ViewportBuilder::default()
-        .with_title(concat!("Global Status ", env!("CARGO_PKG_VERSION")))
+        .with_title(concat!("QuietEarth ", env!("CARGO_PKG_VERSION")))
         .with_inner_size([1200.0, 760.0])
 }
 
@@ -49,7 +52,7 @@ pub fn run(data: pins::PinData, mut options: eframe::NativeOptions) -> eframe::R
                 .as_ref()
                 .ok_or("the wgpu renderer is not available")?;
             GlobeResources::install(state);
-            Ok(Box::new(GlobeApp::new(data)))
+            Ok(Box::new(GlobeApp::new(data, state.clone())))
         }),
     )
 }
@@ -64,49 +67,129 @@ pub fn desktop_options() -> eframe::NativeOptions {
 fn android_main(app: winit::platform::android::activity::AndroidApp) {
     let options = eframe::NativeOptions { android_app: Some(app), ..Default::default() };
     if let Err(e) = run(pins::load_embedded(), options) {
-        eprintln!("Global Status: {e}");
+        eprintln!("QuietEarth: {e}");
     }
 }
 
 struct GlobeApp {
     camera: OrbitCamera,
     data: pins::PinData,
+    grove: Grove,
     show_pins: bool,
     show_grid: bool,
+    show_leaves: bool,
     selected: Option<usize>,
+    selected_leaf: Option<String>,
     nuke_on: bool,
     yield_idx: usize,
     airburst: bool,
     shots: Vec<BlastShot>,
     basemap: Basemap,
     terrain: TerrainKind,
+    tile_status: String,
+    tile_job: Option<std::thread::JoinHandle<Result<(u32, u32, Vec<u8>), String>>>,
+    render_state: eframe::egui_wgpu::RenderState,
+    marble: (u32, u32, Vec<u8>),
 }
 
 impl GlobeApp {
-    fn new(data: pins::PinData) -> Self {
+    fn new(data: pins::PinData, render_state: eframe::egui_wgpu::RenderState) -> Self {
         Self {
             camera: OrbitCamera::default(),
             data,
+            grove: builtin_grove(),
             show_pins: true,
             show_grid: false,
+            show_leaves: true,
             selected: None,
+            selected_leaf: None,
             nuke_on: false,
             yield_idx: 0,
             airburst: true,
             shots: Vec::new(),
             basemap: Basemap::BlueMarble,
             terrain: TerrainKind::Ellipsoid,
+            tile_status: "Blue Marble (compiled)".into(),
+            tile_job: None,
+            render_state,
+            marble: marble_rgba(),
+        }
+    }
+
+    fn tile_layer(basemap: Basemap) -> Option<TileLayer> {
+        match basemap {
+            Basemap::Osm | Basemap::Streets => Some(TileLayer::Osm),
+            Basemap::OpenTopo => Some(TileLayer::OpenTopo),
+            Basemap::Satellite => Some(TileLayer::Gibs),
+            _ => None,
+        }
+    }
+
+    fn request_albedo(&mut self) {
+        if self.tile_job.is_some() {
+            return;
+        }
+        let Some(layer) = Self::tile_layer(self.basemap) else {
+            self.write_pixels(self.marble.0, self.marble.1, self.marble.2.clone());
+            self.tile_status = "Blue Marble (compiled)".into();
+            return;
+        };
+        let (mw, mh, marble) = self.marble.clone();
+        self.tile_status = format!("fetching {} z2…", self.basemap.label());
+        self.tile_job = Some(std::thread::spawn(move || {
+            #[cfg(target_os = "android")]
+            {
+                let _ = (layer, mw, mh, marble);
+                return Err("tiles are desktop-only in this cut".into());
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                use image::RgbaImage;
+                let mosaic = crate::engine::tiles::stitch_layer(layer, 2)?;
+                let streets = mercator_to_equirect(&mosaic, mw, mh);
+                let marble_img = RgbaImage::from_raw(mw, mh, marble)
+                    .ok_or_else(|| "marble buffer".to_string())?;
+                let out = overlay_on_marble(&marble_img, &streets);
+                Ok((mw, mh, out.into_raw()))
+            }
+        }));
+    }
+
+    fn write_pixels(&self, width: u32, height: u32, pixels: Vec<u8>) {
+        let renderer = self.render_state.renderer.write();
+        if let Some(res) = renderer.callback_resources.get::<GlobeResources>() {
+            res.write_albedo(&self.render_state.queue, &pixels, width, height);
+        }
+    }
+
+    fn poll_tiles(&mut self) {
+        let Some(job) = self.tile_job.take() else {
+            return;
+        };
+        if !job.is_finished() {
+            self.tile_job = Some(job);
+            return;
+        }
+        match job.join() {
+            Ok(Ok((w, h, pixels))) => {
+                self.write_pixels(w, h, pixels);
+                self.tile_status = format!("{} on QuietEarth", self.basemap.label());
+            }
+            Ok(Err(err)) => self.tile_status = err,
+            Err(_) => self.tile_status = "tile thread panicked".into(),
         }
     }
 
     fn side_panel(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("layers").resizable(true).default_width(260.0).show(ctx, |ui| {
-            ui.heading("Global Status");
-            ui.label(egui::RichText::new(concat!("Native globe alpha ", env!("CARGO_PKG_VERSION"))).weak());
+        egui::SidePanel::left("layers").resizable(true).default_width(248.0).show(ctx, |ui| {
+            ui.heading("QuietEarth");
+            ui.label(egui::RichText::new(concat!("rust wgpu · ", env!("CARGO_PKG_VERSION"))).weak());
+            ui.label(egui::RichText::new(&self.tile_status).weak());
             ui.separator();
             ui.label(&self.data.status);
             ui.label(ImageryLayer::for_basemap(self.basemap).credit);
-            ui.label("Basemap (free only)");
+            ui.label("Basemap (stitches onto the sphere)");
+            let before = self.basemap;
             egui::ComboBox::from_id_salt("basemap")
                 .selected_text(self.basemap.label())
                 .show_ui(ui, |ui| {
@@ -114,6 +197,9 @@ impl GlobeApp {
                         ui.selectable_value(&mut self.basemap, b, b.label());
                     }
                 });
+            if self.basemap != before {
+                self.request_albedo();
+            }
             ui.label("Terrain");
             egui::ComboBox::from_id_salt("terrain")
                 .selected_text(self.terrain.label())
@@ -122,9 +208,43 @@ impl GlobeApp {
                     ui.selectable_value(&mut self.terrain, TerrainKind::Terrarium, TerrainKind::Terrarium.label());
                 });
             ui.checkbox(&mut self.show_pins, format!("Capital pins ({})", self.data.pins.len()));
+            ui.checkbox(&mut self.show_leaves, format!("Rustle leaves ({})", self.grove.len()));
             ui.checkbox(&mut self.show_grid, "Graticule");
             ui.separator();
-            ui.heading("NUCLEAR");
+            ui.collapsing("Leaves", |ui| {
+                let rows: Vec<_> = self
+                    .grove
+                    .all()
+                    .map(|leaf| {
+                        (
+                            leaf.id.clone(),
+                            leaf.bundle.to_string(),
+                            leaf.label.clone(),
+                            leaf.point(),
+                        )
+                    })
+                    .collect();
+                for (id, bundle, label, point) in rows {
+                    let selected = self.selected_leaf.as_deref() == Some(id.as_str());
+                    if ui
+                        .selectable_label(selected, format!("{bundle}  {label}"))
+                        .clicked()
+                    {
+                        self.selected_leaf = Some(id);
+                        if let Some((lat, lon)) = point {
+                            self.camera.lat = lat as f32;
+                            self.camera.lon = lon as f32;
+                        }
+                    }
+                }
+            });
+            if let Some(id) = self.selected_leaf.clone() {
+                if let Some(leaf) = self.grove.get(&id) {
+                    ui.label(egui::RichText::new(leaf.json().to_string()).small().weak());
+                }
+            }
+            ui.separator();
+            ui.collapsing("NUCLEAR", |ui| {
             ui.label(egui::RichText::new(format!("DEFCON {}", blast_defcon(&self.shots))).strong());
             ui.checkbox(&mut self.nuke_on, "Arm (one thumb)");
             ui.add(egui::Slider::new(&mut self.yield_idx, 0..=KT_PRESETS.len() - 1).text("yield step"));
@@ -144,6 +264,7 @@ impl GlobeApp {
             if let Some(shot) = self.shots.last() {
                 ui.label(blast_card(*shot));
             }
+            });
             ui.separator();
             ui.label("Layers (Cesium parity)");
             egui::ScrollArea::vertical().id_salt("layer-stubs").max_height(160.0).show(ui, |ui| {
@@ -171,7 +292,7 @@ impl GlobeApp {
             ));
             ui.add(egui::Slider::new(&mut self.camera.lat, -85.0..=85.0).text("lat"));
             ui.add(egui::Slider::new(&mut self.camera.lon, -180.0..=180.0).text("lon"));
-            ui.add(egui::Slider::new(&mut self.camera.distance, 1.15..=12.0).text("distance"));
+            ui.add(egui::Slider::new(&mut self.camera.distance, 1.08..=12.0).text("distance"));
             if ui.button("Reset view").clicked() {
                 self.camera = OrbitCamera::default();
             }
@@ -207,6 +328,9 @@ impl GlobeApp {
 
         let painter = ui.painter_at(rect);
         self.paint_blast_rings(&painter, rect, view_proj);
+        if self.show_leaves {
+            self.paint_leaves(&painter, rect, view_proj);
+        }
         if !self.show_pins {
             return;
         }
@@ -230,6 +354,62 @@ impl GlobeApp {
             painter.text(pos + egui::vec2(8.0, -8.0), egui::Align2::LEFT_BOTTOM, &pin.label, egui::FontId::proportional(14.0), egui::Color32::WHITE);
             if response.clicked() {
                 self.selected = Some(i);
+            }
+        }
+    }
+
+    fn paint_leaves(&self, painter: &egui::Painter, rect: egui::Rect, view_proj: glam::Mat4) {
+        for leaf in self.grove.all() {
+            if leaf.bundle == Bundle::Geofence {
+                if let (Some(west), Some(south), Some(east), Some(north)) = (
+                    leaf.number("west"),
+                    leaf.number("south"),
+                    leaf.number("east"),
+                    leaf.number("north"),
+                ) {
+                    let ring = [
+                        (south, west),
+                        (south, east),
+                        (north, east),
+                        (north, west),
+                        (south, west),
+                    ];
+                    let mut pts = Vec::new();
+                    for (lat, lon) in ring {
+                        let p = globe_math::lat_lon_to_unit(lat, lon);
+                        if !self.camera.sees(p) {
+                            continue;
+                        }
+                        if let Some([x, y]) = project(view_proj, p, [rect.width(), rect.height()]) {
+                            pts.push(rect.min + egui::vec2(x, y));
+                        }
+                    }
+                    if pts.len() > 2 {
+                        painter.add(egui::Shape::closed_line(
+                            pts,
+                            egui::Stroke::new(1.4, egui::Color32::from_rgb(251, 191, 36)),
+                        ));
+                    }
+                }
+            }
+            if let Some((lat, lon)) = leaf.point() {
+                let p = globe_math::lat_lon_to_unit(lat, lon) * 1.003;
+                if !self.camera.sees(p) {
+                    continue;
+                }
+                if let Some([x, y]) = project(view_proj, p, [rect.width(), rect.height()]) {
+                    let pos = rect.min + egui::vec2(x, y);
+                    let hot = self.selected_leaf.as_deref() == Some(leaf.id.as_str());
+                    painter.circle_filled(
+                        pos,
+                        if hot { 6.0 } else { 3.5 },
+                        if hot {
+                            egui::Color32::from_rgb(110, 231, 183)
+                        } else {
+                            egui::Color32::from_rgb(147, 197, 253)
+                        },
+                    );
+                }
             }
         }
     }
@@ -271,6 +451,10 @@ impl GlobeApp {
 
 impl eframe::App for GlobeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_tiles();
+        if self.tile_job.is_some() {
+            ctx.request_repaint();
+        }
         self.side_panel(ctx);
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(egui::Color32::from_rgb(7, 11, 16)))

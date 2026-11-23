@@ -475,6 +475,7 @@ dependencies = [
  "eframe",
  "glam",
  "image",
+ "rustle",
  "wgpu",
  "winit",
 ]

@@ -8,7 +8,7 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
-description = "Native Global Status globe: wgpu Earth that has to succeed Cesium"
+description = "QuietEarth: native wgpu globe that has to succeed Cesium"
 
 [lib]
 name = "downtime_globe_native"
@@ -29,13 +29,14 @@ nuke-sim = []
 
 [dependencies]
 downtime-core = { path = "../downtime-core" }
+rustle = { path = "../rustle" }
 eframe = { version = "0.32", default-features = false, features = ["wgpu", "default_fonts"] }
 # Same wgpu as eframe 0.32; listed directly so its default GPU backends
 # (Vulkan, Metal, DX12, GLES, WGSL) are compiled in.
 wgpu = "25"
 bytemuck = { version = "1", features = ["derive"] }
 glam = "0.30"
-image = { version = "0.25", default-features = false, features = ["jpeg"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 downtime-native = { path = "../downtime-native" }

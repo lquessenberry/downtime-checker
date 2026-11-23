@@ -36,7 +36,7 @@ Exceed Cesium (the reason we left it):
 | `downtime-cli` | `downtime` binary, same menus as `downtime.py`. |
 | `downtime-server` | SSE `/api/*` compatible with the Node visualizer. Becomes the one-user poller. Tokio multi-thread; this is the PHP replacement (not Rapira). |
 | `downtime-wasm` | Browser catalog parsing (wasm-bindgen). Bridge until the globe itself is wasm. |
-| `globe-native` | `downtime-globe`: eframe/egui + wgpu Earth, NASA Blue Marble, capital pins, search counts. |
+| `globe-native` | **QuietEarth** (`downtime-globe`): eframe/egui + wgpu Earth, Blue Marble + OSM/GIBS stitch, Rustle leaves, capital pins. |
 
 `globe-native` layout:
 
@@ -73,7 +73,7 @@ Between phases: `scripts/gsa-cycle/sigmap.sh` (WASM + Rust + Cesium). Wiki: `doc
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 0 | PR #1 workspace on `feat/globalstatus-prod`; Rust CI; Cesium pin tuning | Workspace and CI done; Cesium tuning skipped (native is the renderer) |
-| 1 | Earth on the sphere; renderer bake-off vs Cesium (20k air/ships, GIBS, Terrarium) on a phone and a laptop | Blue Marble on the sphere. XYZ / terrain / instancing not started |
+| 1 | Earth on the sphere; renderer bake-off vs Cesium (20k air/ships, GIBS, Terrarium) on a phone and a laptop | QuietEarth: Blue Marble + desktop OSM/OpenTopo/GIBS stitch. Terrain / instancing not started |
 | 2 | Core owns the data: port `visualizer/lib/*.mjs` and `router.php` into `DataLayer`; datapack pack → cache → network; one-user poller | Layer names match Cesium. Feeds still stubs |
 | 3 | Desktop: XYZ imagery, heightmap, instanced AIR/AIS, 15-minute grid + spiderweb, notifications, signed installers; Rust API replaces Node on Fly | Not started |
 | 4 | Android offline (#16): PMTiles + DEM, GPS, WorkManager, BLE mesh (#17) | Globe + pins APK builds; offline/GPS/mesh not started |
@@ -81,7 +81,7 @@ Between phases: `scripts/gsa-cycle/sigmap.sh` (WASM + Rust + Cesium). Wiki: `doc
 
 ## Known gaps vs Cesium
 
-- One baked Blue Marble, not switchable XYZ tiles.
+- Desktop OSM/OpenTopo/GIBS stitch at z=2 onto Blue Marble; not a live quadtree yet. Android still baked JPEG.
 - No terrain, coastlines as geometry, or 2D mode.
 - Pins are CPU egui dots; phase 3 moves them to GPU instances.
 - Only reachability runs in the core; every other Cesium layer is a named stub.

@@ -87,7 +87,7 @@ impl OrbitCamera {
     }
 
     pub fn zoom(&mut self, scroll: f32) {
-        self.distance = (self.distance * (-scroll * 0.002).exp()).clamp(1.15, 12.0);
+        self.distance = (self.distance * (-scroll * 0.002).exp()).clamp(1.08, 12.0);
     }
 
     /// True when a surface point faces the camera (not behind the globe).
@@ -159,6 +159,6 @@ mod tests {
         assert!((-85.0..=85.0).contains(&cam.lat));
         assert!((-180.0..180.0).contains(&cam.lon));
         cam.zoom(1e6);
-        assert!(cam.distance >= 1.15);
+        assert!(cam.distance >= 1.08);
     }
 }
