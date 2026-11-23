@@ -68,6 +68,9 @@ const state = {
   trafficPane: "air",
   scanWanted: false,
   scanLive: false,
+  replayGen: 0,
+  replayTimer: 0,
+  scanCheckedAt: 0,
 };
 
 const COLORS = {
@@ -143,8 +146,11 @@ async function boot() {
   renderSearches(catalog);
   fillCountries(catalog.countries);
   hookUi();
-  connectEvents();
+  // LOCK & SCAN replays the server's scheduled pass (#34), so the page no
+  // longer holds the /api/events stream open. connectEvents() is kept for
+  // debugging a live pass.
   tickClock();
+  setInterval(syncCheckedNote, 30000);
   Promise.allSettled([
     loadOutages(),
     loadHunger(),
@@ -538,9 +544,7 @@ function bindEffectsHud() {
 }
 
 function hookUi() {
-  document.getElementById("btn-stop").addEventListener("click", () => {
-    fetch("/api/stop", { method: "POST" });
-  });
+  document.getElementById("btn-stop").addEventListener("click", stopReplay);
   document.getElementById("btn-reset").addEventListener("click", resetMap);
   document.getElementById("reset-mobile").addEventListener("click", resetMap);
   document.getElementById("close-view").addEventListener("click", () => setViewOpen(false));
@@ -651,17 +655,156 @@ function hookUi() {
 async function startScan(id, country) {
   if (state.running) return;
   state.scanWanted = true;
-  const response = await fetch("/api/scan", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, country: country || "" }),
-  });
+  let response;
+  let body = {};
+  try {
+    response = await fetch("/api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, country: country || "" }),
+    });
+    body = await response.json().catch(() => ({}));
+  } catch (error) {
+    response = { ok: false };
+  }
   if (!response.ok) {
     state.scanWanted = false;
     state.scanLive = false;
-    const body = await response.json().catch(() => ({}));
     setStatus(body.error || "SCAN REFUSED");
+    return;
   }
+  if (body.pending || !body.state || !(body.state.results || []).some(Boolean)) {
+    state.scanWanted = false;
+    setStatus("GRID PASS IN PROGRESS · TRY AGAIN IN A FEW MINUTES");
+    return;
+  }
+  replayScan(body.state);
+}
+
+// Server checks every site on a schedule; the page plays that pass back the
+// way a live scan arrives: groups of 20, arcs and dots, counters and feed.
+function replayPace(snap) {
+  const pace = snap.pace || {};
+  const realSize = Math.max(1, Number(pace.batchSize) || 20);
+  const realMs = Number(pace.batchMs) || 0;
+  // Time for 20 sites on the real pass, held to 660-800 ms so a full World
+  // pass (1,344 sites, 68 groups) plays in about 45-55 s.
+  const per20 = realMs ? (realMs * 20) / realSize : 760;
+  return { size: 20, batchMs: Math.min(800, Math.max(660, per20)) };
+}
+
+function checkedAgo(at) {
+  if (!at) return "";
+  const sec = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (sec < 90) return "CHECKED JUST NOW";
+  const min = Math.round(sec / 60);
+  if (min < 90) return `CHECKED ${min} MIN AGO`;
+  const hr = Math.round(min / 60);
+  return `CHECKED ${hr} HR AGO`;
+}
+
+function syncCheckedNote() {
+  if (state.feedMode !== "returns") return;
+  const title = document.getElementById("feed-title");
+  if (!title) return;
+  const note = !state.running && state.scanCheckedAt ? checkedAgo(state.scanCheckedAt) : "";
+  title.textContent = note ? `LIVE RETURNS · ${note}` : "LIVE RETURNS";
+  const bar = document.querySelector("#grid-results .grid-results-bar span");
+  if (bar) bar.textContent = note ? `GRID RESULTS · ${note}` : "GRID RESULTS";
+}
+
+function stopReplay() {
+  state.replayGen += 1;
+  if (state.replayTimer) clearTimeout(state.replayTimer);
+  state.replayTimer = 0;
+  if (!state.running) return;
+  state.running = false;
+  state.scanWanted = false;
+  document.getElementById("btn-stop").hidden = true;
+  setStatus("SCAN ABORTED");
+  renderFeed();
+  updateHud();
+  syncCheckedNote();
+  syncGridResultsButton();
+}
+
+function replayScan(snap) {
+  const results = (snap.results || []).filter(Boolean);
+  const gen = ++state.replayGen;
+  if (state.replayTimer) clearTimeout(state.replayTimer);
+  // The server sends its own age so a wrong clock on this device doesn't matter.
+  const ageSec = Number.isFinite(snap.ageSec) ? snap.ageSec : null;
+  state.scanCheckedAt = ageSec === null ? 0 : Date.now() - ageSec * 1000;
+  state.scanLive = true;
+  clearPoints();
+  state.results = [];
+  state.running = true;
+  state.total = results.length;
+  state.done = 0;
+  state.up = 0;
+  state.down = 0;
+  state.startedAt = Date.now();
+  state.heading = snap.heading || "GRID";
+  state.selected = null;
+  document.getElementById("heading").textContent = state.heading.toUpperCase();
+  document.getElementById("btn-stop").hidden = false;
+  if (state.scanSource) state.scanSource.show = true;
+  setFeedMode("returns");
+  document.getElementById("link-dot").className = "pulse-dot live";
+  document.getElementById("selected").hidden = true;
+  setStatus(`TASKING ${results.length} NODES · ${state.heading.toUpperCase()}`);
+  renderFeed();
+  updateHud();
+  syncGridResultsButton();
+  const { size, batchMs } = replayPace(snap);
+  const groups = Math.ceil(results.length / size);
+  // Each group gets a due time on the wall clock (with a +/- 25% wobble, as
+  // real groups never finish on a metronome). A slow phone catches up instead
+  // of stretching the run.
+  const due = [];
+  let at = batchMs * 0.6; // short "tasking" beat before the first group
+  for (let g = 0; g < groups; g += 1) {
+    due.push(at);
+    at += batchMs * (0.75 + Math.random() * 0.5);
+  }
+  const t0 = performance.now();
+  let i = 0;
+  let g = 0;
+  function step() {
+    if (gen !== state.replayGen) return;
+    const elapsed = performance.now() - t0;
+    while (g < groups && due[g] <= elapsed) {
+      const end = Math.min(results.length, i + size);
+      for (; i < end; i += 1) {
+        const result = results[i];
+        result.index = result.index ?? i;
+        state.results[result.index] = result;
+        if (result.status === "up") state.up += 1;
+        else state.down += 1;
+        state.done = i + 1;
+        upsertPoint(result);
+        prependFeed(result);
+      }
+      g += 1;
+    }
+    updateHud();
+    syncGridResultsButton();
+    if (g < groups) {
+      state.replayTimer = setTimeout(step, Math.max(0, due[g] - (performance.now() - t0)));
+      return;
+    }
+    state.replayTimer = 0;
+    state.running = false;
+    document.getElementById("btn-stop").hidden = true;
+    document.getElementById("link-dot").className = state.down ? "pulse-dot hot" : "pulse-dot live";
+    const sec = ((performance.now() - t0) / 1000).toFixed(1);
+    const note = checkedAgo(state.scanCheckedAt);
+    setStatus(`COMPLETE · ${state.up} UP · ${state.down} DOWN · ${sec}s${note ? " · " + note : ""}`);
+    updateHud();
+    syncCheckedNote();
+    syncGridResultsButton();
+  }
+  state.replayTimer = setTimeout(step, due[0] || 0);
 }
 
 function connectEvents() {
@@ -933,6 +1076,7 @@ function setFeedMode(mode) {
   else if (state.feedMode === "stream") title.textContent = `SCANNERS ${state.streamPoints.length}`;
   else if (state.feedMode === "conflicts") title.textContent = `CONFLICT TRACKER ${state.conflicts.length}`;
   else title.textContent = "LIVE RETURNS";
+  syncCheckedNote();
 }
 
 function sourceFor(layer) {
@@ -951,7 +1095,9 @@ function setCount(key, value) {
 }
 
 function resetMap() {
-  fetch("/api/stop", { method: "POST" });
+  // Local view only. The scheduled server pass is never stopped from a page.
+  stopReplay();
+  state.scanCheckedAt = 0;
   state.running = false;
   state.scanWanted = false;
   state.scanLive = false;

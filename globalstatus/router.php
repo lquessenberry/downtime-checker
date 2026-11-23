@@ -13,62 +13,87 @@ if (!is_dir($dataDir)) {
     mkdir($dataDir, 0755, true);
 }
 
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+require $root . '/poll-lib.php';
 
-if ($path === '/api/events' && $method === 'GET') {
-    stream_events();
-}
-if ($path === '/api/scan' && $method === 'POST') {
-    begin_scan();
-}
-if ($path === '/api/stop' && $method === 'POST') {
-    file_put_contents($stopFile, '1');
-    json_out(200, array('ok' => true));
-}
-if (preg_match('#^/api/aircraft/([0-9a-fA-F]{6})$#', $path, $match) && $method === 'GET') {
-    json_out(200, aircraft_detail(strtolower($match[1]), $_GET));
-}
-if ($path === '/api/outages' && $method === 'GET') {
-    json_out(200, outages_snapshot());
-}
-if ($path === '/api/mil' && $method === 'GET') {
-    json_out(200, military_snapshot());
-}
-if ($path === '/api/mesh' && $method === 'GET') {
-    json_out(200, mesh_snapshot());
-}
-if ($path === '/api/disease' && $method === 'GET') {
-    json_out(200, disease_snapshot());
-}
-if ($path === '/api/animal' && $method === 'GET') {
-    json_out(200, animal_snapshot());
+// Web requests only. poll-runner.php (cron) loads this file for its functions.
+if (!defined('GSA_RUNNER')) {
+    gsa_http_routes();
 }
 
-$files = array(
-    '/api/catalog' => 'api/catalog.json',
-    '/api/websdr' => 'api/websdr.json',
-    '/api/gpsjam' => 'api/gpsjam.json',
-    '/api/conflicts' => 'api/conflicts.json',
-    '/api/hunger' => 'api/hunger.json',
-    '/api/radio' => 'api/radio.json',
-    '/api/streams' => 'api/streams.json',
-    '/api/feeds' => 'api/feeds.json',
-    '/api/amfm' => 'api/amfm.json',
-);
-if (isset($files[$path]) && $method === 'GET') {
-    $file = $root . '/' . $files[$path];
-    if (!is_file($file)) {
-        json_out(404, array('error' => 'Missing data'));
+function gsa_http_routes()
+{
+    global $root;
+    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+
+    if ($path === '/api/events' && $method === 'GET') {
+        // Left for pages still open from before the switch. The new page
+        // does not open this stream.
+        stream_events();
     }
-    header('Content-Type: application/json; charset=utf-8');
-    header('Cache-Control: no-store');
-    header('Content-Length: ' . filesize($file));
-    readfile($file);
-    exit;
-}
+    if ($path === '/api/scan' && $method === 'POST') {
+        begin_scan();
+    }
+    if ($path === '/api/scan-state' && $method === 'GET') {
+        $id = isset($_GET['id']) ? (string) $_GET['id'] : 'everything';
+        $country = clean_country($_GET['country'] ?? '');
+        if (!scan_allowed_id($id)) {
+            json_out(400, array('error' => 'Unknown check'));
+        }
+        json_out(200, gsa_filter_scan_state(gsa_scan_cache_read(), $id, $country));
+    }
+    if ($path === '/api/poll-status' && $method === 'GET') {
+        json_out(200, gsa_poll_status_read());
+    }
+    if ($path === '/api/stop' && $method === 'POST') {
+        // Stop is local to each visitor now. Visitors can no longer write
+        // data/stop.flag, so nobody can abort the scheduled pass.
+        json_out(200, array('ok' => true, 'local' => true));
+    }
+    if (preg_match('#^/api/aircraft/([0-9a-fA-F]{6})$#', $path, $match) && $method === 'GET') {
+        json_out(200, aircraft_detail(strtolower($match[1]), $_GET));
+    }
+    if ($path === '/api/outages' && $method === 'GET') {
+        json_out(200, outages_snapshot());
+    }
+    if ($path === '/api/mil' && $method === 'GET') {
+        json_out(200, military_snapshot());
+    }
+    if ($path === '/api/mesh' && $method === 'GET') {
+        json_out(200, mesh_snapshot());
+    }
+    if ($path === '/api/disease' && $method === 'GET') {
+        json_out(200, disease_snapshot());
+    }
+    if ($path === '/api/animal' && $method === 'GET') {
+        json_out(200, animal_snapshot());
+    }
 
-json_out(404, array('error' => 'Not found'));
+    $files = array(
+        '/api/catalog' => 'api/catalog.json',
+        '/api/websdr' => 'api/websdr.json',
+        '/api/gpsjam' => 'api/gpsjam.json',
+        '/api/conflicts' => 'api/conflicts.json',
+        '/api/hunger' => 'api/hunger.json',
+        '/api/radio' => 'api/radio.json',
+        '/api/streams' => 'api/streams.json',
+        '/api/feeds' => 'api/feeds.json',
+        '/api/amfm' => 'api/amfm.json',
+    );
+    if (isset($files[$path]) && $method === 'GET') {
+        $file = $root . '/' . $files[$path];
+        if (!is_file($file)) {
+            json_out(404, array('error' => 'Missing data'));
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        header('Content-Length: ' . filesize($file));
+        readfile($file);
+        exit;
+    }
+
+    json_out(404, array('error' => 'Not found'));
+}
 
 function json_out($code, $payload)
 {
@@ -248,16 +273,14 @@ function target_matches($row, $id, $country)
     return has_kind($row, $kind);
 }
 
-function begin_scan()
+function clean_country($country)
 {
-    global $eventFile, $stopFile, $lockFile;
-    $body = json_decode((string) file_get_contents('php://input'), true);
-    if (!is_array($body)) {
-        $body = array();
-    }
-    $id = isset($body['id']) ? (string) $body['id'] : '';
-    $country = isset($body['country']) ? trim((string) $body['country']) : '';
-    $country = preg_replace('/[^\p{L}\p{N} .()\'’-]/u', '', $country);
+    $country = trim((string) $country);
+    return (string) preg_replace('/[^\p{L}\p{N} .()\'’-]/u', '', $country);
+}
+
+function scan_allowed_id($id)
+{
     $allowed = array(
         'everything', 'world', 'united-states', 'banks', 'tech', 'utilities', 'education',
         'medical', 'exchanges', 'transport', 'stores', 'communications', 'military',
@@ -266,38 +289,83 @@ function begin_scan()
         'us-transport', 'us-stores', 'us-communications', 'us-military', 'us-shipping',
         'us-food', 'us-weather',
     );
-    if (!in_array($id, $allowed, true)) {
+    return in_array($id, $allowed, true);
+}
+
+// LOCK & SCAN: serve the last scheduled pass for this test. No new scan.
+function begin_scan()
+{
+    $body = json_decode((string) file_get_contents('php://input'), true);
+    if (!is_array($body)) {
+        $body = array();
+    }
+    $id = isset($body['id']) ? (string) $body['id'] : '';
+    $country = clean_country($body['country'] ?? '');
+    if (!scan_allowed_id($id)) {
         json_out(400, array('error' => 'Unknown check'));
     }
+    $snap = gsa_scan_cache_read();
+    $filtered = gsa_filter_scan_state($snap, $id, $country);
+    $pending = !empty($filtered['pending']);
+    json_out(200, array(
+        'ok' => true,
+        'replay' => true,
+        'pending' => $pending,
+        'state' => $filtered,
+        'error' => $pending ? 'Grid pass not ready yet' : null,
+    ));
+}
+
+// Cron only (poll-runner.php grid). Same lock as before, so passes never overlap.
+function run_scheduled_scan($id = 'everything', $country = '', $slice = 0)
+{
+    global $lockFile, $stopFile;
     $lock = fopen($lockFile, 'c');
     if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
         if ($lock) {
             fclose($lock);
         }
-        json_out(409, array('error' => 'A check is already running'));
+        return array('ok' => false, 'busy' => true, 'error' => 'A pass is already running');
     }
     @unlink($stopFile);
-    file_put_contents($eventFile, '');
     $targets = select_targets($id, $country);
-    $heading = $id === 'country' ? $country : catalog_label($id);
+    if ($slice > 0) {
+        $targets = array_slice($targets, 0, $slice);
+    }
     $state = blank_state();
     $state['running'] = true;
     $state['scanId'] = time();
-    $state['heading'] = $heading;
+    $state['heading'] = catalog_label($id);
     $state['searchId'] = $id;
     $state['total'] = count($targets);
     $state['startedAt'] = (int) round(microtime(true) * 1000);
     $state['results'] = array_fill(0, count($targets), null);
-    emit_event($state, array(
-        'type' => 'scan-start',
-        'scanId' => $state['scanId'],
-        'heading' => $heading,
-        'searchId' => $id,
-        'country' => $country,
-        'total' => count($targets),
-    ));
-    close_http(array('ok' => true), 202);
-    run_scan($state, $targets, $lock);
+    $state = run_scan($state, $targets, $lock, false, microtime(true) + GSA_GRID_MAX_SEC);
+    $info = array(
+        'up' => $state['up'],
+        'down' => $state['down'],
+        'done' => $state['done'],
+        'total' => $state['total'],
+        'mode' => $state['mode'] ?? '',
+        'ms' => $state['ms'] ?? 0,
+    );
+    $problem = gsa_pass_problem($state);
+    if ($problem === null && $slice > 0) {
+        $problem = 'Test slice, not published';
+    }
+    if ($problem !== null) {
+        $info['ok'] = false;
+        $info['published'] = false;
+        $info['error'] = $problem;
+        $info['kept'] = is_file(gsa_scan_cache_file()) ? 'last good pass' : 'nothing saved yet';
+        return $info;
+    }
+    $put = gsa_cache_put(gsa_scan_cache_file(), $state);
+    $info['ok'] = empty($put['error']);
+    $info['published'] = $info['ok'];
+    $info['bytes'] = $put['bytes'] ?? 0;
+    $info['error'] = $put['error'] ?? null;
+    return $info;
 }
 
 function close_http($payload, $code)
@@ -323,7 +391,7 @@ function close_http($payload, $code)
     flush();
 }
 
-function run_scan($state, $targets, $lock)
+function run_scan($state, $targets, $lock, $halt = true, $deadline = 0)
 {
     global $stopFile;
     @set_time_limit(0);
@@ -331,15 +399,28 @@ function run_scan($state, $targets, $lock)
     $started = microtime(true);
     $mode = probe_mode();
     $batchSize = $mode === 'ping' ? 20 : 16;
+    $state['mode'] = $mode;
+    $state['batchSize'] = $batchSize;
     $count = count($targets);
     for ($offset = 0; $offset < $count; $offset += $batchSize) {
-        if (is_file($stopFile)) {
+        $late = $deadline > 0 && microtime(true) >= $deadline;
+        if (is_file($stopFile) || $late) {
             $state['running'] = false;
+            $state['stopped'] = !$late;
+            $state['timedOut'] = $late;
             $state['finishedAt'] = (int) round(microtime(true) * 1000);
-            emit_event($state, array('type' => 'scan-stop', 'scanId' => $state['scanId']));
+            $state['ms'] = (int) round((microtime(true) - $started) * 1000);
+            if ($halt) {
+                emit_event($state, array('type' => 'scan-stop', 'scanId' => $state['scanId']));
+            } else {
+                write_state($state);
+            }
             flock($lock, LOCK_UN);
             fclose($lock);
-            exit;
+            if ($halt) {
+                exit;
+            }
+            return $state;
         }
         $slice = array_slice($targets, $offset, $batchSize, true);
         $checked = $mode === 'ping' ? ping_batch($slice) : https_batch($slice);
@@ -372,33 +453,45 @@ function run_scan($state, $targets, $lock)
                 'index' => $index,
             );
             $state['results'][$index] = $result;
-            emit_event($state, array(
-                'type' => 'result',
-                'scanId' => $state['scanId'],
-                'done' => $state['done'],
-                'up' => $state['up'],
-                'down' => $state['down'],
-                'result' => $result,
-            ));
+            if ($halt) {
+                emit_event($state, array(
+                    'type' => 'result',
+                    'scanId' => $state['scanId'],
+                    'done' => $state['done'],
+                    'up' => $state['up'],
+                    'down' => $state['down'],
+                    'result' => $result,
+                ));
+            }
         }
     }
     $state['running'] = false;
     $state['finishedAt'] = (int) round(microtime(true) * 1000);
-    emit_event($state, array(
-        'type' => 'scan-done',
-        'scanId' => $state['scanId'],
-        'up' => $state['up'],
-        'down' => $state['down'],
-        'total' => $state['total'],
-        'ms' => (int) round((microtime(true) - $started) * 1000),
-    ));
+    $state['ms'] = (int) round((microtime(true) - $started) * 1000);
+    if ($halt) {
+        emit_event($state, array(
+            'type' => 'scan-done',
+            'scanId' => $state['scanId'],
+            'up' => $state['up'],
+            'down' => $state['down'],
+            'total' => $state['total'],
+            'ms' => $state['ms'],
+        ));
+    }
     flock($lock, LOCK_UN);
     fclose($lock);
-    exit;
+    if ($halt) {
+        exit;
+    }
+    return $state;
 }
 
 function probe_mode()
 {
+    $forced = getenv('GSA_PROBE_MODE');
+    if ($forced === 'https' || $forced === 'ping') {
+        return $forced;
+    }
     if (!function_exists('proc_open')) {
         return 'https';
     }
