@@ -151,12 +151,12 @@ async function boot() {
   fillCountries(catalog.countries);
   hookUi();
   tickClock();
+  // Scanners (1.5 MB) and the aircraft/GPS-jamming feed (1.7 MB) load when
+  // their layer or list is opened, not at startup.
   Promise.allSettled([
     loadOutages(),
     loadHunger(),
-    loadStreams(),
     loadConflicts(),
-    pollLiveFeeds(),
   ]).then((results) => {
     const failed = results.find((result) => result.status === "rejected");
     if (failed) statusLive(failed.reason?.message || String(failed.reason));
@@ -180,7 +180,7 @@ function tuneQuality(basemapId) {
   const sharp = basemapId === "satellite" || basemapId === "sentinel" || basemapId === "streets" || basemapId === "osm";
   viewer.scene.globe.maximumScreenSpaceError = sharp ? 2 : 4;
   const dpr = window.devicePixelRatio || 1;
-  const cap = sharp ? (phoneLayout() ? 1.25 : 2) : (phoneLayout() ? 1 : 1.5);
+  const cap = sharp ? (phoneLayout() ? 1 : 2) : (phoneLayout() ? 0.85 : 1.5);
   // Pixel ratio is devicePixelRatio times resolutionScale only when this is false.
   viewer.useBrowserRecommendedResolution = false;
   viewer.resolutionScale = Math.min(dpr, cap) / dpr;
@@ -340,6 +340,14 @@ async function startGlobe() {
   viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#070b10");
   viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10202c");
   viewer.scene.globe.enableLighting = false;
+  // Draw only when something changes (camera, tiles, entities). Saves phone battery.
+  viewer.scene.requestRenderMode = true;
+  viewer.scene.maximumRenderTimeChange = Infinity;
+  if (phoneLayout()) {
+    viewer.scene.globe.preloadSiblings = false;
+    viewer.scene.fog.enabled = true;
+    viewer.scene.fog.screenSpaceErrorFactor = 4;
+  }
   state.viewer = viewer;
   state.basemap = startupMap;
   tuneQuality(startupMap);
@@ -360,6 +368,12 @@ async function startGlobe() {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
+  // With requestRenderMode, redraw whenever any layer adds or removes pins.
+  for (let i = 0; i < viewer.dataSources.length; i += 1) {
+    viewer.dataSources.get(i).entities.collectionChanged.addEventListener(kickRender);
+  }
+  viewer.entities.collectionChanged.addEventListener(kickRender);
+  viewer.selectedEntityChanged.addEventListener(kickRender);
   viewer.scene.preRender.addEventListener(cullAircraftHorizon);
   viewer.scene.preRender.addEventListener(keepFlatMapIntact);
   viewer.camera.moveEnd.addEventListener(() => {
@@ -717,6 +731,7 @@ function replayScan(snap) {
       i += 1;
     }
     state.done = i;
+    kickRender();
     updateHud();
     syncGridResultsButton();
     if (i < n) {
@@ -897,6 +912,7 @@ function upsertArc(result) {
 }
 
 function upsertPoint(result) {
+  kickRender();
   if (!state.viewer || !state.scanSource || result.lat == null || result.lon == null) return;
   const color = COLORS[result.status] || COLORS.pending;
   const pixelSize = result.status === "down" ? 16 : 12;
@@ -990,6 +1006,7 @@ function tickClock() {
 function setFeedMode(mode) {
   const allowed = ["outages", "hunger", "stream", "conflicts", "returns"];
   state.feedMode = allowed.includes(mode) ? mode : "outages";
+  if (state.feedMode === "stream") ensureStreams();
   for (const name of allowed) {
     const pane = document.getElementById(`${name}-pane`);
     if (!pane) continue;
@@ -1018,6 +1035,7 @@ function sourceFor(layer) {
 }
 
 function setCount(key, value) {
+  kickRender();
   const text = String(value);
   for (const el of document.querySelectorAll(`[data-count="${key}"]`)) el.textContent = text;
 }
@@ -1188,6 +1206,7 @@ function setLayer(layer, on) {
     }
     syncTrafficBars();
   }
+  if (layer === "stream" && state.layers.stream) ensureStreams();
   if (layer === "ships" && state.layers.ships) scheduleShips();
   if ((layer === "aircraft" || layer === "jamming") && state.layers[layer]) pollLiveFeeds();
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
@@ -1242,6 +1261,11 @@ function setLayer(layer, on) {
     loadHunger().catch((error) => statusLive(error.message || String(error)));
   }
   syncMobilePick(layer);
+  kickRender();
+}
+
+function kickRender() {
+  if (state.viewer) state.viewer.scene.requestRender();
 }
 
 const LAYER_LABEL = {
@@ -1917,6 +1941,17 @@ function closePin() {
   document.getElementById("sdr-listen").hidden = true;
   renderConflictList();
   renderStreamList();
+}
+
+let streamsLoading = null;
+function ensureStreams() {
+  if (!streamsLoading) {
+    streamsLoading = loadStreams().catch((error) => {
+      streamsLoading = null;
+      statusLive(error.message || String(error));
+    });
+  }
+  return streamsLoading;
 }
 
 async function loadStreams() {
@@ -2936,6 +2971,7 @@ function placeLiveLayer(key, points) {
 }
 
 function hideFilteredShips() {
+  kickRender();
   const selected = state.viewer && state.viewer.selectedEntity;
   if (!selected || !selected._live || selected._live.layer !== "ships") return;
   if (shipMatches(selected._live)) return;
@@ -2945,6 +2981,7 @@ function hideFilteredShips() {
 }
 
 function hideFilteredAircraft(points) {
+  kickRender();
   const card = document.getElementById("aircraft-card");
   if (!card || card.hidden) return;
   const hex = (document.getElementById("ac-hex").textContent || "").trim().toLowerCase();
