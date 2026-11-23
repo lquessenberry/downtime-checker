@@ -669,6 +669,7 @@ button:hover { border-color: #9fd4e2; }
 .swatch.designations { background: #f0c14a; }
 .swatch.violence { background: #c44b4b; }
 .swatch.nuke { background: #7cff6b; }
+.swatch.effects { background: #ff8f1f; }
 .swatch.quakes { background: #f08a24; }
 .swatch.streets3d { background: #c4a574; }
 .nuke-hud {
@@ -710,6 +711,172 @@ button:hover { border-color: #9fd4e2; }
   font-size: 11px;
   color: #c8f5c4;
 }
+
+.effects-hud,
+.effects-results {
+  position: absolute;
+  z-index: 8;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-family: var(--font);
+  box-shadow: none;
+  letter-spacing: 0;
+}
+.effects-hud {
+  right: 12px;
+  top: 12px;
+  width: min(360px, 92vw);
+  max-height: min(70vh, 640px);
+  overflow: auto;
+  padding: 12px 14px;
+  -webkit-overflow-scrolling: touch;
+}
+.effects-hud h2,
+.effects-results h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.effects-lede,
+.effects-note {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--dim);
+  letter-spacing: 0.02em;
+}
+#effects-calc {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: end;
+}
+.effects-span { grid-column: 1 / -1; }
+.effects-hud label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+.effects-hud input,
+.effects-hud select {
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 8px;
+  background: #101820;
+  color: var(--text);
+  border: 1px solid var(--line);
+  font: inherit;
+}
+.effects-go {
+  min-height: 44px;
+  width: 100%;
+  background: #101820;
+  color: var(--text);
+  border: 1px solid var(--line);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+#effects-presets {
+  margin: 10px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#effects-presets .chip {
+  min-height: 36px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #101820;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+#effects-presets .chip[aria-pressed="true"] {
+  background: rgba(120, 190, 210, 0.1);
+  color: var(--text);
+  border-color: #9fd4e2;
+}
+.effects-results {
+  position: fixed;
+  z-index: 18;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(58vh, 560px);
+  overflow: auto;
+  padding: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.effects-results-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+#effects-close {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1;
+  min-width: 36px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.effects-yield-line {
+  margin: 0 0 8px;
+  font-weight: 700;
+  color: var(--text);
+}
+.effects-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+}
+.effects-table th,
+.effects-table td {
+  text-align: left;
+  padding: 7px 6px;
+  vertical-align: top;
+  border-top: 1px solid var(--line);
+}
+.effects-table th {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.effects-table th:nth-child(1),
+.effects-table td:nth-child(1) { width: 30%; }
+.effects-table th:nth-child(3),
+.effects-table td:nth-child(3) { width: 28%; }
+.effects-table .num { font-variant-numeric: tabular-nums; }
+.effects-table .group { color: var(--text); font-weight: 700; }
+.effects-table .swatch {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+.effects-disc {
+  margin-top: 12px;
+  color: #b89f86;
+  font-size: 10px;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+}
+.effects-disc p { margin: 0 0 8px; }
+
 .layer[data-layer-toggle="conflicts"],
 .layer[data-layer-toggle="aircraft"],
 .layer[data-layer-toggle="jamming"],
@@ -861,6 +1028,24 @@ button:hover { border-color: #9fd4e2; }
     margin: 0;
   }
   .legend .layer .switch { display: none; }
+  .effects-hud {
+    left: 8px;
+    right: 8px;
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: 46vh;
+  }
+  .effects-results.mobile-sheet {
+    left: 8px !important;
+    right: 8px !important;
+    top: auto !important;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: 58vh;
+    transform: none !important;
+    z-index: 9;
+  }
   #sdr-listen { top: 0; bottom: 0; z-index: 40; }
   .sdr-bar { flex-wrap: wrap; }
   #btn-reset { display: none; }
@@ -1039,4 +1224,71 @@ button:hover { border-color: #9fd4e2; }
   color: #fff;
   text-decoration: none;
   letter-spacing: 0.08em;
+}
+.effects-hud input, .effects-hud select, .effects-go, #effects-presets .chip { border-radius: 4px; }
+.effects-go:hover, #effects-presets .chip:hover, .effects-hud select:hover, .effects-hud input:focus, .effects-hud select:focus { border-color: #9fd4e2; outline: none; }
+.effects-hud select option { background: #101820; color: var(--text); }
+
+/* Nuke Simulator launch sounds: sound chip and the launching indicator. */
+.effects-sound {
+  position: absolute;
+  top: 9px;
+  right: 12px;
+  min-height: 26px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #101820;
+  color: var(--text);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.effects-sound[aria-pressed="false"] { color: var(--dim); }
+.effects-sound:hover, .effects-sound:focus-visible { border-color: #9fd4e2; outline: none; }
+.effects-launching {
+  position: absolute;
+  z-index: 19;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 14px;
+  background: var(--panel);
+  border: 1px solid #ff8f1f;
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.effects-launching[hidden] { display: none; }
+.effects-launching:hover, .effects-launching:focus-visible { border-color: #ffb04a; outline: none; }
+.effects-launching-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e10600;
+  animation: effects-launch-blink 0.8s steps(2, start) infinite;
+}
+@keyframes effects-launch-blink { to { visibility: hidden; } }
+
+/* Nuke Simulator explosion GIF, anchored on ground zero by effects-radius.js. */
+.effects-gif {
+  position: fixed;
+  z-index: 17;
+  left: 0;
+  top: 0;
+  max-width: none;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-drag: none;
 }

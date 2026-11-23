@@ -39,6 +39,7 @@ const state = {
     designations: { source: null, points: [] },
     violence: { source: null, points: [] },
     nuke: { source: null, points: [] },
+    effects: { source: null, points: [] },
     quakes: { source: null, points: [] },
     streets3d: { source: null, points: [] },
   },
@@ -57,6 +58,7 @@ const state = {
     designations: false,
     violence: false,
     nuke: false,
+    effects: false,
     quakes: false,
     streets3d: false,
   },
@@ -354,7 +356,7 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "effects", "quakes", "streets3d"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
@@ -390,12 +392,14 @@ async function startGlobe() {
   // Cesium then inserts a temporary imagery entity; that is not a layer pin either.
   const popupClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   popupClicks.setInputAction((click) => {
+    if (state.layers.effects && window.GsaEffectsRadius && window.GsaEffectsRadius.handleClick(click.position)) return;
     if (state.layers.nuke && placeNukeAt(click.position)) return;
     if (pickedMapPin(click.position)) return;
     closeMapPopups();
     if (viewer.selectedEntity) viewer.selectedEntity = undefined;
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   bindNukeHud();
+  bindEffectsHud();
   viewer.camera.moveEnd.addEventListener(() => {
     if (state.layers.streets3d) scheduleStreets3d();
   });
@@ -1207,6 +1211,9 @@ function setLayer(layer, on) {
       syncNukeHud();
     }
   }
+  if (layer === "effects") {
+    if (window.GsaEffectsRadius) window.GsaEffectsRadius.setActive(state.layers.effects);
+  }
   if (layer === "streets3d") {
     if (state.layers.streets3d) {
       applyTerrain("elevation");
@@ -1252,6 +1259,7 @@ const LAYER_LABEL = {
   designations: "DESIGNATIONS",
   violence: "ATTRIBUTED VIOLENCE",
   nuke: "NUCLEAR",
+  effects: "NUKE SIMULATOR",
   quakes: "QUAKES",
   streets3d: "STREETS 3D",
 };
@@ -1259,7 +1267,7 @@ const LAYER_LABEL = {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "effects", "quakes", "streets3d"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -2120,6 +2128,7 @@ const LIVE_STYLE = {
   designations: { color: "#f0c14a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DESIGNATION" },
   violence: { color: "#c44b4b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ATTRIBUTED VIOLENCE" },
   nuke: { color: "#7cff6b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "NUCLEAR" },
+  effects: { color: "#ff8f1f", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "NUKE SIMULATOR" },
   quakes: { color: "#f08a24", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "QUAKES" },
   streets3d: { color: "#c4a574", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "STREETS 3D" },
 };
@@ -3188,6 +3197,9 @@ function statusLive(error) {
       ? `ATTRIBUTED VIOLENCE ${state.live.violence.points.length}`
       : "ATTRIBUTED VIOLENCE",
     state.layers.nuke ? `NUCLEAR ${state.nuke.shots.length}` : "NUCLEAR",
+    state.layers.effects && window.GsaEffectsRadius && window.GsaEffectsRadius.hasResult()
+      ? "NUKE SIMULATOR 1"
+      : "NUKE SIMULATOR",
     state.live.quakes.points.length
       ? `QUAKES ${state.live.quakes.points.length}`
       : "QUAKES",
@@ -3200,6 +3212,17 @@ function statusLive(error) {
 function currentYieldKt() {
   const presets = (window.GsaBlast && window.GsaBlast.KT_PRESETS) || [15, 100, 300, 1000, 5000];
   return presets[state.nuke.yieldIdx] || 15;
+}
+
+function bindEffectsHud() {
+  if (window.GsaEffectsRadius && state.viewer) {
+    window.GsaEffectsRadius.bind({
+      viewer: state.viewer,
+      source: state.live.effects && state.live.effects.source,
+      setCount,
+      statusLive,
+    });
+  }
 }
 
 function bindNukeHud() {
