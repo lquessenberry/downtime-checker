@@ -6,11 +6,16 @@
 //   php poll-runner.php once
 //   php poll-runner.php loop
 //   php poll-runner.php grid --slice=16
+//   php poll-runner.php aircraft [--force-mil|--skip-mil|--mock=PATH]
 //
-// 3 minutes is the max for AIR/JAM. Grid is ~15 minutes.
+// Aircraft on globalstatus.app (cPanel cron, every 5 minutes): one civilian
+// adsb.lol pull each run, plus /v2/mil only when the last mil pull is at least
+// 15 minutes old (~384 requests/day, under the 500/day unkeyed cap).
+// Visitors read the cache. Jamming stays on its own TTL. Grid is ~10 minutes.
 //
-// Live on globalstatus.app (cPanel cron, every 10 minutes):
+// Live cPanel crons:
 //   /usr/local/bin/php -q /home/<user>/public_html/globalstatus.app/poll-runner.php grid
+//   /usr/local/bin/php -q /home/<user>/public_html/globalstatus.app/poll-runner.php aircraft > /home/<user>/globalstatus-aircraft-last.log 2>&1
 // Visitors' LOCK & SCAN replays data/scan-cache.json; it never starts a scan.
 
 if (PHP_SAPI !== 'cli') {
@@ -29,17 +34,24 @@ $argv = $_SERVER['argv'] ?? array('poll-runner.php');
 array_shift($argv);
 $job = $argv ? array_shift($argv) : 'status';
 $slice = 0;
+$forceMil = false;
+$skipMil = false;
 foreach ($argv as $arg) {
     if (strpos($arg, '--slice=') === 0) {
         $slice = (int) substr($arg, 8);
+    } elseif ($arg === '--force-mil') {
+        $forceMil = true;
+    } elseif ($arg === '--skip-mil') {
+        $skipMil = true;
+    } elseif (strpos($arg, '--mock=') === 0) {
+        $GLOBALS['GSA_ADSB_MOCK'] = substr($arg, 7);
     }
 }
 
 $ttls = array(
     'jamming' => 180,
-    'aircraft' => 180,
+    'aircraft' => 300,
     'outages' => 180,
-    'mil' => 180,
     'mesh' => 90,
     'disease' => 180,
     'animal' => 600,
@@ -88,12 +100,15 @@ function runner_run($name, $slice = 0)
         });
     }
     if ($name === 'mil') {
+        // Military positions come from the aircraft cache (15-minute mil pull).
+        // This job never calls adsb.lol on its own.
         return runner_timed('mil', function () {
             $snap = military_snapshot();
             return array(
                 'ok' => empty($snap['error']),
                 'count' => $snap['count'] ?? 0,
                 'error' => $snap['error'] ?? null,
+                'cacheOnly' => true,
             );
         });
     }
@@ -133,8 +148,11 @@ function runner_run($name, $slice = 0)
         });
     }
     if ($name === 'aircraft') {
-        return runner_timed('aircraft', function () {
-            return aircraft_refresh();
+        return runner_timed('aircraft', function () use ($forceMil, $skipMil) {
+            return aircraft_refresh(array(
+                'forceMil' => $forceMil,
+                'skipMil' => $skipMil,
+            ));
         });
     }
     if ($name === 'grid') {
@@ -144,7 +162,7 @@ function runner_run($name, $slice = 0)
     }
     if ($name === 'once') {
         $out = array();
-        foreach (array('outages', 'mesh', 'disease', 'animal', 'mil', 'jamming', 'aircraft') as $job) {
+        foreach (array('outages', 'mesh', 'disease', 'animal', 'jamming', 'aircraft') as $job) {
             $out[$job] = runner_run($job);
         }
         return $out;

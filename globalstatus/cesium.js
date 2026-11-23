@@ -67,6 +67,9 @@ const state = {
   airFilter: "all",
   aircraftFeed: [],
   militaryPoints: null,
+  aircraftUpdated: null,
+  aircraftSnapMs: 0,
+  aircraftStale: false,
   shipFilter: "underway",
   amfmReady: false,
   trafficPane: "air",
@@ -164,8 +167,12 @@ async function boot() {
     else statusLive();
   });
   setInterval(() => {
-    if (state.layers.aircraft || state.layers.jamming) pollLiveFeeds();
-  }, 180000);
+    if (!document.hidden && state.layers.aircraft) pollAircraft().catch((error) => statusLive(error.message || String(error)));
+  }, 45000);
+  setInterval(() => {
+    if (!document.hidden && state.layers.jamming) pollJamming().catch((error) => statusLive(error.message || String(error)));
+  }, 60000);
+  setInterval(tickAircraft, 1000);
   setInterval(() => {
     loadOutages().catch((error) => statusLive(error.message || String(error)));
   }, 180000);
@@ -382,7 +389,12 @@ async function startGlobe() {
     if (state.layers.quakes && !document.hidden) loadQuakes();
   }, (window.GsaQuakes && window.GsaQuakes.POLL_MS) || 300000);
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && state.layers.quakes) scheduleQuakes();
+    if (document.hidden) return;
+    if (state.layers.quakes) scheduleQuakes();
+    if (state.layers.aircraft) {
+      tickAircraft();
+      pollAircraft().catch((error) => statusLive(error.message || String(error)));
+    }
   });
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
@@ -1257,8 +1269,12 @@ function setLayer(layer, on) {
     }
     syncTrafficBars();
   }
+  if (layer === "aircraft" && state.layers.aircraft) {
+    tickAircraft();
+    if (!state.aircraftFeed.length) pollAircraft().catch((error) => statusLive(error.message || String(error)));
+  }
+  if (layer === "jamming" && state.layers.jamming) pollJamming().catch((error) => statusLive(error.message || String(error)));
   if (layer === "ships" && state.layers.ships) scheduleShips();
-  if ((layer === "aircraft" || layer === "jamming") && state.layers[layer]) pollLiveFeeds();
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
   if (layer === "disease" && state.layers.disease) scheduleDisease();
   if (layer === "animal" && state.layers.animal) scheduleAnimal();
@@ -1360,6 +1376,8 @@ function syncTrafficBars() {
   if (shipBar) shipBar.classList.toggle("is-open", shipOn && (!airOn || pane === "ships"));
   const shipCreditLine = document.querySelector(".ship-credit");
   if (shipCreditLine) shipCreditLine.hidden = !shipOn;
+  const airCreditLine = document.querySelector(".air-credit");
+  if (airCreditLine) airCreditLine.hidden = !airOn;
   for (const button of document.querySelectorAll("[data-traffic-pane]")) {
     const on = button.dataset.trafficPane === pane;
     button.classList.toggle("on", on);
@@ -2230,12 +2248,13 @@ function setAirFilter(filter, turnOn) {
   }
   if (turnOn && !state.layers.aircraft) setLayer("aircraft", true);
   if (state.airFilter === "mil") {
-    if (state.militaryPoints) publishAircraft(state.militaryPoints);
+    const mil = state.militaryPoints || (state.aircraftFeed || []).filter((point) => point.mil);
+    publishAircraft(mil);
     refreshMilitary().catch((error) => statusLive(error.message || String(error)));
-    return;
+  } else {
+    publishAircraft(state.aircraftFeed || []);
   }
-  publishAircraft(state.aircraftFeed || []);
-  if (turnOn && !state.running) statusLive();
+  if (!state.running) statusLive();
 }
 
 function publishAircraft(points) {
@@ -2690,6 +2709,87 @@ function aircraftStyle(point) {
 
 let militaryToken = 0;
 
+function aircraftDest(lat, lon, trackDeg, distNm) {
+  const radiusNm = 3440.065;
+  const d = distNm / radiusNm;
+  const lat1 = (Number(lat) * Math.PI) / 180;
+  const lon1 = (Number(lon) * Math.PI) / 180;
+  const brng = ((Number(trackDeg) || 0) * Math.PI) / 180;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brng));
+  const lon2 = lon1 + Math.atan2(
+    Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
+    Math.cos(d) - Math.sin(lat1) * Math.sin(lat2),
+  );
+  return {
+    lat: (lat2 * 180) / Math.PI,
+    lon: (((lon2 * 180) / Math.PI + 540) % 360) - 180,
+  };
+}
+
+const AIRCRAFT_COAST_MS = 6 * 60 * 1000;
+
+function aircraftCoasted(point, now) {
+  const originMs = Number(point.ts) || state.aircraftSnapMs || now;
+  const age = Math.max(0, now - originMs);
+  const coast = Math.min(age, AIRCRAFT_COAST_MS);
+  const gs = Number(point.gs) || 0;
+  const ground = aircraftOnGround(point);
+  const track = Number(point.track) || 0;
+  let altM = Number(point.altM) || 0;
+  if (ground || gs < 5 || coast <= 0 || point.lat == null || point.lon == null) {
+    return { lat: point.lat, lon: point.lon, altM, track };
+  }
+  const moved = aircraftDest(point.lat, point.lon, track, gs * (coast / 3600000));
+  const rate = Number(point.baro_rate);
+  if (Number.isFinite(rate)) {
+    altM = Math.max(0, altM + rate * 0.3048 * (coast / 60000));
+  }
+  return { lat: moved.lat, lon: moved.lon, altM, track };
+}
+
+function tickAircraft() {
+  if (document.hidden || !state.layers.aircraft) return;
+  const source = state.live.aircraft && state.live.aircraft.source;
+  if (!source || !window.Cesium) return;
+  const now = Date.now();
+  const entities = source.entities.values;
+  for (let i = 0; i < entities.length; i += 1) {
+    const entity = entities[i];
+    const item = entity._live;
+    if (!item || item.layer !== "aircraft") continue;
+    const pos = aircraftCoasted(item, now);
+    if (pos.lat == null || pos.lon == null) continue;
+    entity.position = Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, pos.altM || 0);
+    if (entity.billboard) entity.billboard.rotation = -Cesium.Math.toRadians(pos.track || 0);
+  }
+}
+
+function aircraftAgeLabel() {
+  if (!state.aircraftSnapMs) return "";
+  const min = Math.max(0, Math.round((Date.now() - state.aircraftSnapMs) / 60000));
+  if (state.aircraftStale) return min ? `stale, ${min} min ago` : "stale";
+  if (min <= 0) return "just now";
+  return `${min} min ago`;
+}
+
+function applyAircraftSnapshot(body) {
+  const points = Array.isArray(body && body.points) ? body.points : [];
+  if (body && body.updated) {
+    const parsed = Date.parse(body.updated);
+    state.aircraftSnapMs = Number.isFinite(parsed) ? parsed : (Number(body.at) || Date.now());
+    state.aircraftUpdated = body.updated;
+  } else if (body && body.at) {
+    state.aircraftSnapMs = Number(body.at) || Date.now();
+  } else if (points.length && points[0].ts) {
+    state.aircraftSnapMs = Number(points[0].ts);
+  }
+  state.aircraftStale = Boolean(body && body.stale);
+  state.aircraftFeed = points;
+  state.militaryPoints = points.filter((point) => point.mil);
+  if (state.airFilter === "mil") publishAircraft(state.militaryPoints);
+  else publishAircraft(state.aircraftFeed);
+}
+
 async function refreshMilitary() {
   const token = ++militaryToken;
   try {
@@ -2706,20 +2806,28 @@ async function refreshMilitary() {
   publishAircraft(state.militaryPoints || (state.aircraftFeed || []).filter((point) => point.mil));
 }
 
-async function pollLiveFeeds() {
-  try {
-    await loadAdsbIcons();
-  } catch (error) {
-    state.adsbIcons = null;
-  }
+async function pollJamming() {
   const data = await fetch("/api/feeds").then((response) => response.json());
   const jam = data.jamming || {};
   state.live.jamming.points = jam.points || [];
   setCount("jamming", jam.count ?? state.live.jamming.points.length);
   placeLiveLayer("jamming", state.live.jamming.points);
-  state.aircraftFeed = (data.aircraft && data.aircraft.points) || [];
-  if (state.airFilter === "mil") await refreshMilitary();
-  else publishAircraft(state.aircraftFeed);
+}
+
+async function pollAircraft() {
+  try {
+    await loadAdsbIcons();
+  } catch (error) {
+    state.adsbIcons = null;
+  }
+  const data = await fetch("/api/aircraft").then((response) => response.json());
+  applyAircraftSnapshot(data);
+  statusLive();
+}
+
+async function pollLiveFeeds() {
+  await pollJamming();
+  await pollAircraft();
   statusLive();
 }
 
@@ -2953,17 +3061,27 @@ function placeLiveLayer(key, points) {
     if (key === "aircraft" && !aircraftMatches(point)) continue;
     if (key === "ships" && !shipMatches(point)) continue;
     if (key === "amfm" && !amfmStations(point).length) continue;
-    const height = key === "aircraft" ? Number(point.altM) || 0 : 0;
+    let height = key === "aircraft" ? Number(point.altM) || 0 : 0;
+    let lon = point.lon;
+    let lat = point.lat;
+    let track = Number(point.track) || 0;
+    if (key === "aircraft") {
+      const coasted = aircraftCoasted(point, Date.now());
+      lon = coasted.lon;
+      lat = coasted.lat;
+      height = coasted.altM || 0;
+      track = coasted.track || 0;
+    }
     const entityOptions = {
       name: point.name,
-      position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, height),
+      position: Cesium.Cartesian3.fromDegrees(lon, lat, height),
     };
     let kind = base.kind;
     if (key === "aircraft" && state.adsbIcons) {
       entityOptions.billboard = {
         image: aircraftIcon(point),
         color: Cesium.Color.fromCssColorString(altitudeColor(point.alt)),
-        rotation: -Cesium.Math.toRadians(Number(point.track) || 0),
+        rotation: -Cesium.Math.toRadians(track),
         width: PIN_SIZE,
         height: PIN_SIZE,
         sizeInMeters: false,
@@ -3215,9 +3333,10 @@ function statusLive(error) {
   const jam = state.live.jamming.points.length;
   const airPoints = state.live.aircraft.points;
   const airNames = { mil: "MILITARY", airliner: "AIRLINERS", heli: "HELICOPTERS", ground: "GROUND" };
+  const airAge = aircraftAgeLabel();
   const air = state.airFilter === "all"
-    ? `LIVE AIR TRAFFIC ${airPoints.length}`
-    : `LIVE AIR TRAFFIC ${aircraftVisibleCount(airPoints)} ${airNames[state.airFilter] || ""}`.trim();
+    ? `LIVE AIR TRAFFIC ${airPoints.length}${airAge ? ` · ${airAge}` : ""}`
+    : `LIVE AIR TRAFFIC ${aircraftVisibleCount(airPoints)} ${airNames[state.airFilter] || ""}`.trim() + (airAge ? ` · ${airAge}` : "");
   const shipPoints = state.live.ships.points;
   const shipNames = {
     underway: "UNDERWAY",

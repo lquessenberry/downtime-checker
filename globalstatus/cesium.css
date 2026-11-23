@@ -382,7 +382,7 @@ button:hover { border-color: #9fd4e2; }
   background: #163044;
   color: #fff;
 }
-.ship-credit {
+.ship-credit, .air-credit {
   position: absolute;
   left: 8px;
   right: 108px;
@@ -400,21 +400,21 @@ button:hover { border-color: #9fd4e2; }
   background: rgba(7, 11, 16, 0.72);
   pointer-events: none;
 }
-.ship-credit-track {
+.ship-credit-track, .air-credit-track {
   display: inline-block;
   white-space: nowrap;
   padding-left: 100%;
   animation: ship-credit-marquee 36s linear infinite;
   pointer-events: auto;
 }
-.ship-credit[hidden] { display: none; }
-.ship-credit a { color: #9fd4e2; }
+.ship-credit[hidden], .air-credit[hidden] { display: none; }
+.ship-credit a, .air-credit a { color: #9fd4e2; }
 @keyframes ship-credit-marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-100%); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ship-credit-track { animation: none; padding-left: 0; }
+  .ship-credit-track, .air-credit-track { animation: none; padding-left: 0; }
 }
 .outage-card {
   position: relative;
@@ -802,7 +802,7 @@ button:hover { border-color: #9fd4e2; }
   .traffic-switch button,
   .air-filters button,
   .ship-filters button { min-height: 44px; font-size: 14px; }
-  .ship-credit {
+  .ship-credit, .air-credit {
     left: 8px;
     right: 96px;
     bottom: calc(8px + env(safe-area-inset-bottom));
@@ -810,7 +810,7 @@ button:hover { border-color: #9fd4e2; }
     font-size: 12px;
     line-height: 22px;
   }
-  .stage:has(.view-settings:not(.is-closed)) .ship-credit {
+  .stage:has(.view-settings:not(.is-closed)) .ship-credit, .stage:has(.view-settings:not(.is-closed)) .air-credit {
     right: min(252px, 68%);
     bottom: calc(8px + env(safe-area-inset-bottom));
   }
