@@ -296,9 +296,9 @@ function formatYield(kt) {
     var lede = el("effects-lede");
     if (!lede) return;
     if (!groundZero) {
-      lede.textContent = "Tap the globe to choose ground zero, then pick a weapon or type a yield and press Submit.";
+      lede.textContent = "Tap the globe to choose ground zero, then pick a weapon or type a yield and press Launch Nuke.";
     } else {
-      lede.textContent = "Ground zero set. Adjust the settings and press Submit. Tap a new spot to move it.";
+      lede.textContent = "Ground zero set. Adjust the settings and press Launch Nuke. Tap a new spot to move it.";
     }
   }
 
@@ -357,6 +357,7 @@ function formatYield(kt) {
   }
 
   function clearAll() {
+    if (typeof cancelLaunch === "function") cancelLaunch();
     clearRings();
     clearMarker();
     hidePopup();
@@ -559,6 +560,174 @@ function formatYield(kt) {
     positionPopup();
   }
 
+  // ---- Launch sounds -------------------------------------------------------
+  // Launch Nuke plays the alarm, then the detonation. The rings and results
+  // appear when the detonation starts. Tap the indicator or press Escape to
+  // skip the alarm. Muted, missing, or blocked audio shows the rings at once.
+  var SOUND_KEY = "gsa-nuke-sound";
+  var SOUND_URLS = { alarm: "sounds/nuke-alarm.mp3", blast: "sounds/nuke-blast.mp3" };
+  var sounds = { alarm: null, blast: null };
+  var launch = null;
+  var launchSeq = 0;
+
+  function isMuted() {
+    try { return window.localStorage.getItem(SOUND_KEY) === "off"; } catch (err) { return false; }
+  }
+
+  function setMuted(on) {
+    try { window.localStorage.setItem(SOUND_KEY, on ? "off" : "on"); } catch (err) {}
+    if (on) {
+      stopSound("blast");
+      if (launch) skipLaunch();
+    }
+    updateSoundChip();
+  }
+
+  function updateSoundChip() {
+    var chip = el("effects-sound");
+    if (!chip) return;
+    var muted = isMuted();
+    chip.textContent = muted ? "Sound off" : "Sound on";
+    chip.setAttribute("aria-pressed", muted ? "false" : "true");
+    chip.setAttribute("aria-label", muted ? "Launch sounds are off. Turn them on." : "Launch sounds are on. Turn them off.");
+  }
+
+  function getSound(name) {
+    if (sounds[name] || typeof Audio === "undefined") return sounds[name];
+    try {
+      var audio = new Audio();
+      audio.preload = "auto";
+      audio.src = SOUND_URLS[name];
+      audio.load();
+      sounds[name] = audio;
+    } catch (err) {
+      sounds[name] = null;
+    }
+    return sounds[name];
+  }
+
+  function stopSound(name) {
+    var audio = sounds[name];
+    if (!audio) return;
+    try { audio.pause(); audio.currentTime = 0; } catch (err) {}
+  }
+
+  function playSound(name) {
+    if (isMuted()) return Promise.reject(new Error("muted"));
+    var audio = getSound(name);
+    if (!audio) return Promise.reject(new Error("no audio"));
+    try {
+      audio.currentTime = 0;
+      var result = audio.play();
+      return result && typeof result.then === "function" ? result : Promise.resolve();
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
+
+  function launchIndicator() {
+    var box = el("effects-launching");
+    if (box) return box;
+    box = document.createElement("button");
+    box.type = "button";
+    box.id = "effects-launching";
+    box.className = "effects-launching";
+    box.hidden = true;
+    box.innerHTML = "<span class=\"effects-launching-dot\" aria-hidden=\"true\"></span><span>Launching… tap to skip</span>";
+    box.addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      skipLaunch();
+    });
+    var host = document.querySelector(".stage") || document.body;
+    host.appendChild(box);
+    return box;
+  }
+
+  function showIndicator(on) {
+    var box = on ? launchIndicator() : el("effects-launching");
+    if (box) box.hidden = !on;
+  }
+
+  function clearLaunchTimers(job) {
+    if (!job) return;
+    clearTimeout(job.loadTimer);
+    clearTimeout(job.endTimer);
+    if (job.alarm && job.onEnded) {
+      job.alarm.removeEventListener("ended", job.onEnded);
+      job.alarm.removeEventListener("error", job.onEnded);
+    }
+  }
+
+  // Stop a launch that has not detonated yet. No rings are drawn.
+  function cancelLaunch() {
+    if (!launch) return false;
+    var job = launch;
+    launch = null;
+    clearLaunchTimers(job);
+    stopSound("alarm");
+    showIndicator(false);
+    return true;
+  }
+
+  // Detonate now: stop the alarm, start the blast sound, then draw.
+  function detonate(job) {
+    if (!job || launch !== job) return;
+    launch = null;
+    clearLaunchTimers(job);
+    stopSound("alarm");
+    showIndicator(false);
+    if (!isMuted()) playSound("blast").catch(function () {});
+    var blast = drawRingsOnGlobe(job.effects);
+    showResults(job.effects, blast);
+  }
+
+  function skipLaunch() {
+    if (launch) detonate(launch);
+  }
+
+  function startLaunch(effects) {
+    cancelLaunch();
+    var hud = el("effects-hud");
+    if (hud) hud.hidden = true;
+    var popup = el("effects-results");
+    if (popup && !popup.hidden) {
+      popup.hidden = true;
+      popup.classList.remove("mobile-sheet");
+      shownBlast = null;
+    }
+    launchSeq += 1;
+    var job = { id: launchSeq, effects: effects, alarm: null, onEnded: null, loadTimer: 0, endTimer: 0 };
+    launch = job;
+    if (isMuted()) {
+      detonate(job);
+      return job;
+    }
+    var alarm = getSound("alarm");
+    // Already failed to load (for example a 404): do not wait for it.
+    if (!alarm || alarm.error || alarm.networkState === 3) {
+      detonate(job);
+      return job;
+    }
+    job.alarm = alarm;
+    job.onEnded = function () { detonate(job); };
+    alarm.addEventListener("ended", job.onEnded);
+    alarm.addEventListener("error", job.onEnded);
+    showIndicator(true);
+    // If the alarm has not started within 5 s, stop waiting for it.
+    job.loadTimer = setTimeout(function () { detonate(job); }, 5000);
+    playSound("alarm").then(function () {
+      if (launch !== job) return;
+      clearTimeout(job.loadTimer);
+      // Safety net in case "ended" never arrives.
+      var seconds = isFinite(alarm.duration) && alarm.duration > 0 ? alarm.duration : 12;
+      job.endTimer = setTimeout(function () { detonate(job); }, (seconds + 2) * 1000);
+    }).catch(function () {
+      detonate(job);
+    });
+    return job;
+  }
+
   function submitCalc() {
     var kt = readYieldKt();
     var burst = el("effects-burst");
@@ -576,8 +745,7 @@ function formatYield(kt) {
     var effects = computeEffects(kt, air);
     setNote(effects.note);
     markPreset(kt);
-    var blast = drawRingsOnGlobe(effects);
-    showResults(effects, blast);
+    startLaunch(effects);
     return true;
   }
 
@@ -594,9 +762,10 @@ function formatYield(kt) {
   }
 
   // Reopen an earlier blast's own results and make it the current test,
-  // so changing the settings and pressing Submit updates that blast.
+  // so changing the settings and pressing Launch Nuke updates that blast.
   function openBlast(blast) {
     if (!blast) return false;
+    cancelLaunch();
     if (markerEntity) {
       try { source.entities.remove(markerEntity); } catch (err) {}
       markerEntity = null;
@@ -617,7 +786,9 @@ function formatYield(kt) {
     var cartesian = viewer.camera.pickEllipsoid(position, viewer.scene.globe.ellipsoid);
     if (!cartesian) return false;
     var carto = Cesium.Cartographic.fromCartesian(cartesian);
-    // A new spot closes the last results and brings the settings back.
+    // A new spot cancels a launch in progress, closes the last results and
+    // brings the settings back.
+    cancelLaunch();
     hidePopup();
     setGroundZero(
       Cesium.Math.toDegrees(carto.longitude),
@@ -631,8 +802,10 @@ function formatYield(kt) {
     var hud = el("effects-hud");
     if (hud) hud.hidden = !active;
     if (!active) {
+      cancelLaunch();
+      stopSound("blast");
       clearAll();
-      setNote("Pick a weapon or type a yield, then press Submit.");
+      setNote("Pick a weapon or type a yield, then press Launch Nuke.");
     } else {
       updateLede();
     }
@@ -670,7 +843,32 @@ function formatYield(kt) {
       });
     }
     if (closeBtn) closeBtn.addEventListener("click", hidePopup);
-    setNote("Pick a weapon or type a yield, then press Submit.");
+    var goBtn = el("effects-go");
+    if (goBtn && /^\s*submit\s*$/i.test(goBtn.textContent)) goBtn.textContent = "Launch Nuke";
+    var hudBox = el("effects-hud");
+    var chip = el("effects-sound");
+    if (!chip && hudBox) {
+      chip = document.createElement("button");
+      chip.type = "button";
+      chip.id = "effects-sound";
+      chip.className = "effects-sound";
+      var title = hudBox.querySelector("h2");
+      if (title && title.nextSibling) hudBox.insertBefore(chip, title.nextSibling);
+      else hudBox.appendChild(chip);
+    }
+    if (chip) {
+      chip.addEventListener("click", function () { setMuted(!isMuted()); });
+      updateSoundChip();
+    }
+    getSound("alarm");
+    getSound("blast");
+    document.addEventListener("keydown", function (event) {
+      if (launch && (event.key === "Escape" || event.key === "Esc")) {
+        event.preventDefault();
+        skipLaunch();
+      }
+    });
+    setNote("Pick a weapon or type a yield, then press Launch Nuke.");
     updateLede();
     window.addEventListener("resize", positionPopup);
     if (viewer && viewer.scene) {
@@ -728,6 +926,13 @@ function formatYield(kt) {
     getLastEffects: function () { return lastEffects; },
     getRingEntities: function () { return ringEntities.slice(); },
     getBlasts: function () { return blasts.slice(); },
+    isLaunching: function () { return Boolean(launch); },
+    skipLaunch: skipLaunch,
+    cancelLaunch: cancelLaunch,
+    isMuted: isMuted,
+    setMuted: setMuted,
+    soundUrls: SOUND_URLS,
+    getSounds: function () { return sounds; },
     getShownBlast: function () { return shownBlast; },
     openBlast: openBlast,
     hasResult: hasResult,

@@ -97,7 +97,8 @@
     </div>
     <div id="effects-hud" class="effects-hud" hidden>
       <h2>Nuke Simulator</h2>
-      <p class="effects-lede" id="effects-lede">Tap the globe to choose ground zero, then pick a weapon or type a yield and press Submit.</p>
+      <button type="button" id="effects-sound" class="effects-sound" aria-pressed="true">Sound on</button>
+      <p class="effects-lede" id="effects-lede">Tap the globe to choose ground zero, then pick a weapon or type a yield and press Launch Nuke.</p>
       <form id="effects-calc" autocomplete="off">
         <div class="effects-span">
           <label for="effects-weapon">Weapon</label>
@@ -159,7 +160,7 @@
         </div>
         <div class="effects-span">
           <label for="effects-go">Calculate</label>
-          <button id="effects-go" class="effects-go" type="submit">Submit</button>
+          <button id="effects-go" class="effects-go" type="submit">Launch Nuke</button>
         </div>
       </form>
       <div class="presets" id="effects-presets">
