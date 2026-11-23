@@ -73,7 +73,7 @@ function gsa_http_routes()
     }
 
     if ($path === '/api/feeds' && $method === 'GET') {
-        json_out(200, feeds_with_live_aircraft());
+        json_out(200, feeds_with_live_layers());
     }
 
     $files = array(
@@ -1227,7 +1227,7 @@ function outages_build($root, $raw)
     );
 }
 
-function feeds_with_live_aircraft()
+function feeds_with_live_layers()
 {
     global $root;
     $file = $root . '/api/feeds.json';
@@ -1238,10 +1238,17 @@ function feeds_with_live_aircraft()
             $pack = $decoded;
         }
     }
-    // Jamming, ships, and conflicts stay as they are in the static file.
-    // Aircraft comes from the cron cache so visitors never trigger adsb.lol.
+    // Ships and conflicts stay as they are in the static file.
+    // Aircraft and jamming come from the cron caches so visitors never
+    // trigger adsb.lol or api.gpsinterference.com.
     $pack['aircraft'] = gsa_aircraft_snapshot();
+    $pack['jamming'] = gsa_jamming_snapshot();
     return $pack;
+}
+
+function feeds_with_live_aircraft()
+{
+    return feeds_with_live_layers();
 }
 
 function military_snapshot()
