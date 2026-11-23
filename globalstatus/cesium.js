@@ -40,6 +40,7 @@ const state = {
     violence: { source: null, points: [] },
     nuke: { source: null, points: [] },
     quakes: { source: null, points: [] },
+    sats: { source: null, points: [] },
     streets3d: { source: null, points: [] },
   },
   layers: {
@@ -58,6 +59,8 @@ const state = {
     violence: false,
     nuke: false,
     quakes: false,
+    daynight: false,
+    sats: false,
     streets3d: false,
   },
   nuke: { shots: [], yieldIdx: 0, airburst: true },
@@ -354,7 +357,7 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "sats", "streets3d"]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
@@ -376,8 +379,8 @@ async function startGlobe() {
     if (state.layers.animal) loadAnimal();
   }, 600000);
   setInterval(() => {
-    if (state.layers.quakes && !document.hidden) loadQuakes();
-  }, (window.GsaQuakes && window.GsaQuakes.POLL_MS) || 300000);
+    if (state.layers.quakes && !document.hidden) loadQuakes({ force: true }).catch((error) => statusLive(error.message || String(error)));
+  }, (window.GsaQuakes && window.GsaQuakes.POLL_MS) || 60000);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && state.layers.quakes) scheduleQuakes();
   });
@@ -1216,6 +1219,19 @@ function setLayer(layer, on) {
     }
   }
   if (layer === "quakes" && state.layers.quakes) scheduleQuakes();
+  if (layer === "daynight") applyDayNight(state.layers.daynight);
+  if (layer === "sats") {
+    if (state.layers.sats) startSats();
+    else stopSats();
+  }
+  if ((layer === "quakes" || layer === "sats") && !state.layers[layer]) {
+    const selected = state.viewer && state.viewer.selectedEntity;
+    if (selected && selected._live && selected._live.layer === layer) {
+      state.viewer.selectedEntity = undefined;
+      const box = document.getElementById("selected");
+      if (box) box.hidden = true;
+    }
+  }
   if (layer === "amfm") {
     if (state.layers.amfm) {
       loadAmfm().catch((error) => statusLive(error.message || String(error)));
@@ -1252,14 +1268,16 @@ const LAYER_LABEL = {
   designations: "DESIGNATIONS",
   violence: "ATTRIBUTED VIOLENCE",
   nuke: "NUCLEAR",
-  quakes: "QUAKES",
+  quakes: "EARTHQUAKES",
+  daynight: "DAY / NIGHT",
+  sats: "SATELLITES",
   streets3d: "STREETS 3D",
 };
 
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "daynight", "sats", "streets3d"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -2120,7 +2138,8 @@ const LIVE_STYLE = {
   designations: { color: "#f0c14a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DESIGNATION" },
   violence: { color: "#c44b4b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ATTRIBUTED VIOLENCE" },
   nuke: { color: "#7cff6b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "NUCLEAR" },
-  quakes: { color: "#f08a24", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "QUAKES" },
+  quakes: { color: "#f08a24", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "EARTHQUAKES" },
+  sats: { color: "#7fe0ff", outline: MARKER_OUTLINE, size: () => 6, kind: "SATELLITES" },
   streets3d: { color: "#c4a574", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "STREETS 3D" },
 };
 
@@ -2681,6 +2700,8 @@ function cullAircraftHorizon() {
     state.live.designations.source,
     state.live.violence.source,
     state.live.nuke.source,
+    state.live.quakes.source,
+    state.live.sats.source,
     state.live.streets3d.source,
     state.outageSource,
     state.hungerSource,
@@ -2850,12 +2871,12 @@ function scheduleQuakes() {
   loadQuakes().catch((error) => statusLive(error.message || String(error)));
 }
 
-async function loadQuakes() {
+async function loadQuakes(opts) {
   if (!window.GsaQuakes) return;
   if (document.hidden) return;
   if (quakesLoading) return quakesLoading;
   quakesLoading = (async () => {
-    const result = await window.GsaQuakes.fetchFeed();
+    const result = await window.GsaQuakes.fetchFeed(opts);
     state.live.quakes.points = result.points || [];
     setCount("quakes", state.live.quakes.points.length);
     placeLiveLayer("quakes", state.live.quakes.points);
@@ -3002,10 +3023,22 @@ function showLive(item) {
   box.hidden = false;
   let extra = "";
   if (item.layer === "quakes") {
-    const mag = item.mag != null ? `Magnitude ${item.mag}` : "";
-    const bits = [mag, item.place, item.timeText].filter(Boolean).map((part) => esc(String(part)));
+    const mag = item.mag != null ? `Magnitude ${Number(item.mag).toFixed(1)}` : "";
+    const depth = Number.isFinite(item.depthKm) ? `Depth ${Math.round(item.depthKm)} km` : "";
+    const bits = [mag, item.place, item.timeText, depth].filter(Boolean).map((part) => esc(String(part)));
     extra = bits.length ? `<br>${bits.join("<br>")}` : "";
-    if (item.url) extra += `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">USGS event</a>`;
+    if (item.url) extra += `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">USGS event page</a>`;
+  }
+  else if (item.layer === "sats") {
+    const bits = [
+      `NORAD ${item.norad}${item.intl ? ` · ${item.intl}` : ""}`,
+      Number.isFinite(item.altKm) ? `Altitude ${Math.round(item.altKm).toLocaleString("en-US")} km (${Math.round(item.altKm * 0.621371).toLocaleString("en-US")} mi)` : "",
+      Number.isFinite(item.speedKms) ? `Speed ${item.speedKms.toFixed(2)} km/s` : "",
+      item.groupLabel,
+      item.docked && item.docked.length ? `Docked here: ${item.docked.join(", ")}` : "",
+    ].filter(Boolean).map((part) => esc(String(part)));
+    extra = `<br>${bits.join("<br>")}`;
+    extra += `<br><a href="https://celestrak.org/satcat/table-satcat.php?CATNR=${encodeURIComponent(item.norad)}" target="_blank" rel="noreferrer">CelesTrak record</a>`;
   }
   else if (item.url) extra = `<br><a href="${esc(item.url)}" target="_blank" rel="noreferrer">CFR briefing</a>`;
   else if (item.pct != null) extra = `<br>${item.pct}% bad NACp · ${item.bad || 0} degraded`;
@@ -3138,6 +3171,154 @@ async function openAircraft(item) {
   }
 }
 
+// DAY / NIGHT · Cesium's own sun lighting, sun, moon, and star background.
+// Off restores the site's normal look (no lighting, no sky box, plain dark background).
+let dayNightTimer = 0;
+
+function applyDayNight(on) {
+  const viewer = state.viewer;
+  if (!viewer) return;
+  const scene = viewer.scene;
+  if (on) {
+    if (!state.dayNightSky) state.dayNightSky = Cesium.SkyBox.createEarthSkyBox();
+    if (!scene.sun) scene.sun = new Cesium.Sun();
+    if (!scene.moon) scene.moon = new Cesium.Moon();
+    scene.skyBox = state.dayNightSky;
+    scene.skyBox.show = true;
+    scene.sun.show = true;
+    scene.moon.show = true;
+    viewer.clock.currentTime = Cesium.JulianDate.now();
+    scene.globe.enableLighting = true;
+    if (!dayNightTimer) {
+      dayNightTimer = setInterval(() => {
+        if (state.viewer) state.viewer.clock.currentTime = Cesium.JulianDate.now();
+      }, 60000);
+    }
+    setCount("daynight", "ON");
+  } else {
+    scene.globe.enableLighting = false;
+    if (scene.skyBox) scene.skyBox.show = false;
+    if (scene.sun) scene.sun.show = false;
+    if (scene.moon) scene.moon.show = false;
+    if (dayNightTimer) {
+      clearInterval(dayNightTimer);
+      dayNightTimer = 0;
+    }
+    setCount("daynight", "—");
+  }
+  if (scene.requestRender) scene.requestRender();
+}
+
+// SATELLITES · CelesTrak orbits, positions worked out in the browser with satellite.js (sats.js).
+const SAT_TICK_MS = 1500;
+let satTimer = 0;
+let satToken = 0;
+
+async function startSats() {
+  const viewer = state.viewer;
+  const layer = state.live.sats;
+  if (!viewer || !window.GsaSats) return;
+  const token = ++satToken;
+  // Orbits older than the cache window are fetched again when the layer is turned back on.
+  if (layer.records && Date.now() - (layer.fetchedAt || 0) > window.GsaSats.CACHE_MS) {
+    layer.records = null;
+    layer.entitiesBuilt = false;
+  }
+  if (!layer.records) {
+    setCount("sats", "…");
+    try {
+      const [lib, data] = await Promise.all([window.GsaSats.loadLib(), window.GsaSats.fetchElements()]);
+      if (token !== satToken || !state.layers.sats) return;
+      layer.lib = lib;
+      layer.records = window.GsaSats.buildRecords(lib, data.groups, phoneLayout());
+      layer.fetchedAt = data.fetchedAt;
+      if (data.errors && data.errors.length) console.warn("SATELLITES:", data.errors.join("; "));
+    } catch (error) {
+      if (token !== satToken) return;
+      setCount("sats", "—");
+      statusLive(error.message || String(error));
+      return;
+    }
+  }
+  if (!layer.entitiesBuilt) buildSatEntities();
+  tickSats();
+  if (!satTimer) satTimer = setInterval(tickSats, SAT_TICK_MS);
+}
+
+function stopSats() {
+  satToken += 1;
+  if (satTimer) {
+    clearInterval(satTimer);
+    satTimer = 0;
+  }
+}
+
+function buildSatEntities() {
+  const layer = state.live.sats;
+  const source = layer.source;
+  source.entities.removeAll();
+  const lib = layer.lib;
+  window.GsaSats.propagateAll(lib, layer.records, new Date());
+  // Modules and visiting craft docked at a station share its position. Draw one pin
+  // (the station, listed first by CelesTrak) and name the docked ones in its popup.
+  const hubs = [];
+  for (const rec of layer.records) {
+    rec.docked = [];
+    rec.dockedTo = null;
+    if (rec.group !== "stations" || !Number.isFinite(rec.lat)) continue;
+    const here = Cesium.Cartesian3.fromDegrees(rec.lon, rec.lat, rec.altKm * 1000);
+    const hub = hubs.find((item) => Cesium.Cartesian3.distance(item.at, here) < 5000);
+    if (hub) {
+      rec.dockedTo = hub.rec;
+      hub.rec.docked.push(rec.name);
+    } else hubs.push({ rec, at: here });
+  }
+  for (const rec of layer.records) {
+    rec.entity = null;
+    if (rec.dockedTo) continue;
+    rec.layer = "sats";
+    rec.kind = "SATELLITES";
+    const start = Number.isFinite(rec.lat)
+      ? Cesium.Cartesian3.fromDegrees(rec.lon, rec.lat, rec.altKm * 1000)
+      : Cesium.Cartesian3.ZERO;
+    const entity = source.entities.add({
+      id: rec.id,
+      name: rec.name,
+      position: new Cesium.ConstantPositionProperty(start),
+      point: {
+        pixelSize: rec.size,
+        color: Cesium.Color.fromCssColorString(rec.color),
+        outlineColor: Cesium.Color.fromCssColorString(MARKER_OUTLINE),
+        outlineWidth: 1,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    });
+    entity._live = rec;
+    rec.entity = entity;
+  }
+  layer.entitiesBuilt = true;
+}
+
+function tickSats() {
+  const layer = state.live.sats;
+  if (!state.layers.sats || !layer.records || document.hidden) return;
+  window.GsaSats.propagateAll(layer.lib, layer.records, new Date());
+  const shown = [];
+  for (const rec of layer.records) {
+    if (!rec.entity) continue;
+    if (!Number.isFinite(rec.lat)) continue;
+    rec.entity.position.setValue(Cesium.Cartesian3.fromDegrees(rec.lon, rec.lat, rec.altKm * 1000));
+    shown.push(rec);
+  }
+  const countChanged = layer.points.length !== shown.length;
+  layer.points = shown;
+  setCount("sats", shown.length);
+  if (countChanged) statusLive();
+  const selected = state.viewer && state.viewer.selectedEntity;
+  const box = document.getElementById("selected");
+  if (selected && selected._live && selected._live.layer === "sats" && box && !box.hidden) showLive(selected._live);
+}
+
 function statusLive(error) {
   const jam = state.live.jamming.points.length;
   const airPoints = state.live.aircraft.points;
@@ -3189,8 +3370,12 @@ function statusLive(error) {
       : "ATTRIBUTED VIOLENCE",
     state.layers.nuke ? `NUCLEAR ${state.nuke.shots.length}` : "NUCLEAR",
     state.live.quakes.points.length
-      ? `QUAKES ${state.live.quakes.points.length}`
-      : "QUAKES",
+      ? `EARTHQUAKES ${state.live.quakes.points.length}`
+      : "EARTHQUAKES",
+    state.layers.daynight ? "DAY / NIGHT ON" : "DAY / NIGHT",
+    state.live.sats.points.length
+      ? `SATELLITES ${state.live.sats.points.length}`
+      : "SATELLITES",
     state.layers.streets3d ? `STREETS 3D ${state.live.streets3d.points.length}` : "STREETS 3D",
   ];
   if (error) parts.push(error);

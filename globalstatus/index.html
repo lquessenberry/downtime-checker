@@ -76,7 +76,9 @@
       <button type="button" class="layer" data-layer-toggle="designations" aria-pressed="false"><span class="layer-name"><span class="swatch designations"></span> DESIGNATIONS</span><span class="layer-meta"><em data-count="designations">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="violence" aria-pressed="false"><span class="layer-name"><span class="swatch violence"></span> ATTRIBUTED VIOLENCE</span><span class="layer-meta"><em data-count="violence">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="nuke" aria-pressed="false"><span class="layer-name"><span class="swatch nuke"></span> NUCLEAR</span><span class="layer-meta"><em data-count="nuke">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="layer-name"><span class="swatch quakes"></span> QUAKES</span><span class="layer-meta"><em data-count="quakes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="layer-name"><span class="swatch quakes"></span> EARTHQUAKES</span><span class="layer-meta"><em data-count="quakes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="daynight" aria-pressed="false"><span class="layer-name"><span class="swatch daynight"></span> DAY / NIGHT</span><span class="layer-meta"><em data-count="daynight">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="sats" aria-pressed="false"><span class="layer-name"><span class="swatch sats"></span> SATELLITES</span><span class="layer-meta"><em data-count="sats">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="streets3d" aria-pressed="false"><span class="layer-name"><span class="swatch streets3d"></span> STREETS 3D</span><span class="layer-meta"><em data-count="streets3d">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
     </div>
@@ -264,7 +266,9 @@
       <button type="button" class="layer" data-layer-toggle="designations" aria-pressed="false"><span class="swatch designations"></span> DESIGNATIONS <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="violence" aria-pressed="false"><span class="swatch violence"></span> ATTRIBUTED VIOLENCE <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="nuke" aria-pressed="false"><span class="swatch nuke"></span> NUCLEAR <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="swatch quakes"></span> QUAKES <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="swatch quakes"></span> EARTHQUAKES <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="daynight" aria-pressed="false"><span class="swatch daynight"></span> DAY / NIGHT <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="sats" aria-pressed="false"><span class="swatch sats"></span> SATELLITES <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="streets3d" aria-pressed="false"><span class="swatch streets3d"></span> STREETS 3D <span class="switch" aria-hidden="true"></span></button>
     </div>
     <div id="status-line"><span id="status-track">CESIUM READY · LOADING POWER OUTAGES, JAMMED GPS SIGNALS, AND CONFLICT TRACKER</span></div>
@@ -305,6 +309,7 @@
 
   <script src="/blast.js"></script>
   <script src="/quakes.js"></script>
+  <script src="/sats.js"></script>
   <script src="/cesium.js"></script>
 </body>
 </html>
