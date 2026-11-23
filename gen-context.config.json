@@ -9,7 +9,9 @@
     "rust/crates/downtime-server",
     "rust/crates/downtime-cli",
     "rust/crates/globe-native",
+    "rust/crates/rustle",
     "globalstatus",
+    "globalstatus-wasm",
     "visualizer",
     "scripts",
     "docs"

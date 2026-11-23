@@ -1,30 +1,33 @@
 # Stack snapshot (between phases)
 
-Generated with SigMap **v8.85.1** on the `feat/map-assets-batch3` tree (Rust native + WASM + Cesium web globe).
+Generated with SigMap **v8.88.0** on `feat/rustle-leaves` (QuietEarth wasm + Rustle + Cesium leftover).
 
 | Layer | Where | Engine / runtime |
 | --- | --- | --- |
-| Cesium web globe | `globalstatus/cesium.js`, `router.php` | CesiumJS **1.128** was what live `cesium.com` served; docs pin **1.134** until native succeeds. Vendored minified `globalstatus/vendor/cesium` is **not** indexed (no symbols). Apache-2.0 `Source/` only for RE. |
+| QuietEarth web | `globalstatus-wasm/index.html`, `globe-native` wasm | eframe 0.32 / wgpu 25, WebGPU + WebGL2. Staging homepage. |
+| Canvas HUD | `globalstatus-wasm/hud.html`, `globe.js` | Lightweight WebGL sphere; `/hud.html` |
+| Cesium web globe | `globalstatus/cesium.js`, `router.php` | Live leftover. Vendored minified Cesium **not** indexed. |
 | Visualizer | `visualizer/lib/*.mjs`, `server.mjs` | Node datapack / poller (being replaced by `downtime-server`) |
 | Rust core | `rust/crates/downtime-core` | Catalog, blast, layers, geo. `no_std` + alloc |
+| Rustle | `rust/crates/rustle` | Git-text leaves (Drupal analog) |
 | Rust native I/O | `downtime-native`, `downtime-server`, `downtime-cli` | tokio multi-thread HTTP + probes |
-| WebAssembly | `rust/crates/downtime-wasm` | wasm-bindgen bridge (`blast_rings_json`, catalog) |
-| Native globe | `rust/crates/globe-native` | eframe 0.32 / wgpu 25, WGS84 ellipsoid, map_assets |
+| WebAssembly helpers | `rust/crates/downtime-wasm` | wasm-bindgen bridge (`blast_rings_json`, catalog, rustle json) |
+| Native globe | `rust/crates/globe-native` | QuietEarth desktop + wasm `WebHandle` |
 
 ## This SigMap run
 
+Full numbers: [COVERAGE.md](./COVERAGE.md). Wiki: [WIKI.md](./WIKI.md).
+
 | Metric | Value |
 | --- | --- |
-| Files scanned | 112 |
-| Files with symbols | 112 (100% of scanned) |
-| Symbols | 980 |
-| Indexed files (wiki) | 117 |
-| Modules | rust 43 · scripts 29 · visualizer 21 · globalstatus 6 · docs 13 |
-| Token reduction | 219,013 → 409 (~100% in overview) |
-| `--ci` coverage | 56% vs 80% target (markdown/docs pull it down; not a product fail) |
-
-Regenerate between phase bands and after each map-asset batch:
+| Files scanned | 126 |
+| Symbols | 1,202 |
+| Indexed files (wiki) | 131 · 7 modules |
+| `--ci` coverage | 59% vs 80% target / 50% gate (markdown/docs pull it down) |
+| Health | 100/100 A |
+| Source-root coverage | 93% (86/92) |
 
 ```bash
 scripts/gsa-cycle/sigmap.sh
 ```
+
