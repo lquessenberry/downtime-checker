@@ -331,6 +331,18 @@ function formatYield(kt) {
     if (typeof hooks.statusLive === "function") hooks.statusLive();
   }
 
+  function circlePositions(lon, lat, miles) {
+    var R = 3958.8, n = 128, d = miles / R;
+    var la = lat * Math.PI / 180, lo = lon * Math.PI / 180, pts = [];
+    for (var i = 0; i < n; i++) {
+      var brg = 2 * Math.PI * i / n;
+      var la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(brg));
+      var lo2 = lo + Math.atan2(Math.sin(brg) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2));
+      pts.push(Cesium.Cartesian3.fromRadians(lo2, la2));
+    }
+    return pts;
+  }
+
   function colorMaterial(css, opacity) {
     var color = Cesium.Color.fromCssColorString(css);
     return color.withAlpha(opacity);
@@ -374,25 +386,40 @@ function formatYield(kt) {
     clearRings();
     if (!groundZero || !source || typeof Cesium === "undefined") return;
     var ordered = effects.rings.slice().sort(function (a, b) { return b.miles - a.miles; });
-    var position = Cesium.Cartesian3.fromDegrees(groundZero.lon, groundZero.lat);
-    ordered.forEach(function (ring) {
-      var meters = ring.miles * M_PER_MILE;
-      if (!(meters > 0) || !isFinite(meters)) return;
-      var entity = source.entities.add({
+    var ascending = ordered.slice().reverse();
+    // Each ring is drawn as a band from the next smaller ring out to its own
+    // radius, so bands never overlap and every color matches the popup dot.
+    ascending.forEach(function (ring, index) {
+      if (!(ring.miles > 0) || !isFinite(ring.miles)) return;
+      var inner = 0;
+      for (var k = index - 1; k >= 0; k--) {
+        if (ascending[k].miles > 0 && ascending[k].miles < ring.miles) { inner = ascending[k].miles; break; }
+      }
+      var outerPts = circlePositions(groundZero.lon, groundZero.lat, ring.miles);
+      var hierarchy = inner > 0
+        ? new Cesium.PolygonHierarchy(outerPts, [new Cesium.PolygonHierarchy(circlePositions(groundZero.lon, groundZero.lat, inner))])
+        : new Cesium.PolygonHierarchy(outerPts);
+      var band = source.entities.add({
         name: ring.name,
-        position: position,
-        ellipse: {
-          semiMajorAxis: meters,
-          semiMinorAxis: meters,
-          height: 0,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          material: colorMaterial(ring.color, ring.opacity),
-          outline: true,
-          outlineColor: colorMaterial(ring.stroke, 0.95),
-          outlineWidth: 2.5
+        polygon: {
+          hierarchy: hierarchy,
+          material: colorMaterial(ring.color, Math.max(ring.opacity, 0.6)),
+          classificationType: Cesium.ClassificationType.BOTH,
+          zIndex: index
         }
       });
-      ringEntities.push(entity);
+      ringEntities.push(band);
+      var edge = source.entities.add({
+        name: ring.name + " edge",
+        polyline: {
+          positions: outerPts.concat([outerPts[0]]),
+          width: 2,
+          clampToGround: true,
+          material: colorMaterial(ring.stroke, 0.95),
+          zIndex: index
+        }
+      });
+      ringEntities.push(edge);
     });
     lastEffects = effects;
     if (typeof hooks.setCount === "function") hooks.setCount("effects", 1);
