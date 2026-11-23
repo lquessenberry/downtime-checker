@@ -227,7 +227,7 @@
     "Comoros",
     "Congo",
     "Costa Rica",
-    "Côte d'Ivoire",
+    "C\u00f4te d'Ivoire",
     "Croatia",
     "Cuba",
     "Cyprus",
@@ -369,7 +369,5 @@
     "Uzbekistan",
     "Vanuatu",
     "Vietnam"
-  ],
-  "fetchedAt": 1795299183385,
-  "source": "repo catalogs"
+  ]
 }
