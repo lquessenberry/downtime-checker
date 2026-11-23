@@ -275,6 +275,13 @@ function formatYield(kt) {
   var ringEntities = [];
   var lastEffects = null;
   var positioned = false;
+  // Every submitted test stays on the map as its own blast with its own
+  // entities and results. currentBlast is the one tied to the current ground
+  // zero (re-submitting there updates it); shownBlast is the one in the popup.
+  var blasts = [];
+  var blastSeq = 0;
+  var currentBlast = null;
+  var shownBlast = null;
 
   function isMobile() {
     return window.matchMedia && window.matchMedia("(max-width: 800px)").matches;
@@ -297,6 +304,7 @@ function formatYield(kt) {
 
   function hidePopup() {
     var popup = el("effects-results");
+    shownBlast = null;
     if (!popup) return;
     popup.hidden = true;
     popup.classList.remove("mobile-sheet");
@@ -304,15 +312,40 @@ function formatYield(kt) {
     if (hud && active) hud.hidden = false;
   }
 
-  function clearRings() {
-    if (source) {
-      ringEntities.forEach(function (entity) {
-        try { source.entities.remove(entity); } catch (err) {}
-      });
-    }
+  function removeEntities(list) {
+    if (!source) return;
+    list.forEach(function (entity) {
+      try { source.entities.remove(entity); } catch (err) {}
+    });
+  }
+
+  function rebuildRingList() {
     ringEntities = [];
-    lastEffects = null;
-    if (typeof hooks.setCount === "function") hooks.setCount("effects", 0);
+    blasts.forEach(function (blast) {
+      ringEntities = ringEntities.concat(blast.entities);
+    });
+    lastEffects = blasts.length ? blasts[blasts.length - 1].effects : null;
+    if (typeof hooks.setCount === "function") hooks.setCount("effects", blasts.length);
+  }
+
+  function removeBlast(blast) {
+    removeEntities(blast.entities);
+    if (blast.marker) removeEntities([blast.marker]);
+    blasts = blasts.filter(function (b) { return b !== blast; });
+    if (currentBlast === blast) currentBlast = null;
+    if (shownBlast === blast) shownBlast = null;
+    rebuildRingList();
+  }
+
+  function clearRings() {
+    blasts.slice().forEach(function (blast) {
+      removeEntities(blast.entities);
+      if (blast.marker) removeEntities([blast.marker]);
+    });
+    blasts = [];
+    currentBlast = null;
+    shownBlast = null;
+    rebuildRingList();
   }
 
   function clearMarker() {
@@ -348,15 +381,9 @@ function formatYield(kt) {
     return color.withAlpha(opacity);
   }
 
-  function setGroundZero(lon, lat) {
-    if (!active || !source || typeof Cesium === "undefined") return;
-    groundZero = { lon: lon, lat: lat };
-    var position = Cesium.Cartesian3.fromDegrees(lon, lat);
-    if (markerEntity) {
-      markerEntity.position = position;
-    } else {
-      markerEntity = source.entities.add({
-        id: "effects-ground-zero",
+  function markerOptions(position, text, id) {
+    return {
+        id: id,
         position: position,
         point: {
           pixelSize: 14,
@@ -367,7 +394,7 @@ function formatYield(kt) {
           disableDepthTestDistance: Number.POSITIVE_INFINITY
         },
         label: {
-          text: "Ground zero",
+          text: text,
           font: "14px IBM Plex Mono, monospace",
           fillColor: Cesium.Color.WHITE,
           outlineColor: Cesium.Color.BLACK,
@@ -377,14 +404,36 @@ function formatYield(kt) {
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY
         }
-      });
+    };
+  }
+
+  function setGroundZero(lon, lat) {
+    if (!active || !source || typeof Cesium === "undefined") return;
+    groundZero = { lon: lon, lat: lat };
+    currentBlast = null;
+    var position = Cesium.Cartesian3.fromDegrees(lon, lat);
+    if (markerEntity) {
+      markerEntity.position = position;
+    } else {
+      markerEntity = source.entities.add(markerOptions(position, "Ground zero", "effects-ground-zero"));
     }
     updateLede();
   }
 
   function drawRingsOnGlobe(effects) {
-    clearRings();
-    if (!groundZero || !source || typeof Cesium === "undefined") return;
+    if (!groundZero || !source || typeof Cesium === "undefined") return null;
+    // Re-submitting at the same ground zero updates that blast in place.
+    // A new spot adds a new blast and keeps every earlier one on the map.
+    if (currentBlast) removeBlast(currentBlast);
+    blastSeq += 1;
+    var blast = {
+      id: blastSeq,
+      groundZero: { lon: groundZero.lon, lat: groundZero.lat },
+      effects: effects,
+      entities: [],
+      marker: null
+    };
+    var base = blastSeq * 32;
     var ordered = effects.rings.slice().sort(function (a, b) { return b.miles - a.miles; });
     var ascending = ordered.slice().reverse();
     // Each ring is drawn as a band from the next smaller ring out to its own
@@ -405,10 +454,11 @@ function formatYield(kt) {
           hierarchy: hierarchy,
           material: colorMaterial(ring.color, Math.max(ring.opacity, 0.6)),
           classificationType: Cesium.ClassificationType.BOTH,
-          zIndex: index
+          zIndex: base + index
         }
       });
-      ringEntities.push(band);
+      band._effectsBlast = blast;
+      blast.entities.push(band);
       var edge = source.entities.add({
         name: ring.name + " edge",
         polyline: {
@@ -416,13 +466,27 @@ function formatYield(kt) {
           width: 2,
           clampToGround: true,
           material: colorMaterial(ring.stroke, 0.95),
-          zIndex: index
+          zIndex: base + index
         }
       });
-      ringEntities.push(edge);
+      edge._effectsBlast = blast;
+      blast.entities.push(edge);
     });
-    lastEffects = effects;
-    if (typeof hooks.setCount === "function") hooks.setCount("effects", 1);
+    // The pending ground-zero pin becomes this blast's own marker.
+    var markerText = "Ground zero · " + formatYield(effects.kt);
+    if (markerEntity) {
+      source.entities.remove(markerEntity);
+      markerEntity = null;
+    }
+    blast.marker = source.entities.add(markerOptions(
+      Cesium.Cartesian3.fromDegrees(blast.groundZero.lon, blast.groundZero.lat),
+      markerText,
+      "effects-ground-zero-" + blast.id
+    ));
+    blast.marker._effectsBlast = blast;
+    blasts.push(blast);
+    currentBlast = blast;
+    rebuildRingList();
     if (ordered.length && viewer) {
       var largestMiles = ordered[0].miles;
       var latRad = groundZero.lat * Math.PI / 180;
@@ -440,6 +504,7 @@ function formatYield(kt) {
       });
     }
     if (typeof hooks.statusLive === "function") hooks.statusLive();
+    return blast;
   }
 
   function positionPopup() {
@@ -461,8 +526,9 @@ function formatYield(kt) {
     var maxY = rect.bottom - Math.min(h, rect.height - 24) - pad;
     var x = rect.right - w - pad;
     var y = rect.top + pad;
-    if (groundZero) {
-      var cartesian = Cesium.Cartesian3.fromDegrees(groundZero.lon, groundZero.lat);
+    var anchor = shownBlast ? shownBlast.groundZero : groundZero;
+    if (anchor) {
+      var cartesian = Cesium.Cartesian3.fromDegrees(anchor.lon, anchor.lat);
       var pos = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, cartesian);
       if (pos && isFinite(pos.x) && isFinite(pos.y)) {
         y = Math.max(rect.top + pad, Math.min(pos.y - 36, maxY));
@@ -475,7 +541,7 @@ function formatYield(kt) {
     popup.style.transform = "none";
   }
 
-  function showResults(effects) {
+  function showResults(effects, blast) {
     var yieldLine = el("effects-yield-line");
     var popupNote = el("effects-popup-note");
     var rows = el("effects-rows");
@@ -484,12 +550,12 @@ function formatYield(kt) {
     if (popupNote) popupNote.textContent = effects.note;
     if (rows) rows.innerHTML = effects.html;
     if (!popup) return;
+    shownBlast = blast || null;
     popup.hidden = false;
-    if (isMobile()) {
-      popup.classList.add("mobile-sheet");
-      var hud = el("effects-hud");
-      if (hud) hud.hidden = true;
-    }
+    // The results open where the settings panel sits, so close the settings.
+    var hud = el("effects-hud");
+    if (hud) hud.hidden = true;
+    if (isMobile()) popup.classList.add("mobile-sheet");
     positionPopup();
   }
 
@@ -500,7 +566,6 @@ function formatYield(kt) {
     if (kt === null) {
       setNote("Enter a yield greater than zero.");
       hidePopup();
-      clearRings();
       if (typeof hooks.statusLive === "function") hooks.statusLive();
       return false;
     }
@@ -511,16 +576,49 @@ function formatYield(kt) {
     var effects = computeEffects(kt, air);
     setNote(effects.note);
     markPreset(kt);
-    drawRingsOnGlobe(effects);
-    showResults(effects);
+    var blast = drawRingsOnGlobe(effects);
+    showResults(effects, blast);
+    return true;
+  }
+
+  function blastAt(position) {
+    if (!viewer || !position) return null;
+    var picked;
+    try { picked = viewer.scene.pick(position); } catch (err) { return null; }
+    if (!picked) return null;
+    var entity = picked.id || (picked.primitive && picked.primitive.id);
+    if (entity && entity._effectsBlast && blasts.indexOf(entity._effectsBlast) !== -1) {
+      return entity._effectsBlast;
+    }
+    return null;
+  }
+
+  // Reopen an earlier blast's own results and make it the current test,
+  // so changing the settings and pressing Submit updates that blast.
+  function openBlast(blast) {
+    if (!blast) return false;
+    if (markerEntity) {
+      try { source.entities.remove(markerEntity); } catch (err) {}
+      markerEntity = null;
+    }
+    groundZero = { lon: blast.groundZero.lon, lat: blast.groundZero.lat };
+    currentBlast = blast;
+    setNote(blast.effects.note);
+    markPreset(blast.effects.kt);
+    updateLede();
+    showResults(blast.effects, blast);
     return true;
   }
 
   function handleClick(position) {
     if (!active || !viewer) return false;
+    var hit = blastAt(position);
+    if (hit) return openBlast(hit);
     var cartesian = viewer.camera.pickEllipsoid(position, viewer.scene.globe.ellipsoid);
     if (!cartesian) return false;
     var carto = Cesium.Cartographic.fromCartesian(cartesian);
+    // A new spot closes the last results and brings the settings back.
+    hidePopup();
     setGroundZero(
       Cesium.Math.toDegrees(carto.longitude),
       Cesium.Math.toDegrees(carto.latitude)
@@ -577,11 +675,21 @@ function formatYield(kt) {
     window.addEventListener("resize", positionPopup);
     if (viewer && viewer.scene) {
       viewer.scene.postRender.addEventListener(positionPopup);
+      // The site's click handler ignores clicks on map entities, so clicks on
+      // an earlier blast's rings or marker are handled here.
+      var blastClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      blastClicks.setInputAction(function (click) {
+        if (!active) return;
+        var hit = blastAt(click.position);
+        if (!hit) return;
+        openBlast(hit);
+        if (viewer.selectedEntity && viewer.selectedEntity._effectsBlast) viewer.selectedEntity = undefined;
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
     }
   }
 
   function hasResult() {
-    return Boolean(lastEffects && lastEffects.rings && lastEffects.rings.length);
+    return blasts.length > 0;
   }
 
   function setInputs(amount, unit, burst) {
@@ -619,6 +727,9 @@ function formatYield(kt) {
     getGroundZero: function () { return groundZero; },
     getLastEffects: function () { return lastEffects; },
     getRingEntities: function () { return ringEntities.slice(); },
+    getBlasts: function () { return blasts.slice(); },
+    getShownBlast: function () { return shownBlast; },
+    openBlast: openBlast,
     hasResult: hasResult,
     isActive: function () { return active; }
   };
