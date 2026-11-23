@@ -698,8 +698,10 @@ fn mime_of(path: &Path) -> &'static str {
         Some("css") => "text/css; charset=utf-8",
         Some("json") => "application/json; charset=utf-8",
         Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
         Some("svg") => "image/svg+xml",
         Some("ico") => "image/x-icon",
+        Some("wasm") => "application/wasm",
         _ => "application/octet-stream",
     }
 }
@@ -826,6 +828,17 @@ fn parse_tile_path(path: &str) -> Option<(String, String, &'static str, u32, u32
             Some((
                 upstream,
                 "tile.openstreetmap.org".into(),
+                "image/png",
+                z,
+                x,
+                y,
+            ))
+        }
+        "opentopo" if z <= 12 => {
+            let upstream = format!("/{z}/{x}/{y}.png");
+            Some((
+                upstream,
+                "a.tile.opentopomap.org".into(),
                 "image/png",
                 z,
                 x,
@@ -1123,6 +1136,8 @@ mod tests {
         let osm = parse_tile_path("/tiles/osm/3/2/4.png").unwrap();
         assert_eq!(osm.1, "tile.openstreetmap.org");
         assert_eq!(osm.0, "/3/2/4.png");
+        let topo = parse_tile_path("/tiles/opentopo/2/0/1.png").unwrap();
+        assert_eq!(topo.1, "a.tile.opentopomap.org");
         let gibs = parse_tile_path("/tiles/gibs/4/1/2.jpg").unwrap();
         assert!(gibs.0.contains("/4/2/1.jpg"), "{}", gibs.0);
         assert!(parse_tile_path("/tiles/osm/3/20/1.png").is_none());

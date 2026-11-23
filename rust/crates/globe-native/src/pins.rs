@@ -1,7 +1,7 @@
 //! Catalog data for the globe, loaded through `downtime-core`/`downtime-native`.
 
 use std::collections::BTreeMap;
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 use std::path::Path;
 
 use downtime_core::{capital, load_catalog, Loaded, CATALOG_FILES};
@@ -76,7 +76,12 @@ pub fn load_embedded() -> PinData {
 
 /// Load catalogs from `root`, else search upward from the current directory
 /// and from the executable, else fall back to the built-in catalogs.
-#[cfg(not(target_os = "android"))]
+#[cfg(any(target_os = "android", target_arch = "wasm32"))]
+pub fn load(_root: Option<&std::path::Path>) -> PinData {
+    load_embedded()
+}
+
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 pub fn load(root: Option<&Path>) -> PinData {
     let root = match root {
         Some(r) => Some(r.to_path_buf()),

@@ -1,7 +1,8 @@
 //! OSM / GIBS raster tiles stitched into the equirect albedo QuietEarth samples.
 //!
-//! Desktop only (needs TLS). Android stays on the compiled Blue Marble until
-//! the APK grows INTERNET + a tile cache.
+//! Desktop uses TLS (`downtime-native`). The wasm cut fetches same-origin
+//! `/tiles/{osm|opentopo|gibs}/…` through downtime-server. Android stays on
+//! the compiled Blue Marble until the APK grows INTERNET + a tile cache.
 
 use image::{Rgba, RgbaImage};
 
@@ -44,6 +45,15 @@ impl TileLayer {
         match self {
             TileLayer::Gibs => 8,
             _ => 12,
+        }
+    }
+
+    /// Same-origin proxy path downtime-server allowlists.
+    pub fn proxy_url(self, z: u32, x: u32, y: u32) -> String {
+        match self {
+            TileLayer::Osm => format!("/tiles/osm/{z}/{x}/{y}.png"),
+            TileLayer::OpenTopo => format!("/tiles/opentopo/{z}/{x}/{y}.png"),
+            TileLayer::Gibs => format!("/tiles/gibs/{z}/{x}/{y}.jpg"),
         }
     }
 }
@@ -101,7 +111,7 @@ pub fn overlay_on_marble(marble: &RgbaImage, streets: &RgbaImage) -> RgbaImage {
     out
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 pub fn stitch_layer(layer: TileLayer, z: u32) -> Result<RgbaImage, String> {
     let z = z.min(layer.max_z()).min(3);
     let n = 1u32 << z;
@@ -118,6 +128,49 @@ pub fn stitch_layer(layer: TileLayer, z: u32) -> Result<RgbaImage, String> {
                 std::time::Duration::from_secs(10),
             )
             .map_err(|err| err.message)?;
+            let tile = image::load_from_memory(&bytes)
+                .map_err(|err| err.to_string())?
+                .to_rgba8();
+            let tw = tile.width().min(TILE);
+            let th = tile.height().min(TILE);
+            for ty in 0..th {
+                for tx in 0..tw {
+                    mosaic.put_pixel(x * TILE + tx, y * TILE + ty, *tile.get_pixel(tx, ty));
+                }
+            }
+        }
+    }
+    Ok(mosaic)
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
+    use wasm_bindgen::JsCast;
+    let window = web_sys::window().ok_or_else(|| "no window".to_string())?;
+    let resp_val = wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(url))
+        .await
+        .map_err(|_| format!("fetch {url}"))?;
+    let resp: web_sys::Response = resp_val.dyn_into().map_err(|_| "response".to_string())?;
+    if !resp.ok() {
+        return Err(format!("{url} HTTP {}", resp.status()));
+    }
+    let buf = wasm_bindgen_futures::JsFuture::from(
+        resp.array_buffer().map_err(|_| "arrayBuffer".to_string())?,
+    )
+    .await
+    .map_err(|_| format!("body {url}"))?;
+    Ok(js_sys::Uint8Array::new(&buf).to_vec())
+}
+
+/// Browser cut: stitch z=2 (16 tiles) via `/tiles/…` so OSM CORS never hits the page.
+#[cfg(target_arch = "wasm32")]
+pub async fn stitch_layer_web(layer: TileLayer, z: u32) -> Result<RgbaImage, String> {
+    let z = z.min(layer.max_z()).min(2);
+    let n = 1u32 << z;
+    let mut mosaic = RgbaImage::new(n * TILE, n * TILE);
+    for y in 0..n {
+        for x in 0..n {
+            let bytes = fetch_bytes(&layer.proxy_url(z, x, y)).await?;
             let tile = image::load_from_memory(&bytes)
                 .map_err(|err| err.to_string())?
                 .to_rgba8();
@@ -158,5 +211,15 @@ mod tests {
         streets.put_pixel(2, 1, Rgba([40, 50, 60, 255]));
         let out = overlay_on_marble(&marble, &streets);
         assert_eq!(out.get_pixel(0, 0).0, [10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn proxy_urls_match_the_server_allowlist() {
+        assert_eq!(TileLayer::Osm.proxy_url(2, 1, 0), "/tiles/osm/2/1/0.png");
+        assert_eq!(
+            TileLayer::OpenTopo.proxy_url(2, 0, 1),
+            "/tiles/opentopo/2/0/1.png"
+        );
+        assert_eq!(TileLayer::Gibs.proxy_url(2, 3, 1), "/tiles/gibs/2/3/1.jpg");
     }
 }

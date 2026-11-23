@@ -77,7 +77,7 @@ Between phases: `scripts/gsa-cycle/sigmap.sh` (WASM + Rust + Cesium). Wiki: `doc
 | 2 | Core owns the data: port `visualizer/lib/*.mjs` and `router.php` into `DataLayer`; datapack pack → cache → network; one-user poller | Layer names match Cesium. Feeds still stubs |
 | 3 | Desktop: XYZ imagery, heightmap, instanced AIR/AIS, 15-minute grid + spiderweb, notifications, signed installers; Rust API replaces Node on Fly | Not started |
 | 4 | Android offline (#16): PMTiles + DEM, GPS, WorkManager, BLE mesh (#17) | Globe + pins APK builds; offline/GPS/mesh not started |
-| 5 | WebGPU/WebGL2 build of this globe replaces Cesium in production; Meshtastic sitrep; Pi image; `no_std` core | Not started |
+| 5 | WebGPU/WebGL2 build of this globe replaces Cesium in production; Meshtastic sitrep; Pi image; `no_std` core | Staging preview: QuietEarth wasm on https://globalstatus-stage.fly.dev/ |
 
 ## Known gaps vs Cesium
 

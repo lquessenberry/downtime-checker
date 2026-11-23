@@ -15,9 +15,9 @@ Window title: **QuietEarth**. Crate: `globe-native`.
 
 ## What it is not
 
-- Not the Fly WASM canvas alpha (`globalstatus-wasm`). That is a lightweight HUD until this globe ships to the web (phase 5).
 - Not Cesium, Mapbox, ion, or Esri.
 - Not quietearth.app as a separate product. Global Status App is the app; QuietEarth is the globe engine.
+- The old canvas HUD still lives at `/hud.html` on staging.
 
 ## Run
 
@@ -30,3 +30,12 @@ cargo run -p downtime-globe-native -- --summary
 Pick **OpenStreetMap** in the basemap list. Status reads `fetching … z2` then `OpenStreetMap on QuietEarth`. Wheel in (distance down to 1.08 Earth radii).
 
 Android APK still uses compiled Blue Marble only (no INTERNET permission yet).
+
+## Staging (Fly)
+
+https://globalstatus-stage.fly.dev/ is the wasm/WebGPU cut of this crate
+(`WebHandle` + downtime-server). Same HUD, Blue Marble, OSM stitch via `/tiles/`.
+
+```bash
+fly deploy -c fly.wasm.toml --ha=false -a globalstatus-stage
+```

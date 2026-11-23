@@ -2,14 +2,13 @@
 
 Staging: https://globalstatus-stage.fly.dev/
 
-This cut replaces the PHP Cesium globe on Fly staging with:
+Homepage is **QuietEarth**: the same `globe-native` crate as the desktop wgpu
+app, built for `wasm32-unknown-unknown` (eframe WebGPU, WebGL2 fallback).
 
-- `downtime-wasm` in the browser (blast, **Rustle grove**, catalog helpers)
-- `downtime-server` (tokio) for `/healthz`, `/api/blast`, `/api/leaves`, `/api/catalog`, `/api/scan`
-- WebGL orthographic Earth (NASA Blue Marble JPEG), drag / pitch / wheel zoom
-- OSM XYZ tiles via same-origin `/tiles/osm/{z}/{x}/{y}.png` once you zoom in (GIBS marble tiles at `/tiles/gibs/...`)
-- Click a point for Rustle context (geofence, nearby leaves, orbitals)
-- CHECK GRID against the catalog (weather default)
+- `downtime-globe-native` wasm (`WebHandle`) is `/`
+- `downtime-server` (tokio) for `/healthz`, `/api/blast`, `/api/leaves`, `/api/catalog`, `/api/scan`, `/tiles/{osm,opentopo,gibs}/…`
+- OSM / OpenTopo / GIBS stitch via same-origin `/tiles/…` (z=2 mosaic)
+- Old canvas HUD kept at `/hud.html` (uses `downtime-wasm` + `globe.js`)
 - **No CesiumJS, no Cesium ion, no Mapbox**
 
 ```bash
@@ -23,6 +22,6 @@ Local:
 cargo run -p downtime-server -- --static globalstatus-wasm --bind 127.0.0.1 --port 4181 --no-lookup
 ```
 
-Alpha limits: WebGL sphere (not wgpu globe-native), no live OSM XYZ sampler yet, no phone-footer poller. Catalog scans use `--no-lookup` on Fly so pins join through Rustle addresses when the catalog row has no lat/lon. Native `globe-native` remains the product renderer.
+Alpha limits: z=2 stitch (not a live quadtree), no phone-footer poller, no terrain. Catalog scans use `--no-lookup` on Fly. Desktop `downtime-globe` remains the native product binary; this is the web cut of the same renderer.
 
 Copilot is out of the review loop until 2026-12-01.

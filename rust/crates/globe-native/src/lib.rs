@@ -4,8 +4,9 @@
 //! succeed Cesium in every way (see `docs/rust-native.md` and `docs/QUIETEARTH.md`).
 //! NASA Blue Marble is the far albedo; OSM / OpenTopo / GIBS stitch onto it.
 //!
-//! The same code runs on Linux, macOS and Windows (`main.rs`) and on Android
-//! (`android_main` below, built as a `cdylib` with cargo-apk).
+//! The same code runs on Linux, macOS and Windows (`main.rs`), on Android
+//! (`android_main` below, built as a `cdylib` with cargo-apk), and in the
+//! browser (`WebHandle`, wasm32 eframe / WebGPU with WebGL2 fallback).
 //!
 //! First-party blast rings live in `downtime-core::blast` (cube-root scaling).
 //! That is not the private nuke-sim crate. Release builds still do not enable
@@ -27,6 +28,7 @@ use downtime_core::{
 use eframe::egui;
 use glam::Vec3;
 use rustle::{builtin_grove, Bundle, Grove};
+use std::sync::{Arc, Mutex};
 
 use globe_math::{project, OrbitCamera};
 use pins::Pin;
@@ -34,6 +36,7 @@ use render::{marble_rgba, GlobeCallback, GlobeResources};
 
 pub const APP_NAME: &str = "QuietEarth";
 
+#[cfg(not(target_arch = "wasm32"))]
 fn viewport() -> egui::ViewportBuilder {
     egui::ViewportBuilder::default()
         .with_title(concat!("QuietEarth ", env!("CARGO_PKG_VERSION")))
@@ -41,6 +44,7 @@ fn viewport() -> egui::ViewportBuilder {
 }
 
 /// Open the globe window with already-loaded catalog data.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run(data: pins::PinData, mut options: eframe::NativeOptions) -> eframe::Result<()> {
     options.renderer = eframe::Renderer::Wgpu;
     eframe::run_native(
@@ -58,6 +62,7 @@ pub fn run(data: pins::PinData, mut options: eframe::NativeOptions) -> eframe::R
 }
 
 /// Desktop defaults.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn desktop_options() -> eframe::NativeOptions {
     eframe::NativeOptions { viewport: viewport(), ..Default::default() }
 }
@@ -87,7 +92,8 @@ struct GlobeApp {
     basemap: Basemap,
     terrain: TerrainKind,
     tile_status: String,
-    tile_job: Option<std::thread::JoinHandle<Result<(u32, u32, Vec<u8>), String>>>,
+    fetching: bool,
+    tile_slot: Arc<Mutex<Option<Result<(u32, u32, Vec<u8>), String>>>>,
     render_state: eframe::egui_wgpu::RenderState,
     marble: (u32, u32, Vec<u8>),
 }
@@ -110,7 +116,8 @@ impl GlobeApp {
             basemap: Basemap::BlueMarble,
             terrain: TerrainKind::Ellipsoid,
             tile_status: "Blue Marble (compiled)".into(),
-            tile_job: None,
+            fetching: false,
+            tile_slot: Arc::new(Mutex::new(None)),
             render_state,
             marble: marble_rgba(),
         }
@@ -126,7 +133,7 @@ impl GlobeApp {
     }
 
     fn request_albedo(&mut self) {
-        if self.tile_job.is_some() {
+        if self.fetching {
             return;
         }
         let Some(layer) = Self::tile_layer(self.basemap) else {
@@ -134,25 +141,54 @@ impl GlobeApp {
             self.tile_status = "Blue Marble (compiled)".into();
             return;
         };
-        let (mw, mh, marble) = self.marble.clone();
-        self.tile_status = format!("fetching {} z2…", self.basemap.label());
-        self.tile_job = Some(std::thread::spawn(move || {
-            #[cfg(target_os = "android")]
+        #[cfg(target_os = "android")]
+        {
+            let _ = layer;
+            self.tile_status = "tiles are desktop-only in this cut".into();
+            return;
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let (mw, mh, marble) = self.marble.clone();
+            self.tile_status = format!("fetching {} z2…", self.basemap.label());
+            self.fetching = true;
+            let slot = self.tile_slot.clone();
+            #[cfg(not(target_arch = "wasm32"))]
             {
-                let _ = (layer, mw, mh, marble);
-                return Err("tiles are desktop-only in this cut".into());
+                std::thread::spawn(move || {
+                    let result = (|| {
+                        use image::RgbaImage;
+                        let mosaic = crate::engine::tiles::stitch_layer(layer, 2)?;
+                        let streets = mercator_to_equirect(&mosaic, mw, mh);
+                        let marble_img = RgbaImage::from_raw(mw, mh, marble)
+                            .ok_or_else(|| "marble buffer".to_string())?;
+                        let out = overlay_on_marble(&marble_img, &streets);
+                        Ok((mw, mh, out.into_raw()))
+                    })();
+                    if let Ok(mut guard) = slot.lock() {
+                        *guard = Some(result);
+                    }
+                });
             }
-            #[cfg(not(target_os = "android"))]
+            #[cfg(target_arch = "wasm32")]
             {
-                use image::RgbaImage;
-                let mosaic = crate::engine::tiles::stitch_layer(layer, 2)?;
-                let streets = mercator_to_equirect(&mosaic, mw, mh);
-                let marble_img = RgbaImage::from_raw(mw, mh, marble)
-                    .ok_or_else(|| "marble buffer".to_string())?;
-                let out = overlay_on_marble(&marble_img, &streets);
-                Ok((mw, mh, out.into_raw()))
+                wasm_bindgen_futures::spawn_local(async move {
+                    let result = async {
+                        use image::RgbaImage;
+                        let mosaic = crate::engine::tiles::stitch_layer_web(layer, 2).await?;
+                        let streets = mercator_to_equirect(&mosaic, mw, mh);
+                        let marble_img = RgbaImage::from_raw(mw, mh, marble)
+                            .ok_or_else(|| "marble buffer".to_string())?;
+                        let out = overlay_on_marble(&marble_img, &streets);
+                        Ok((mw, mh, out.into_raw()))
+                    }
+                    .await;
+                    if let Ok(mut guard) = slot.lock() {
+                        *guard = Some(result);
+                    }
+                });
             }
-        }));
+        }
     }
 
     fn write_pixels(&self, width: u32, height: u32, pixels: Vec<u8>) {
@@ -163,20 +199,20 @@ impl GlobeApp {
     }
 
     fn poll_tiles(&mut self) {
-        let Some(job) = self.tile_job.take() else {
+        let result = match self.tile_slot.lock() {
+            Ok(mut guard) => guard.take(),
+            Err(_) => return,
+        };
+        let Some(result) = result else {
             return;
         };
-        if !job.is_finished() {
-            self.tile_job = Some(job);
-            return;
-        }
-        match job.join() {
-            Ok(Ok((w, h, pixels))) => {
+        self.fetching = false;
+        match result {
+            Ok((w, h, pixels)) => {
                 self.write_pixels(w, h, pixels);
                 self.tile_status = format!("{} on QuietEarth", self.basemap.label());
             }
-            Ok(Err(err)) => self.tile_status = err,
-            Err(_) => self.tile_status = "tile thread panicked".into(),
+            Err(err) => self.tile_status = err,
         }
     }
 
@@ -452,12 +488,53 @@ impl GlobeApp {
 impl eframe::App for GlobeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_tiles();
-        if self.tile_job.is_some() {
+        if self.fetching {
             ctx.request_repaint();
         }
         self.side_panel(ctx);
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(egui::Color32::from_rgb(7, 11, 16)))
             .show(ctx, |ui| self.globe(ui));
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+/// Browser entry: `new WebHandle().start(canvas)` after `init()`.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub struct WebHandle {
+    runner: eframe::WebRunner,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+impl WebHandle {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        console_error_panic_hook::set_once();
+        eframe::WebLogger::init(log::LevelFilter::Info).ok();
+        Self {
+            runner: eframe::WebRunner::new(),
+        }
+    }
+
+    #[wasm_bindgen]
+    pub async fn start(&self, canvas: web_sys::HtmlCanvasElement) -> Result<(), JsValue> {
+        self.runner
+            .start(
+                canvas,
+                eframe::WebOptions::default(),
+                Box::new(|cc| {
+                    let state = cc
+                        .wgpu_render_state
+                        .as_ref()
+                        .ok_or("QuietEarth: wgpu is not available (need WebGPU or WebGL2)")?;
+                    GlobeResources::install(state);
+                    Ok(Box::new(GlobeApp::new(pins::load_embedded(), state.clone())))
+                }),
+            )
+            .await
     }
 }
