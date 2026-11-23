@@ -667,6 +667,9 @@ button:hover { border-color: #9fd4e2; }
 .swatch.animal { background: #e2b340; }
 .swatch.amfm { background: #7aa2ff; }
 .swatch.effects { background: #ff8f1f; }
+.swatch.quakes { background: radial-gradient(circle, #f6e27a 0 30%, #e25b12 70%); }
+.swatch.daynight { background: linear-gradient(90deg, #ffe9a8 50%, #1b2a44 50%); }
+.swatch.sats { background: #7fe0ff; }
 
 .effects-hud,
 .effects-results {
