@@ -1259,7 +1259,7 @@ const LAYER_LABEL = {
   designations: "DESIGNATIONS",
   violence: "ATTRIBUTED VIOLENCE",
   nuke: "NUCLEAR",
-  effects: "EFFECTS RADIUS",
+  effects: "NUKE SIMULATOR",
   quakes: "QUAKES",
   streets3d: "STREETS 3D",
 };
@@ -2128,7 +2128,7 @@ const LIVE_STYLE = {
   designations: { color: "#f0c14a", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "DESIGNATION" },
   violence: { color: "#c44b4b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "ATTRIBUTED VIOLENCE" },
   nuke: { color: "#7cff6b", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "NUCLEAR" },
-  effects: { color: "#ff8f1f", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "EFFECTS RADIUS" },
+  effects: { color: "#ff8f1f", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "NUKE SIMULATOR" },
   quakes: { color: "#f08a24", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "QUAKES" },
   streets3d: { color: "#c4a574", outline: MARKER_OUTLINE, size: () => MARKER_SIZE, kind: "STREETS 3D" },
 };
@@ -3198,8 +3198,8 @@ function statusLive(error) {
       : "ATTRIBUTED VIOLENCE",
     state.layers.nuke ? `NUCLEAR ${state.nuke.shots.length}` : "NUCLEAR",
     state.layers.effects && window.GsaEffectsRadius && window.GsaEffectsRadius.hasResult()
-      ? "EFFECTS RADIUS 1"
-      : "EFFECTS RADIUS",
+      ? "NUKE SIMULATOR 1"
+      : "NUKE SIMULATOR",
     state.live.quakes.points.length
       ? `QUAKES ${state.live.quakes.points.length}`
       : "QUAKES",
