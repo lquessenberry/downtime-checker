@@ -421,7 +421,28 @@ function formatYield(kt) {
     updateLede();
   }
 
-  function drawRingsOnGlobe(effects) {
+  // Frame the largest ring for a blast at gz.
+  function flyToEffects(gz, effects) {
+    if (!viewer || !gz || !effects || !effects.rings || !effects.rings.length) return;
+    var largestMiles = 0;
+    effects.rings.forEach(function (ring) { if (ring.miles > largestMiles) largestMiles = ring.miles; });
+    if (!(largestMiles > 0)) return;
+    var latRad = gz.lat * Math.PI / 180;
+    var pad = largestMiles * 1.2;
+    var dLat = pad / 69;
+    var dLon = pad / (69 * Math.max(0.2, Math.cos(latRad)));
+    viewer.camera.flyTo({
+      destination: Cesium.Rectangle.fromDegrees(
+        gz.lon - dLon * 1.25,
+        gz.lat - dLat * 1.2,
+        gz.lon + dLon * 1.55,
+        gz.lat + dLat * 1.2
+      ),
+      duration: 1.35
+    });
+  }
+
+  function drawRingsOnGlobe(effects, skipFly) {
     if (!groundZero || !source || typeof Cesium === "undefined") return null;
     // Re-submitting at the same ground zero updates that blast in place.
     // A new spot adds a new blast and keeps every earlier one on the map.
@@ -488,22 +509,7 @@ function formatYield(kt) {
     blasts.push(blast);
     currentBlast = blast;
     rebuildRingList();
-    if (ordered.length && viewer) {
-      var largestMiles = ordered[0].miles;
-      var latRad = groundZero.lat * Math.PI / 180;
-      var pad = largestMiles * 1.2;
-      var dLat = pad / 69;
-      var dLon = pad / (69 * Math.max(0.2, Math.cos(latRad)));
-      viewer.camera.flyTo({
-        destination: Cesium.Rectangle.fromDegrees(
-          groundZero.lon - dLon * 1.25,
-          groundZero.lat - dLat * 1.2,
-          groundZero.lon + dLon * 1.55,
-          groundZero.lat + dLat * 1.2
-        ),
-        duration: 1.35
-      });
-    }
+    if (!skipFly) flyToEffects(blast.groundZero, effects);
     if (typeof hooks.statusLive === "function") hooks.statusLive();
     return blast;
   }
@@ -578,7 +584,7 @@ function formatYield(kt) {
     try { window.localStorage.setItem(SOUND_KEY, on ? "off" : "on"); } catch (err) {}
     if (on) {
       stopSound("blast");
-      if (launch) skipLaunch();
+      if (launch && launch.phase === "alarm") skipLaunch();
     }
     updateSoundChip();
   }
@@ -633,7 +639,7 @@ function formatYield(kt) {
     box.id = "effects-launching";
     box.className = "effects-launching";
     box.hidden = true;
-    box.innerHTML = "<span class=\"effects-launching-dot\" aria-hidden=\"true\"></span><span>Launching… tap to skip</span>";
+    box.innerHTML = "<span class=\"effects-launching-dot\" aria-hidden=\"true\"></span><span id=\"effects-launching-text\">Launching… tap to skip</span>";
     box.addEventListener("click", function (event) {
       event.preventDefault();
       event.stopPropagation();
@@ -644,46 +650,169 @@ function formatYield(kt) {
     return box;
   }
 
-  function showIndicator(on) {
+  function showIndicator(on, text) {
     var box = on ? launchIndicator() : el("effects-launching");
-    if (box) box.hidden = !on;
+    if (!box) return;
+    if (on) {
+      var label = el("effects-launching-text");
+      if (label) label.textContent = text || "Launching… tap to skip";
+    }
+    box.hidden = !on;
   }
 
   function clearLaunchTimers(job) {
     if (!job) return;
     clearTimeout(job.loadTimer);
     clearTimeout(job.endTimer);
+    clearTimeout(job.gifLoadTimer);
+    clearTimeout(job.gifTimer);
     if (job.alarm && job.onEnded) {
       job.alarm.removeEventListener("ended", job.onEnded);
       job.alarm.removeEventListener("error", job.onEnded);
     }
   }
 
-  // Stop a launch that has not detonated yet. No rings are drawn.
+  // ---- Explosion GIF --------------------------------------------------------
+  // When the blast sound starts, the mushroom cloud plays once with its base
+  // on ground zero. When it ends it is removed and the rings are drawn.
+  // Browsers loop or cache GIF animations, so the timing is driven here and
+  // every launch gets a fresh object URL so the GIF starts from frame 1.
+  var GIF_URL = "images/nuke-blast.gif";
+  var GIF_MS = 2800;          // total frame time of images/nuke-blast.gif
+  var GIF_BASE_Y = 0.96;      // the cloud's base, as a fraction of the image height
+  var GIF_ASPECT = 415 / 600; // width / height
+  var gifBlob = null;
+  var gifFailed = false;
+  var gifLoading = null;
+
+  function preloadGif() {
+    if (gifBlob || gifLoading || gifFailed) return;
+    if (typeof fetch !== "function" || typeof URL === "undefined" || !URL.createObjectURL) return;
+    gifLoading = fetch(GIF_URL).then(function (response) {
+      if (!response.ok) throw new Error("GIF " + response.status);
+      return response.blob();
+    }).then(function (blob) {
+      gifBlob = blob;
+    }).catch(function () {
+      gifFailed = true;
+    }).then(function () {
+      gifLoading = null;
+    });
+  }
+
+  function gifHeight() {
+    var canvas = viewer && viewer.scene && viewer.scene.canvas;
+    var h = canvas ? canvas.clientHeight : window.innerHeight;
+    return Math.round(Math.max(150, Math.min(440, h * 0.5)));
+  }
+
+  function positionGif() {
+    var job = launch;
+    if (!job || job.phase !== "gif" || !job.img || !viewer) return;
+    var img = job.img;
+    var pos = null;
+    try {
+      pos = Cesium.SceneTransforms.worldToWindowCoordinates(
+        viewer.scene, Cesium.Cartesian3.fromDegrees(job.gz.lon, job.gz.lat));
+    } catch (err) { pos = null; }
+    if (!pos || !isFinite(pos.x) || !isFinite(pos.y)) {
+      img.style.visibility = "hidden";
+      return;
+    }
+    var rect = viewer.scene.canvas.getBoundingClientRect();
+    var h = gifHeight();
+    var w = Math.round(h * GIF_ASPECT);
+    img.style.height = h + "px";
+    img.style.width = w + "px";
+    img.style.left = Math.round(rect.left + pos.x - w / 2) + "px";
+    img.style.top = Math.round(rect.top + pos.y - h * GIF_BASE_Y) + "px";
+    if (job.gifReady) img.style.visibility = "visible";
+  }
+
+  function removeGif(job) {
+    if (!job || !job.img) return;
+    var img = job.img;
+    job.img = null;
+    img.onload = null;
+    img.onerror = null;
+    if (img.parentNode) img.parentNode.removeChild(img);
+    if (job.gifUrl && job.gifUrl.indexOf("blob:") === 0) {
+      try { URL.revokeObjectURL(job.gifUrl); } catch (err) {}
+    }
+  }
+
+  // Stop a launch before its rings are drawn: no rings, no sound, no GIF.
   function cancelLaunch() {
     if (!launch) return false;
     var job = launch;
     launch = null;
     clearLaunchTimers(job);
     stopSound("alarm");
+    if (job.phase === "gif") stopSound("blast");
+    removeGif(job);
     showIndicator(false);
     return true;
   }
 
-  // Detonate now: stop the alarm, start the blast sound, then draw.
-  function detonate(job) {
+  // The GIF is done (or skipped, or could not load): draw the rings.
+  function finishLaunch(job) {
     if (!job || launch !== job) return;
     launch = null;
     clearLaunchTimers(job);
-    stopSound("alarm");
+    removeGif(job);
     showIndicator(false);
-    if (!isMuted()) playSound("blast").catch(function () {});
-    var blast = drawRingsOnGlobe(job.effects);
+    var blast = drawRingsOnGlobe(job.effects, true);
     showResults(job.effects, blast);
   }
 
+  // Detonate: stop the alarm, start the blast sound, and play the GIF.
+  function detonate(job) {
+    if (!job || launch !== job || job.phase !== "alarm") return;
+    clearLaunchTimers(job);
+    stopSound("alarm");
+    job.phase = "gif";
+    if (!isMuted()) playSound("blast").catch(function () {});
+    flyToEffects(job.gz, job.effects);
+    if (gifFailed || typeof document === "undefined") {
+      finishLaunch(job);
+      return;
+    }
+    showIndicator(true, "Detonation… tap to skip");
+    var img = document.createElement("img");
+    img.className = "effects-gif";
+    img.alt = "";
+    img.setAttribute("aria-hidden", "true");
+    img.draggable = false;
+    img.style.visibility = "hidden";
+    img.addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      skipLaunch();
+    });
+    img.onload = function () {
+      if (launch !== job) return;
+      clearTimeout(job.gifLoadTimer);
+      job.gifReady = true;
+      positionGif();
+      job.gifTimer = setTimeout(function () { finishLaunch(job); }, GIF_MS);
+    };
+    img.onerror = function () {
+      gifFailed = !gifBlob;
+      finishLaunch(job);
+    };
+    job.img = img;
+    job.gifUrl = gifBlob ? URL.createObjectURL(gifBlob) : GIF_URL + "?play=" + job.id;
+    // A GIF that has not loaded in 4 s is skipped.
+    job.gifLoadTimer = setTimeout(function () { finishLaunch(job); }, 4000);
+    document.body.appendChild(img);
+    positionGif();
+    img.src = job.gifUrl;
+  }
+
   function skipLaunch() {
-    if (launch) detonate(launch);
+    if (!launch) return;
+    if (launch.phase === "alarm") detonate(launch);
+    else finishLaunch(launch);
   }
 
   function startLaunch(effects) {
@@ -697,7 +826,14 @@ function formatYield(kt) {
       shownBlast = null;
     }
     launchSeq += 1;
-    var job = { id: launchSeq, effects: effects, alarm: null, onEnded: null, loadTimer: 0, endTimer: 0 };
+    var job = {
+      id: launchSeq,
+      phase: "alarm",
+      effects: effects,
+      gz: { lon: groundZero.lon, lat: groundZero.lat },
+      alarm: null, onEnded: null, loadTimer: 0, endTimer: 0,
+      img: null, gifUrl: "", gifReady: false, gifLoadTimer: 0, gifTimer: 0
+    };
     launch = job;
     if (isMuted()) {
       detonate(job);
@@ -862,6 +998,7 @@ function formatYield(kt) {
     }
     getSound("alarm");
     getSound("blast");
+    preloadGif();
     document.addEventListener("keydown", function (event) {
       if (launch && (event.key === "Escape" || event.key === "Esc")) {
         event.preventDefault();
@@ -873,6 +1010,8 @@ function formatYield(kt) {
     window.addEventListener("resize", positionPopup);
     if (viewer && viewer.scene) {
       viewer.scene.postRender.addEventListener(positionPopup);
+      viewer.scene.postRender.addEventListener(positionGif);
+      window.addEventListener("resize", positionGif);
       // The site's click handler ignores clicks on map entities, so clicks on
       // an earlier blast's rings or marker are handled here.
       var blastClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
@@ -927,6 +1066,9 @@ function formatYield(kt) {
     getRingEntities: function () { return ringEntities.slice(); },
     getBlasts: function () { return blasts.slice(); },
     isLaunching: function () { return Boolean(launch); },
+    getLaunchPhase: function () { return launch ? launch.phase : ""; },
+    gifUrl: GIF_URL,
+    gifMs: GIF_MS,
     skipLaunch: skipLaunch,
     cancelLaunch: cancelLaunch,
     isMuted: isMuted,

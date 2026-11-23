@@ -1279,3 +1279,16 @@ button:hover { border-color: #9fd4e2; }
   animation: effects-launch-blink 0.8s steps(2, start) infinite;
 }
 @keyframes effects-launch-blink { to { visibility: hidden; } }
+
+/* Nuke Simulator explosion GIF, anchored on ground zero by effects-radius.js. */
+.effects-gif {
+  position: fixed;
+  z-index: 17;
+  left: 0;
+  top: 0;
+  max-width: none;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-drag: none;
+}
