@@ -7,10 +7,23 @@ Options -Indexes
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 
   RewriteRule ^data/ - [F,L]
+  RewriteRule ^poll-(runner|lib)\.php$ - [F,L]
   RewriteRule ^api(?:/|$) router.php [L,QSA]
 </IfModule>
 
 AddType application/manifest+json .webmanifest
+
+# Cron-only scripts (World Grid and aircraft polls). Never reachable from the web.
+# data/ (scan cache, aircraft cache, locks) is blocked above.
+<FilesMatch "^(poll-runner|poll-lib)\.php$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
 
 <FilesMatch "^(router\.php|index\.html|cesium\.(js|css)|sw\.js|manifest\.webmanifest)$">
   <IfModule mod_headers.c>

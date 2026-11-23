@@ -50,6 +50,9 @@ function gsa_http_routes()
         // data/stop.flag, so nobody can abort the scheduled pass.
         json_out(200, array('ok' => true, 'local' => true));
     }
+    if ($path === '/api/aircraft' && $method === 'GET') {
+        json_out(200, gsa_aircraft_snapshot());
+    }
     if (preg_match('#^/api/aircraft/([0-9a-fA-F]{6})$#', $path, $match) && $method === 'GET') {
         json_out(200, aircraft_detail(strtolower($match[1]), $_GET));
     }
@@ -69,6 +72,10 @@ function gsa_http_routes()
         json_out(200, animal_snapshot());
     }
 
+    if ($path === '/api/feeds' && $method === 'GET') {
+        json_out(200, feeds_with_live_aircraft());
+    }
+
     $files = array(
         '/api/catalog' => 'api/catalog.json',
         '/api/websdr' => 'api/websdr.json',
@@ -77,7 +84,6 @@ function gsa_http_routes()
         '/api/hunger' => 'api/hunger.json',
         '/api/radio' => 'api/radio.json',
         '/api/streams' => 'api/streams.json',
-        '/api/feeds' => 'api/feeds.json',
         '/api/amfm' => 'api/amfm.json',
     );
     if (isset($files[$path]) && $method === 'GET') {
@@ -1221,143 +1227,96 @@ function outages_build($root, $raw)
     );
 }
 
-function military_snapshot()
+function feeds_with_live_aircraft()
 {
-    global $dataDir;
-    $lock = fopen($dataDir . '/mil.lock', 'c');
-    if ($lock) {
-        flock($lock, LOCK_EX);
-    }
-    try {
-        return military_snapshot_locked();
-    } finally {
-        if ($lock) {
-            flock($lock, LOCK_UN);
-            fclose($lock);
+    global $root;
+    $file = $root . '/api/feeds.json';
+    $pack = array();
+    if (is_file($file)) {
+        $decoded = json_decode((string) file_get_contents($file), true);
+        if (is_array($decoded)) {
+            $pack = $decoded;
         }
     }
+    // Jamming, ships, and conflicts stay as they are in the static file.
+    // Aircraft comes from the cron cache so visitors never trigger adsb.lol.
+    $pack['aircraft'] = gsa_aircraft_snapshot();
+    return $pack;
 }
 
-function military_snapshot_locked()
+function military_snapshot()
 {
-    global $dataDir;
-    $cacheFile = $dataDir . '/mil-cache.json';
-    // adsb.lol allows 500 requests a day from one address. Three minutes
-    // keeps a day of military viewing under that cap. Visitors share this cache.
-    $ttl = 180;
-    $cached = null;
-    if (is_file($cacheFile)) {
-        $cached = json_decode((string) file_get_contents($cacheFile), true);
-    }
-    if (is_array($cached) && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $ttl && !empty($cached['points'])) {
-        unset($cached['fetchedAt']);
-        $cached['stale'] = false;
-        return $cached;
-    }
-    $raw = outage_fetch('https://api.adsb.lol/v2/mil', browser_agent());
-    $rows = is_array($raw) ? ($raw['ac'] ?? null) : null;
-    if (!is_array($rows)) {
-        if (is_array($cached) && !empty($cached['points'])) {
-            unset($cached['fetchedAt']);
-            $cached['stale'] = true;
-            return $cached;
-        }
-        return array(
-            'source' => 'adsb.lol',
-            'sourceUrl' => 'https://api.adsb.lol/v2/mil',
-            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
-            'stale' => true,
-            'error' => 'Military feed did not answer',
-            'count' => 0,
-            'points' => array(),
-        );
-    }
+    $snap = gsa_aircraft_snapshot();
     $points = array();
-    foreach ($rows as $row) {
-        if (!is_array($row) || !isset($row['lat'], $row['lon'])) {
-            continue;
+    foreach (($snap['points'] ?? array()) as $point) {
+        if (is_array($point) && !empty($point['mil'])) {
+            $points[] = $point;
         }
-        $lat = (float) $row['lat'];
-        $lon = (float) $row['lon'];
-        if ($lat == 0.0 && $lon == 0.0) {
-            continue;
-        }
-        $alt = $row['alt_baro'] ?? 0;
-        if ($alt === 'ground') {
-            $altM = 0;
-        } elseif (is_numeric($alt)) {
-            $altM = round(((float) $alt) * 0.3048, 2);
-        } else {
-            $alt = 0;
-            $altM = 0;
-        }
-        $flags = (int) ($row['dbFlags'] ?? 0);
-        $emergency = $row['emergency'] ?? null;
-        if ($emergency === 'none' || $emergency === '') {
-            $emergency = null;
-        }
-        $points[] = array(
-            'lat' => $lat,
-            'lon' => $lon,
-            'hex' => strtolower((string) ($row['hex'] ?? '')),
-            'name' => trim((string) ($row['flight'] ?? '')),
-            'r' => (string) ($row['r'] ?? ''),
-            't' => (string) ($row['t'] ?? ''),
-            'alt' => $alt,
-            'altM' => $altM,
-            'track' => $row['track'] ?? 0,
-            'gs' => $row['gs'] ?? 0,
-            'squawk' => (string) ($row['squawk'] ?? ''),
-            'emergency' => $emergency,
-            'category' => (string) ($row['category'] ?? ''),
-            'src' => (string) ($row['type'] ?? ''),
-            'mil' => true,
-            'interesting' => (bool) ($flags & 2),
-            'pia' => (bool) ($flags & 4),
-            'ladd' => (bool) ($flags & 8),
-            'baro_rate' => $row['baro_rate'] ?? null,
-            'seen_pos' => $row['seen_pos'] ?? null,
-        );
     }
-    if (!$points) {
-        if (is_array($cached) && !empty($cached['points'])) {
-            unset($cached['fetchedAt']);
-            $cached['stale'] = true;
-            return $cached;
-        }
-        return array(
-            'source' => 'adsb.lol',
-            'sourceUrl' => 'https://api.adsb.lol/v2/mil',
-            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
-            'stale' => true,
-            'error' => 'Military feed had no positions',
-            'count' => 0,
-            'points' => array(),
-        );
+    $error = $snap['error'] ?? null;
+    if (!$points && $error === null && empty($snap['points'])) {
+        $error = 'Awaiting poller';
     }
-    $built = array(
+    return array(
         'source' => 'adsb.lol',
         'sourceUrl' => 'https://api.adsb.lol/v2/mil',
-        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
-        'stale' => false,
+        'updated' => $snap['updated'] ?? null,
+        'attribution' => 'adsb.lol (ODbL 1.0)',
+        'stale' => !empty($snap['stale']) || !$points,
+        'error' => $error,
         'count' => count($points),
         'points' => $points,
+        'ageSec' => $snap['ageSec'] ?? null,
     );
-    $stored = $built;
-    $stored['fetchedAt'] = time();
-    file_put_contents($cacheFile, json_encode($stored), LOCK_EX);
-    return $built;
 }
 
 function aircraft_detail($hex, $query)
 {
-    $detail = array('hex' => $hex, 'live' => null, 'photo' => null, 'route' => null, 'typeInfo' => null);
-    $live = remote_json('https://api.adsb.lol/v2/hex/' . $hex);
+    global $root;
+    $detail = array('hex' => $hex, 'live' => null, 'photo' => null, 'route' => null, 'typeInfo' => null, 'cached' => true);
     $aircraft = null;
-    if (is_array($live) && !empty($live['ac'][0]) && is_array($live['ac'][0])) {
-        $aircraft = $live['ac'][0];
-        $detail['live'] = $aircraft;
+    $snap = gsa_aircraft_snapshot();
+    foreach (($snap['points'] ?? array()) as $point) {
+        if (is_array($point) && strtolower((string) ($point['hex'] ?? '')) === $hex) {
+            $aircraft = $point;
+            break;
+        }
     }
+    if (is_array($aircraft)) {
+        $detail['live'] = array(
+            'hex' => $hex,
+            'flight' => $aircraft['name'] ?? '',
+            'r' => $aircraft['r'] ?? '',
+            't' => $aircraft['t'] ?? '',
+            'squawk' => $aircraft['squawk'] ?? '',
+            'gs' => $aircraft['gs'] ?? null,
+            'alt_baro' => $aircraft['alt'] ?? null,
+            'track' => $aircraft['track'] ?? null,
+            'lat' => $aircraft['lat'] ?? null,
+            'lon' => $aircraft['lon'] ?? null,
+            'baro_rate' => $aircraft['baro_rate'] ?? null,
+            'seen_pos' => $aircraft['seen_pos'] ?? null,
+            'type' => $aircraft['src'] ?? '',
+            'emergency' => $aircraft['emergency'] ?? null,
+            'category' => $aircraft['category'] ?? '',
+            'mil' => !empty($aircraft['mil']),
+        );
+    }
+    $typeCode = is_array($aircraft) ? strtoupper(trim((string) ($aircraft['t'] ?? ''))) : '';
+    if ($typeCode === '' && isset($query['type'])) {
+        $typeCode = strtoupper(trim((string) $query['type']));
+    }
+    if ($typeCode !== '') {
+        $types = json_decode((string) @file_get_contents($root . '/api/icao_aircraft_types.json'), true);
+        if (is_array($types) && isset($types[$typeCode]) && is_array($types[$typeCode])) {
+            $detail['typeInfo'] = array(
+                'desc' => $types[$typeCode]['desc'] ?? '',
+                'wtc' => $types[$typeCode]['wtc'] ?? '',
+            );
+        }
+    }
+    // Photos come from PlaneSpotters, not adsb.lol, and do not spend the
+    // 500/day cap. Skip quietly if the photo service is down.
     $photos = remote_json('https://api.planespotters.net/pub/photos/hex/' . strtoupper($hex));
     if (is_array($photos) && !empty($photos['photos'][0]) && is_array($photos['photos'][0])) {
         $photo = $photos['photos'][0];
@@ -1368,59 +1327,6 @@ function aircraft_detail($hex, $query)
                 'src' => $src,
                 'link' => $photo['link'] ?? '',
                 'photographer' => $photo['photographer'] ?? '',
-            );
-        }
-    }
-    $callsign = '';
-    if (is_array($aircraft)) {
-        $callsign = strtoupper(trim((string) ($aircraft['flight'] ?? '')));
-    }
-    if ($callsign === '' && isset($query['callsign'])) {
-        $callsign = strtoupper(trim((string) $query['callsign']));
-    }
-    $callsign = substr(preg_replace('/[^A-Z0-9]/', '', $callsign), 0, 8);
-    if ($callsign !== '') {
-        $lat = is_array($aircraft) ? ($aircraft['lat'] ?? null) : null;
-        $lon = is_array($aircraft) ? ($aircraft['lon'] ?? null) : null;
-        if ($lat === null && isset($query['lat'])) {
-            $lat = (float) $query['lat'];
-        }
-        if ($lon === null && isset($query['lon'])) {
-            $lon = (float) $query['lon'];
-        }
-        $routes = remote_json('https://adsb.im/api/0/routeset', json_encode(array(
-            'planes' => array(array('callsign' => $callsign, 'lat' => $lat, 'lng' => $lon)),
-        )));
-        if (is_array($routes) && isset($routes[0]) && is_array($routes[0]) && ($routes[0]['plausible'] ?? true) !== false) {
-            $route = $routes[0];
-            $iata = (string) ($route['_airport_codes_iata'] ?? '');
-            $icao = (string) ($route['airport_codes'] ?? '');
-            if (strtolower($iata) === 'unknown') {
-                $iata = '';
-            }
-            if (strtolower($icao) === 'unknown') {
-                $icao = '';
-            }
-            if ($iata !== '' || $icao !== '') {
-                $detail['route'] = array(
-                    'iata' => $iata,
-                    'icao' => $icao,
-                    'airline' => $route['airline_code'] ?? '',
-                );
-            }
-        }
-    }
-    $typeCode = is_array($aircraft) ? strtoupper(trim((string) ($aircraft['t'] ?? ''))) : '';
-    if ($typeCode === '' && isset($query['type'])) {
-        $typeCode = strtoupper(trim((string) $query['type']));
-    }
-    if ($typeCode !== '') {
-        global $root;
-        $types = json_decode((string) @file_get_contents($root . '/api/icao_aircraft_types.json'), true);
-        if (is_array($types) && isset($types[$typeCode]) && is_array($types[$typeCode])) {
-            $detail['typeInfo'] = array(
-                'desc' => $types[$typeCode]['desc'] ?? '',
-                'wtc' => $types[$typeCode]['wtc'] ?? '',
             );
         }
     }
