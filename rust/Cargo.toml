@@ -8,6 +8,7 @@ members = [
     "crates/downtime-server",
     "crates/downtime-wasm",
     "crates/globe-native",
+    "crates/rustle",
 ]
 
 [workspace.package]

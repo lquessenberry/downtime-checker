@@ -3,67 +3,37 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Global Status App · WASM alpha</title>
+  <title>QuietEarth</title>
   <style>
-    :root { color-scheme: dark; --bg:#07090d; --panel:#10141c; --ink:#d7dde8; --muted:#8b95a7; --line:#1e2633; --accent:#6ee7b7; }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; }
-    #app { display: grid; grid-template-columns: 240px 1fr 280px; height: 100%; }
-    header { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
-    header strong { letter-spacing: .04em; }
-    .badge { font-size: 10px; letter-spacing: .12em; color: var(--accent); border: 1px solid var(--accent); padding: 2px 8px; border-radius: 999px; }
-    aside, .rail { background: var(--panel); border-right: 1px solid var(--line); padding: 14px; overflow: auto; }
-    .rail { border-right: 0; border-left: 1px solid var(--line); }
-    canvas { width: 100%; height: 100%; display: block; cursor: grab; background: #000; }
-    label { display: block; color: var(--muted); margin: 10px 0 4px; font-size: 11px; letter-spacing: .08em; }
-    input, select, button { width: 100%; background: #0b0f16; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
-    button { cursor: pointer; }
-    button.primary { background: #123524; border-color: #1f6a46; color: var(--accent); }
-    .stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); }
-    #note { color: var(--muted); white-space: pre-wrap; font-size: 11px; }
-    footer { position: fixed; left: 240px; right: 280px; bottom: 0; padding: 6px 12px; font-size: 11px; color: var(--muted); background: linear-gradient(transparent, #07090d); }
-    @media (max-width: 900px) {
-      #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
-      aside, .rail { max-height: 28vh; }
-      footer { left: 0; right: 0; }
+    html, body { margin: 0; height: 100%; background: #070b10; overflow: hidden; color: #d7dde8; font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; }
+    canvas { width: 100%; height: 100%; display: block; outline: none; }
+    #boot {
+      position: absolute; left: 16px; top: 16px; z-index: 2;
+      color: #8b95a7; max-width: 28rem; white-space: pre-wrap;
+    }
+    #hudlink {
+      position: absolute; right: 12px; bottom: 10px; z-index: 2;
+      color: #6ee7b7; text-decoration: none; font-size: 11px; letter-spacing: .08em;
     }
   </style>
 </head>
 <body>
-  <div id="app">
-    <header>
-      <strong>Global Status App</strong>
-      <span class="badge">WASM ALPHA · NO CESIUM</span>
-      <span id="runtime">loading…</span>
-    </header>
-    <aside>
-      <div class="stat"><span>DEFCON</span><b id="defcon">5</b></div>
-      <div class="stat"><span>Ground zero</span><b id="gz">click globe</b></div>
-      <label>YIELD (kt)</label>
-      <select id="kt">
-        <option>1</option>
-        <option selected>15</option>
-        <option>100</option>
-        <option>300</option>
-        <option>1000</option>
-      </select>
-      <label>BURST</label>
-      <select id="air">
-        <option value="1" selected>airburst</option>
-        <option value="0">ground</option>
-      </select>
-      <button class="primary" id="fire" type="button">FIRE</button>
-      <p id="card"></p>
-    </aside>
-    <canvas id="globe" width="900" height="900"></canvas>
-    <div class="rail">
-      <label>LAYERS (from WASM)</label>
-      <div id="layers"></div>
-      <label>NOTE</label>
-      <p id="note"></p>
-    </div>
-  </div>
-  <footer>NASA Blue Marble texture · OSM/NWS/IEM later · © OpenStreetMap when streets sample · first-party blast (Glasstone-scale) · no Cesium · no ion</footer>
-  <script type="module" src="./globe.js"></script>
+  <div id="boot">QuietEarth starting…</div>
+  <canvas id="globe" tabindex="0"></canvas>
+  <a id="hudlink" href="/hud.html">HUD alpha</a>
+  <script type="module">
+    import init, { WebHandle } from "./downtime_globe_native.js";
+    const boot = document.getElementById("boot");
+    const canvas = document.getElementById("globe");
+    try {
+      await init();
+      const handle = new WebHandle();
+      await handle.start(canvas);
+      boot.remove();
+    } catch (err) {
+      boot.textContent = "QuietEarth failed: " + (err && err.message ? err.message : err);
+      console.error(err);
+    }
+  </script>
 </body>
 </html>

@@ -16,4 +16,4 @@ pub use catalog_io::{
     saved_line, write_cache, write_saved, CatalogError,
 };
 pub use check::{check_all, check_host, icmp_mode, resolve_v4, tcp_open, HostCheck, IcmpMode};
-pub use lookup::{lookup_ipwho, LookupError};
+pub use lookup::{https_get_bytes, lookup_ipwho, LookupError};

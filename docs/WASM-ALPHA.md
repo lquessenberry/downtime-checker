@@ -2,11 +2,13 @@
 
 Staging: https://globalstatus-stage.fly.dev/
 
-This cut replaces the PHP Cesium globe on Fly staging with:
+Homepage is **QuietEarth**: the same `globe-native` crate as the desktop wgpu
+app, built for `wasm32-unknown-unknown` (eframe WebGPU, WebGL2 fallback).
 
-- `downtime-wasm` in the browser (`blast_rings_json`, layers, catalog helpers)
-- `downtime-server` (tokio) for `/healthz`, `/api/blast`, static files
-- Canvas orthographic Earth using the compiled NASA Blue Marble JPEG
+- `downtime-globe-native` wasm (`WebHandle`) is `/`
+- `downtime-server` (tokio) for `/healthz`, `/api/blast`, `/api/leaves`, `/api/catalog`, `/api/scan`, `/tiles/{osm,opentopo,gibs}/…`
+- OSM / OpenTopo / GIBS stitch via same-origin `/tiles/…` (z=2 mosaic)
+- Old canvas HUD kept at `/hud.html` (uses `downtime-wasm` + `globe.js`)
 - **No CesiumJS, no Cesium ion, no Mapbox**
 
 ```bash
@@ -20,6 +22,6 @@ Local:
 cargo run -p downtime-server -- --static globalstatus-wasm --bind 127.0.0.1 --port 4181 --no-lookup
 ```
 
-Alpha limits: software-sampled texture (not wgpu), no live OSM XYZ sampler yet, no phone-footer poller. Native `globe-native` remains the product renderer.
+Alpha limits: z=2 stitch (not a live quadtree), no phone-footer poller, no terrain. Catalog scans use `--no-lookup` on Fly. Desktop `downtime-globe` remains the native product binary; this is the web cut of the same renderer.
 
 Copilot is out of the review loop until 2026-12-01.

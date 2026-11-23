@@ -1,4 +1,4 @@
-//! `downtime-globe`: desktop entry point for the Global Status native globe.
+//! QuietEarth (`downtime-globe`): desktop entry for the native wgpu globe.
 //!
 //! `downtime-globe --summary` prints the loaded catalog without opening a
 //! window (useful on headless CI). `--root DIR` points at a catalog folder;
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--version" || a == "-V") {
-        println!("downtime-globe {}", env!("CARGO_PKG_VERSION"));
+        println!("QuietEarth (downtime-globe) {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
     let root = arg_value(&args, "--root").map(PathBuf::from);

@@ -57,7 +57,7 @@ async fn main() {
             "-h" | "--help" => {
                 println!(
                     "downtime-server [--root DIR] [--static DIR] [--bind ADDR] [--port N] [--workers N] [--no-lookup]\n\n\
-                     Tokio multi-thread server. Serves /api/blast from downtime-core.\n\
+                     Tokio multi-thread server. Serves /api/blast, /api/leaves (Rustle), catalog scan.\n\
                      Default static dir is globalstatus/ when present, else visualizer/public.\n\
                      PORT, WORKERS, and GSA_BIND are also read."
                 );

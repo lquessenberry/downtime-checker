@@ -12,6 +12,7 @@ pub mod primitives;
 pub mod quadtree;
 pub mod scene;
 pub mod terrain;
+pub mod tiles;
 
 pub use cartographic::Cartographic;
 pub use ellipsoid::{Ellipsoid, WGS84_RADII_M};

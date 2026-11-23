@@ -20,6 +20,9 @@ pub struct GlobeResources {
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     index_count: u32,
+    earth: wgpu::Texture,
+    earth_width: u32,
+    earth_height: u32,
 }
 
 fn load_earth_rgba() -> (u32, u32, Vec<u8>) {
@@ -29,11 +32,18 @@ fn load_earth_rgba() -> (u32, u32, Vec<u8>) {
     (rgba.width(), rgba.height(), rgba.into_raw())
 }
 
-fn earth_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureView, wgpu::Sampler) {
+fn earth_texture(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) -> (wgpu::Texture, wgpu::TextureView, wgpu::Sampler, u32, u32) {
     let (width, height, pixels) = load_earth_rgba();
-    let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
+    let size = wgpu::Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    };
     let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("earth"),
+        label: Some("quietearth"),
         size,
         mip_level_count: 1,
         sample_count: 1,
@@ -59,7 +69,7 @@ fn earth_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureVi
     );
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("earth"),
+        label: Some("quietearth"),
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
         address_mode_u: wgpu::AddressMode::Repeat,
@@ -67,13 +77,14 @@ fn earth_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureVi
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         ..Default::default()
     });
-    (view, sampler)
+    (texture, view, sampler, width, height)
 }
 
 impl GlobeResources {
     pub fn install(state: &egui_wgpu::RenderState) {
         let device = &state.device;
-        let (earth_view, earth_samp) = earth_texture(device, &state.queue);
+        let (earth, earth_view, earth_samp, earth_width, earth_height) =
+            earth_texture(device, &state.queue);
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("globe"),
             source: wgpu::ShaderSource::Wgsl(include_str!("globe.wgsl").into()),
@@ -183,8 +194,45 @@ impl GlobeResources {
             vertices,
             indices,
             index_count: mesh_indices.len() as u32,
+            earth,
+            earth_width,
+            earth_height,
         });
     }
+
+    /// Replace the albedo (must be the same size as the compiled Blue Marble).
+    pub fn write_albedo(&self, queue: &wgpu::Queue, pixels: &[u8], width: u32, height: u32) {
+        if width != self.earth_width || height != self.earth_height {
+            return;
+        }
+        if pixels.len() != (width * height * 4) as usize {
+            return;
+        }
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.earth,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * width),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+}
+
+pub fn marble_rgba() -> (u32, u32, Vec<u8>) {
+    load_earth_rgba()
 }
 
 /// One frame's globe draw.

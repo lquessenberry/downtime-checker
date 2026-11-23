@@ -17,9 +17,10 @@ use downtime_core::{
     Loaded, LocateMode, Place, Report, Status, KT_PRESETS, LOOKUP_WORKERS,
 };
 use downtime_native::{
-    cache_record, check_all, load_catalog_dir, lookup_ipwho, read_cache, record_value, write_cache,
-    HostCheck,
+    cache_record, check_all, https_get_bytes, load_catalog_dir, lookup_ipwho, read_cache,
+    record_value, write_cache, HostCheck,
 };
+use rustle::{builtin_grove, Bundle, Grove};
 use serde_json::{json, Map, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -70,15 +71,22 @@ struct App {
     events: Mutex<Vec<mpsc::UnboundedSender<String>>>,
     /// Latest scan id. Writers send after they change `ScanState.scan_id`.
     cancel: watch::Sender<u64>,
+    grove: Grove,
 }
 
 pub async fn serve(listener: TcpListener, config: ServerConfig) -> std::io::Result<()> {
     let (cancel, _) = watch::channel(0u64);
+    let mut grove = builtin_grove();
+    let overlay = config.root.join("leaves");
+    if overlay.is_dir() {
+        let _ = grove.load_dir(&overlay);
+    }
     let app = Arc::new(App {
         config,
         state: Mutex::new(ScanState::idle()),
         events: Mutex::new(Vec::new()),
         cancel,
+        grove,
     });
     loop {
         let (socket, _) = listener.accept().await?;
@@ -119,13 +127,21 @@ async fn handle(mut socket: TcpStream, app: Arc<App>) -> std::io::Result<()> {
             write_json(&mut socket, 200, r#"{"ok":true}"#).await
         }
         ("GET", "/api/blast") => write_json(&mut socket, 200, &blast_json(&request.query)).await,
+        ("GET", path) if path == "/api/leaves" || path.starts_with("/api/leaves/") => {
+            let (status, body) = leaves_json(&app.grove, path, &request.query);
+            write_json(&mut socket, status, &body).await
+        }
+        ("GET", path) if path.starts_with("/tiles/") => proxy_tile(&mut socket, path).await,
         ("GET", "/healthz") => {
-            write_json(
-                &mut socket,
-                200,
-                r#"{"ok":true,"runtime":"rust","threads":"tokio-multi-thread"}"#,
-            )
-            .await
+            let body = json!({
+                "ok": true,
+                "runtime": "rust",
+                "threads": "tokio-multi-thread",
+                "cms": "rustle",
+                "leaves": app.grove.len(),
+            })
+            .to_string();
+            write_json(&mut socket, 200, &body).await
         }
         ("GET", "/favicon.ico") => {
             write_response(&mut socket, 204, "No Content", "image/x-icon", b"", "").await
@@ -682,8 +698,10 @@ fn mime_of(path: &Path) -> &'static str {
         Some("css") => "text/css; charset=utf-8",
         Some("json") => "application/json; charset=utf-8",
         Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
         Some("svg") => "image/svg+xml",
         Some("ico") => "image/x-icon",
+        Some("wasm") => "application/wasm",
         _ => "application/octet-stream",
     }
 }
@@ -783,6 +801,151 @@ fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
         let (name, value) = pair.split_once('=')?;
         (name == key).then_some(value)
     })
+}
+
+const TILE_UA: &str = "GlobalStatusApp/0.1 (https://globalstatus.app; rustle-globe)";
+
+fn parse_tile_path(path: &str) -> Option<(String, String, &'static str, u32, u32, u32)> {
+    // /tiles/{osm|gibs}/{z}/{x}/{y}.png|.jpg
+    let rest = path.strip_prefix("/tiles/")?;
+    let mut parts = rest.split('/');
+    let layer = parts.next()?;
+    let z: u32 = parts.next()?.parse().ok()?;
+    let x: u32 = parts.next()?.parse().ok()?;
+    let y_file = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    let y_str = y_file.split('.').next()?;
+    let y: u32 = y_str.parse().ok()?;
+    let n = 1u32.checked_shl(z)?;
+    if x >= n || y >= n {
+        return None;
+    }
+    match layer {
+        "osm" if z <= 12 => {
+            let upstream = format!("/{z}/{x}/{y}.png");
+            Some((
+                upstream,
+                "tile.openstreetmap.org".into(),
+                "image/png",
+                z,
+                x,
+                y,
+            ))
+        }
+        "opentopo" if z <= 12 => {
+            let upstream = format!("/{z}/{x}/{y}.png");
+            Some((
+                upstream,
+                "a.tile.opentopomap.org".into(),
+                "image/png",
+                z,
+                x,
+                y,
+            ))
+        }
+        "gibs" if z <= 8 => {
+            // GIBS GoogleMapsCompatible is {z}/{y}/{x}
+            let upstream = format!(
+                "/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg"
+            );
+            Some((
+                upstream,
+                "gibs.earthdata.nasa.gov".into(),
+                "image/jpeg",
+                z,
+                x,
+                y,
+            ))
+        }
+        _ => None,
+    }
+}
+
+async fn proxy_tile(socket: &mut TcpStream, path: &str) -> std::io::Result<()> {
+    let Some((upstream, host, mime, _, _, _)) = parse_tile_path(path) else {
+        return write_json(socket, 400, r#"{"error":"bad tile"}"#).await;
+    };
+    let fetched = tokio::task::spawn_blocking(move || {
+        https_get_bytes(
+            &host,
+            &upstream,
+            mime,
+            TILE_UA,
+            400_000,
+            Duration::from_secs(8),
+        )
+    })
+    .await;
+    match fetched {
+        Ok(Ok(mut bytes)) if !bytes.is_empty() => {
+            while bytes.starts_with(b"\r\n") {
+                bytes.drain(..2);
+            }
+            if bytes.starts_with(b"\x89PNG") || bytes.starts_with(b"\xff\xd8") || bytes.starts_with(b"<") {
+                write_response(
+                    socket,
+                    200,
+                    "OK",
+                    mime,
+                    &bytes,
+                    "Cache-Control: public, max-age=86400",
+                )
+                .await
+            } else {
+                write_json(socket, 502, r#"{"error":"tile was not an image"}"#).await
+            }
+        }
+        Ok(Err(err)) => {
+            let body = json!({"error": err.message}).to_string();
+            write_json(socket, 502, &body).await
+        }
+        _ => write_json(socket, 502, r#"{"error":"tile fetch failed"}"#).await,
+    }
+}
+
+fn leaves_json(grove: &Grove, path: &str, query: &str) -> (u16, String) {
+    if path == "/api/leaves" {
+        if let Some(bundle) = query_param(query, "bundle") {
+            let want = Bundle::parse(bundle);
+            let leaves: Vec<_> = grove
+                .by_bundle(&want)
+                .into_iter()
+                .map(rustle::Leaf::json)
+                .collect();
+            return (
+                200,
+                json!({"cms":"rustle","count": leaves.len(), "leaves": leaves}).to_string(),
+            );
+        }
+        if let Some(tag) = query_param(query, "tag") {
+            let leaves: Vec<_> = grove
+                .by_tag(tag)
+                .into_iter()
+                .map(rustle::Leaf::json)
+                .collect();
+            return (
+                200,
+                json!({"cms":"rustle","count": leaves.len(), "leaves": leaves}).to_string(),
+            );
+        }
+        return (200, grove.json().to_string());
+    }
+    if path == "/api/leaves/context" {
+        let lat: f64 = query_param(query, "lat")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.0);
+        let lon: f64 = query_param(query, "lon")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.0);
+        return (200, grove.context(lat, lon).json().to_string());
+    }
+    let id = path.trim_start_matches("/api/leaves/");
+    match grove.get(id) {
+        Some(leaf) => (200, leaf.json().to_string()),
+        None => (404, json!({"error":"no leaf","id": id}).to_string()),
+    }
 }
 
 fn blast_json(query: &str) -> String {
@@ -946,5 +1109,38 @@ mod tests {
         )
         .await;
         assert!(health.contains("tokio-multi-thread"), "{health}");
+        assert!(health.contains("\"cms\":\"rustle\""), "{health}");
+        let leaves = http(
+            addr,
+            "GET /api/leaves HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        assert!(leaves.contains("\"id\":\"iss\""), "{leaves}");
+        assert!(leaves.contains("geoorbital"), "{leaves}");
+        let ctx = http(
+            addr,
+            "GET /api/leaves/context?lat=-30&lon=-20 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        assert!(ctx.contains("\"id\":\"saa\""), "{ctx}");
+        let bad = http(
+            addr,
+            "GET /tiles/osm/3/99/1.png HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        assert!(bad.contains("400") || bad.contains("bad tile"), "{bad}");
+    }
+
+    #[test]
+    fn tile_paths_are_allowlisted() {
+        let osm = parse_tile_path("/tiles/osm/3/2/4.png").unwrap();
+        assert_eq!(osm.1, "tile.openstreetmap.org");
+        assert_eq!(osm.0, "/3/2/4.png");
+        let topo = parse_tile_path("/tiles/opentopo/2/0/1.png").unwrap();
+        assert_eq!(topo.1, "a.tile.opentopomap.org");
+        let gibs = parse_tile_path("/tiles/gibs/4/1/2.jpg").unwrap();
+        assert!(gibs.0.contains("/4/2/1.jpg"), "{}", gibs.0);
+        assert!(parse_tile_path("/tiles/osm/3/20/1.png").is_none());
+        assert!(parse_tile_path("/tiles/esri/1/0/0.png").is_none());
     }
 }

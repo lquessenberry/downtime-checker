@@ -1,0 +1,92 @@
+# Rustle core grove — small text leaves (entities + fields).
+# Blank line starts a new leaf. Drupal nodes/fields, without PHP or SQL.
+
+id: null-island
+bundle: geolocation
+label: Null Island
+status: published
+field.lat: 0
+field.lon: 0
+field.maidenhead: JJ00
+field.note: Gulf of Guinea. NOAA buoy 13010 Soul is nearby.
+link.layer: reachability
+tag: geodesy
+tag: hud
+
+id: saa
+bundle: geofence
+label: South Atlantic Anomaly
+status: published
+field.west: -50
+field.south: -40
+field.east: 10
+field.north: 0
+field.note: Inner Van Allen dip. HUD bbox, not a contour.
+link.asset: wmm
+tag: geodesy
+tag: radiation
+
+id: iss
+bundle: geoorbital
+label: International Space Station
+status: published
+field.norad: 25544
+field.altitude_km: 400
+field.period_min: 92.8
+field.scale_10cm_globe_mm: 3
+link.asset: celestrak-gp-iss
+link.asset: celestrak-tle
+tag: orbit
+tag: hud
+
+id: gps-meo
+bundle: geoorbital
+label: GPS MEO belt
+status: published
+field.altitude_km: 20200
+field.inclination_deg: 55
+field.period_s: 43082
+link.asset: celestrak-gnss
+tag: orbit
+tag: gnss
+
+id: clarke-belt
+bundle: geoorbital
+label: Geostationary Clarke belt
+status: published
+field.altitude_km: 35786
+field.inclination_deg: 0
+link.asset: celestrak-tle
+tag: orbit
+
+id: karman
+bundle: geoorbital
+label: Kármán line
+status: published
+field.altitude_km: 100
+tag: orbit
+tag: atmosphere
+
+id: nws-hq
+bundle: geolocation
+label: National Weather Service
+status: published
+field.lat: 38.9917
+field.lon: -77.0261
+field.address: weather.gov
+field.country: United States
+link.catalog: weather
+link.asset: nws-alerts
+link.asset: noaa-gfs
+tag: weather
+tag: catalog
+
+id: maidenhead-origin
+bundle: geocell
+label: Maidenhead field JJ
+status: published
+field.grid: JJ
+field.lat: 0
+field.lon: 0
+tag: ham
+tag: geodesy

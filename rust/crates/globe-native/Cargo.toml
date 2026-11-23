@@ -8,12 +8,13 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
-description = "Native Global Status globe: wgpu Earth that has to succeed Cesium"
+description = "QuietEarth: native wgpu globe that has to succeed Cesium"
 
 [lib]
 name = "downtime_globe_native"
 path = "src/lib.rs"
-# cdylib for the Android APK (android_main); rlib for the desktop binary.
+# cdylib for the Android APK (android_main) and for wasm-bindgen QuietEarth.
+# rlib for the desktop binary.
 crate-type = ["rlib", "cdylib"]
 
 [[bin]]
@@ -29,16 +30,29 @@ nuke-sim = []
 
 [dependencies]
 downtime-core = { path = "../downtime-core" }
+rustle = { path = "../rustle" }
 eframe = { version = "0.32", default-features = false, features = ["wgpu", "default_fonts"] }
 # Same wgpu as eframe 0.32; listed directly so its default GPU backends
 # (Vulkan, Metal, DX12, GLES, WGSL) are compiled in.
 wgpu = "25"
 bytemuck = { version = "1", features = ["derive"] }
 glam = "0.30"
-image = { version = "0.25", default-features = false, features = ["jpeg"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
-[target.'cfg(not(target_os = "android"))'.dependencies]
+[target.'cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))'.dependencies]
 downtime-native = { path = "../downtime-native" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.130"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Window", "Response", "HtmlCanvasElement"] }
+console_error_panic_hook = "0.1"
+log = "0.4"
+wgpu = { version = "25", features = ["webgl"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+egui-wgpu = { version = "0.32", default-features = false, features = ["fragile-send-sync-non-atomic-wasm"] }
 
 [target.'cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))'.dependencies]
 eframe = { version = "0.32", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }

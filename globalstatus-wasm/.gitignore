@@ -2,3 +2,8 @@ downtime_wasm.js
 downtime_wasm.d.ts
 downtime_wasm_bg.wasm
 downtime_wasm_bg.wasm.d.ts
+downtime_globe_native.js
+downtime_globe_native.d.ts
+downtime_globe_native_bg.wasm
+downtime_globe_native_bg.wasm.d.ts
+earth.jpg
