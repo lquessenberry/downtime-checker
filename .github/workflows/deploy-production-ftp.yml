@@ -1,7 +1,17 @@
 name: Deploy production FTP
 
-# Manual only. Default is a dry-run so a click does not overwrite globalstatus.app.
+# Manual runs stay dry-run by default so a click does not overwrite globalstatus.app.
+# Pushes to feat/globalstatus-prod that touch the live globe (or the FTP script)
+# upload for real, but only after the same required PR CI test jobs succeed on
+# that commit. The Copilot review gate is a different workflow and does not
+# block this deploy (advisory until Dec 1).
 on:
+  push:
+    branches:
+      - feat/globalstatus-prod
+    paths:
+      - "globalstatus/**"
+      - "scripts/ftp_prod.py"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -16,9 +26,171 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: deploy-production-ftp
+  cancel-in-progress: false
+
+env:
+  WASM_BUDGET_KB: "1024"
+
 jobs:
+  web:
+    name: Web, PHP and Python checks
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: JavaScript syntax
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in globalstatus/*.js visualizer/*.mjs visualizer/lib/*.mjs; do
+            echo "node --check $f"; node --check "$f"
+          done
+      - name: PHP lint
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in globalstatus/*.php scripts/*.php; do php -l "$f"; done
+      - name: Python unit tests
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ran=0
+          for t in scripts/*/tests/test_*.py scripts/*/test_*.py; do
+            echo "== $t"; python3 -m unittest "$t"; ran=1
+          done
+          [ "$ran" = 1 ] || echo "no python tests on this branch"
+      - name: Guardrails (no secrets-looking files, no private sim, no GADM in web)
+        run: |
+          set -euo pipefail
+          bad=0
+          if git ls-files | grep -E '(^|/)(\.env|.*\.pem|.*\.key|id_rsa|id_ed25519)$'; then
+            echo "::error::credential-like file tracked"; bad=1
+          fi
+          if git ls-files | grep -iE '(nuke-?sim|nukesim|calculator-will)'; then
+            echo "::error::private simulator or Will's calculator path tracked; keep out until Will approves"; bad=1
+          fi
+          if git ls-files globalstatus visualizer/public | grep -i 'gadm'; then
+            echo "::error::GADM is non-commercial; keep it out of the default web build"; bad=1
+          fi
+          if git ls-files | grep -iE 'splc.*\.jsonl$'; then
+            echo "::error::SPLC exports must not be committed"; bad=1
+          fi
+          exit $bad
+
+  rust:
+    name: Rust fmt, clippy, test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect workspace
+        id: ws
+        run: |
+          if [ -f rust/Cargo.toml ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "no rust/ workspace on this branch"; fi
+      - if: steps.ws.outputs.present == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - if: steps.ws.outputs.present == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: System libs for the wgpu/egui globe
+        if: steps.ws.outputs.present == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libasound2-dev libudev-dev pkg-config >/dev/null
+      - name: cargo fmt --check
+        if: steps.ws.outputs.present == 'true'
+        working-directory: rust
+        continue-on-error: true
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        if: steps.ws.outputs.present == 'true'
+        working-directory: rust
+        continue-on-error: true
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: cargo test
+        if: steps.ws.outputs.present == 'true'
+        working-directory: rust
+        run: cargo test --workspace --locked
+
+  wasm:
+    name: WebAssembly build and size budget
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect wasm crates
+        id: ws
+        run: |
+          crates=""
+          for c in rust/crates/*-wasm rust/crates/globe-web rust/crates/globe-native; do
+            [ -f "$c/Cargo.toml" ] || continue
+            name=$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$c/Cargo.toml" | head -1)
+            if [ "${c##*/}" = "globe-native" ] && ! grep -q 'wasm32' "$c/Cargo.toml"; then continue; fi
+            crates="$crates $name"
+          done
+          echo "crates=${crates# }" >> "$GITHUB_OUTPUT"
+          [ -n "$crates" ] || echo "no wasm crates on this branch"
+      - if: steps.ws.outputs.crates != ''
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - if: steps.ws.outputs.crates != ''
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Build release wasm
+        if: steps.ws.outputs.crates != ''
+        working-directory: rust
+        run: |
+          set -euo pipefail
+          for c in ${{ steps.ws.outputs.crates }}; do
+            cargo build -p "$c" --release --target wasm32-unknown-unknown --locked
+          done
+      - name: Size budget
+        if: steps.ws.outputs.crates != ''
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          fail=0
+          echo "| wasm | raw KB | gzip -9 KB | budget KB |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- | --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          for w in rust/target/wasm32-unknown-unknown/release/*.wasm; do
+            raw=$(( $(stat -c %s "$w") / 1024 ))
+            gz=$(( $(gzip -9 -c "$w" | wc -c) / 1024 ))
+            echo "| ${w##*/} | $raw | $gz | $WASM_BUDGET_KB |" >> "$GITHUB_STEP_SUMMARY"
+            echo "${w##*/}: raw ${raw} KB, gzip ${gz} KB (budget ${WASM_BUDGET_KB} KB)"
+            if [ "$gz" -gt "$WASM_BUDGET_KB" ]; then
+              echo "::error file=${w}::${w##*/} is ${gz} KB gzipped, over the ${WASM_BUDGET_KB} KB budget"; fail=1
+            fi
+          done
+          exit $fail
+
   ftp:
     name: FTP push to globalstatus.app
+    needs: [web, rust, wasm]
+    # Dispatch skips the test jobs; still run FTP with the usual dry-run default.
+    # Push deploys only when every required test job succeeded. Copilot is not a need.
+    if: >-
+      always() &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          needs.web.result == 'success' &&
+          needs.rust.result == 'success' &&
+          needs.wasm.result == 'success'
+        )
+      )
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -35,10 +207,43 @@ jobs:
         run: |
           set -euo pipefail
           args=(push)
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            args+=(--dry-run)
+          mode="real upload (no data caches)"
+          caches="not uploaded"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              args+=(--dry-run)
+              mode="dry-run (no upload)"
+            else
+              mode="manual real upload"
+            fi
+            if [ "${{ inputs.with_data }}" = "true" ]; then
+              args+=(--with-data)
+              mode="${mode}, including data caches"
+              caches="included (--with-data)"
+            fi
           fi
-          if [ "${{ inputs.with_data }}" = "true" ]; then
-            args+=(--with-data)
-          fi
-          python3 scripts/ftp_prod.py "${args[@]}"
+          echo "FTP mode: ${mode}"
+          set +e
+          output=$(python3 scripts/ftp_prod.py "${args[@]}" 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          {
+            echo "## Production FTP"
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Event: \`${{ github.event_name }}\`"
+            echo "- Mode: ${mode}"
+            if [ "${{ github.event_name }}" = "push" ]; then
+              echo "- Tests on this commit: **Web, PHP and Python checks**, **Rust fmt, clippy, test** (fmt/clippy remain advisory; \`cargo test\` must pass), **WebAssembly build and size budget** — all required and green."
+              echo "- **Copilot review gate is not required** for this deploy (advisory until Dec 1)."
+            else
+              echo "- Tests: not re-run on a manual dispatch (same as before). Use a dry-run first unless you intend to publish."
+            fi
+            echo "- Data caches: ${caches}"
+            echo
+            echo '```'
+            printf '%s\n' "$output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

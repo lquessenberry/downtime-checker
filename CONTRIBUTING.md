@@ -2,7 +2,7 @@
 
 Work happens on the fork **[lquessenberry/downtime-checker](https://github.com/lquessenberry/downtime-checker)**, default branch `feat/globalstatus-prod`. Issues: https://github.com/lquessenberry/downtime-checker/issues
 
-**Do not upload feature work to GoDaddy FTP.** FTP is go-live only, after a PR is on the fork and staging looks right. Church FTP is never used.
+**Will (and anyone shipping globe work):** start with the plain-language guide [`docs/CONTRIBUTING-WILL.md`](docs/CONTRIBUTING-WILL.md). The code runs the tests and the production deploy. Do not FTP files to globalstatus.app by hand anymore. Church FTP is never used.
 
 ## First clone (Will)
 
@@ -14,7 +14,9 @@ cd downtime-checker
 git checkout feat/globalstatus-prod
 ```
 
-The live PHP globe lives in `globalstatus/` (same files as `/home/will/.local/share/global-status/quietearth`). Copy a file here, do not STOR it to `107.180.116.144` for day-to-day edits.
+The live PHP globe lives in `globalstatus/`. Edit files here and open a PR; never upload to the production server by hand.
+
+Only files checked into `globalstatus/` are published. Rust and WASM jobs must pass before a deploy, but their build output is not uploaded, so a change that touches only `rust/` does not change the live site.
 
 ## One issue, one branch, one PR
 
@@ -33,8 +35,8 @@ git push -u origin feat/issue-21-disease
 ```
 
 3. Open a pull request **into `feat/globalstatus-prod`** on this fork (not into `willlccasey/downtime-checker` main, and not a direct FTP upload).
-4. Staging preview: https://downtime-globe.fly.dev after Lee deploys the branch.
-5. Go live on https://globalstatus.app only when someone says so (FTP Action, dry-run first).
+4. Staging preview: https://downtime-globe.fly.dev only if Lee deploys that branch to Fly. Staging is optional and is not the production publish.
+5. Go live on https://globalstatus.app by **merging the PR** once the real tests are green (ignore a red Copilot review gate until Dec 1). Merge automatically deploys the globe over FTP. Watch it: https://github.com/lquessenberry/downtime-checker/actions/workflows/deploy-production-ftp.yml
 
 ## What not to mix
 
@@ -44,4 +46,4 @@ git push -u origin feat/issue-21-disease
 | `willlccasey/downtime-checker` | Older Downtime CLI / Cesium PR target |
 | `~/bin/downtime` :4173 | Different app |
 | Fly `downtime-globe` | Staging preview |
-| FTP `globalstatus@globalstatus.app` | Production go-live only |
+| Production upload (FTP, credentials in repo secrets) | Automatic production deploy after a green merge (do not FTP by hand) |
