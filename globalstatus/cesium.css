@@ -1332,3 +1332,32 @@ button:hover { border-color: #9fd4e2; }
   .sw-credit { right: 96px; bottom: calc(34px + env(safe-area-inset-bottom)); font-size: 12px; }
   .layer-group > summary { min-height: 44px; font-size: 13px; }
 }
+
+/* Phone bottom bar: one row of layer dots that swipes left and right, so
+   none are cut off. The bar sits below the globe, so swipes never reach
+   Cesium; a swipe scrolls, a tap still toggles the layer. */
+@media (max-width: 800px) {
+  .hud-bot { min-width: 0; max-width: 100vw; overflow: hidden; }
+  .hud-bot .legend {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .hud-bot .legend::-webkit-scrollbar { display: none; }
+  .hud-bot .legend::before,
+  .hud-bot .legend::after { content: ""; flex: 0 0 8px; }
+  .hud-bot .legend .layer { flex: 0 0 40px; min-width: 40px; touch-action: pan-x; }
+  .hud-bot .legend.fade-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+  .hud-bot .legend.fade-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px); mask-image: linear-gradient(90deg, transparent, #000 28px); }
+  .hud-bot .legend.fade-l.fade-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+}
