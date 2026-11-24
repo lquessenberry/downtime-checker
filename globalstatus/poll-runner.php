@@ -8,6 +8,7 @@
 //   php poll-runner.php grid --slice=16
 //   php poll-runner.php aircraft [--force-mil|--skip-mil|--mock=PATH|--force-jam|--skip-jam|--skip-aircraft|--mock-jam=PATH]
 //   php poll-runner.php jamming [--force-jam|--mock-jam=PATH]
+//   php poll-runner.php space [--force-space|--only=nws,hurricanes,wildfires|--mock-nhc=PATH|--mock-space-fail]
 //
 // Aircraft on globalstatus.app (cPanel cron, every 5 minutes): one civilian
 // adsb.lol pull each run, plus /v2/mil only when the last mil pull is at least
@@ -15,6 +16,9 @@
 // Visitors read the cache. The same aircraft cron also refreshes
 // GPSInterference.com when the last jamming pull is at least 15 minutes
 // old (96 requests/day worst case). No third cron is needed. Grid is ~10 minutes.
+// Space & Weather: the same aircraft cron also refreshes NWS alerts (every
+// run, <= 288/day), NHC storms (15 min, <= 96/day) and NASA FIRMS fires
+// (3 h, <= 8/day). Each feed is time-gated in gsa_space_refresh (poll-lib.php).
 //
 // Live cPanel crons:
 //   /usr/local/bin/php -q /home/<user>/public_html/globalstatus.app/poll-runner.php grid
@@ -42,6 +46,9 @@ $skipMil = false;
 $forceJam = false;
 $skipJam = false;
 $skipAircraft = false;
+$GLOBALS['GSA_SPACE_FORCE'] = false;
+$GLOBALS['GSA_SPACE_ONLY'] = array();
+$skipSpace = false;
 foreach ($argv as $arg) {
     if (strpos($arg, '--slice=') === 0) {
         $slice = (int) substr($arg, 8);
@@ -53,6 +60,16 @@ foreach ($argv as $arg) {
         $forceJam = true;
     } elseif ($arg === '--skip-jam') {
         $skipJam = true;
+    } elseif ($arg === '--force-space') {
+        $GLOBALS['GSA_SPACE_FORCE'] = true;
+    } elseif ($arg === '--skip-space') {
+        $skipSpace = true;
+    } elseif (strpos($arg, '--only=') === 0) {
+        $GLOBALS['GSA_SPACE_ONLY'] = array_values(array_filter(explode(',', substr($arg, 7))));
+    } elseif ($arg === '--mock-space-fail') {
+        $GLOBALS['GSA_SPACE_MOCK_FAIL'] = true;
+    } elseif (strpos($arg, '--mock-nhc=') === 0) {
+        $GLOBALS['GSA_SPACE_MOCK_NHC'] = substr($arg, 11);
     } elseif ($arg === '--skip-aircraft') {
         $skipAircraft = true;
     } elseif (strpos($arg, '--mock=') === 0) {
@@ -70,6 +87,7 @@ $ttls = array(
     'disease' => 180,
     'animal' => 600,
     'grid' => 900,
+    'space' => 300,
 );
 
 function runner_timed($name, $fn)
@@ -169,6 +187,28 @@ function runner_run($name, $slice = 0)
             ));
         });
     }
+    if ($name === 'space') {
+        // Each feed has its own gate; a feed that is not due costs nothing.
+        $out = array();
+        foreach (array_keys(gsa_space_feeds()) as $feed) {
+            $only = $GLOBALS['GSA_SPACE_ONLY'] ?? array();
+            if ($only && !in_array($feed, $only, true)) {
+                continue;
+            }
+            $t0 = microtime(true);
+            try {
+                $info = gsa_space_refresh($feed, array('force' => !empty($GLOBALS['GSA_SPACE_FORCE'])));
+            } catch (Throwable $e) {
+                $info = array('ok' => false, 'error' => $e->getMessage());
+            }
+            $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+            if (empty($info['busy']) && empty($info['skipped'])) {
+                gsa_poll_status_note('space-' . $feed, $info);
+            }
+            $out[$feed] = $info;
+        }
+        return $out;
+    }
     if ($name === 'grid') {
         return runner_timed('grid', function () use ($slice) {
             return run_scheduled_scan('everything', '', $slice);
@@ -176,7 +216,7 @@ function runner_run($name, $slice = 0)
     }
     if ($name === 'once') {
         $out = array();
-        foreach (array('outages', 'mesh', 'disease', 'animal', 'jamming', 'aircraft') as $job) {
+        foreach (array('outages', 'mesh', 'disease', 'animal', 'jamming', 'aircraft', 'space') as $job) {
             $out[$job] = runner_run($job);
         }
         return $out;
@@ -237,6 +277,10 @@ if ($job === 'aircraft') {
     $out['aircraft'] = $info;
     if (!$skipJam) {
         $out['jamming'] = runner_run('jamming', $slice);
+    }
+    // Space & Weather feeds never change this job's exit code.
+    if (!$skipSpace) {
+        $out['space'] = runner_run('space', $slice);
     }
     runner_print($out);
     $airOk = !empty($info['ok']) || !empty($info['busy']) || !empty($info['skipped']);

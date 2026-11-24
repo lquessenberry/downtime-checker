@@ -63,6 +63,10 @@ if ($gsaHttp) {
     if ($path === '/api/animal' && $method === 'GET') {
         json_out(200, animal_snapshot());
     }
+    // SPACE & WEATHER caches written by the */5 cron (poll-lib.php).
+    if (preg_match('#^/api/space/(nws|hurricanes|wildfires)$#', $path, $match) && $method === 'GET') {
+        json_out(200, gsa_space_snapshot($match[1]));
+    }
     if ($path === '/api/feeds' && $method === 'GET') {
         json_out(200, feeds_snapshot());
     }

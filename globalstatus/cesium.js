@@ -41,6 +41,15 @@ const state = {
     nuke: { source: null, points: [] },
     quakes: { source: null, points: [] },
     streets3d: { source: null, points: [] },
+    // SPACE & WEATHER (spaceweather.js). radar and aurora draw imagery, not pins.
+    iss: { source: null, points: [] },
+    volcanoes: { source: null, points: [] },
+    disasters: { source: null, points: [] },
+    radar: { source: null, points: [] },
+    nwsalerts: { source: null, points: [] },
+    aurora: { source: null, points: [] },
+    hurricanes: { source: null, points: [] },
+    wildfires: { source: null, points: [] },
   },
   layers: {
     outages: false,
@@ -59,6 +68,14 @@ const state = {
     nuke: false,
     quakes: false,
     streets3d: false,
+    iss: false,
+    volcanoes: false,
+    disasters: false,
+    radar: false,
+    nwsalerts: false,
+    aurora: false,
+    hurricanes: false,
+    wildfires: false,
   },
   nuke: { shots: [], yieldIdx: 0, airburst: true },
   openKind: "",
@@ -79,6 +96,9 @@ const state = {
   replayTimer: 0,
   scanCheckedAt: 0,
 };
+
+// SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
+const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "aurora", "hurricanes", "wildfires"];
 
 const COLORS = {
   up: Cesium.Color.fromCssColorString("#3dff9a"),
@@ -231,6 +251,7 @@ async function applyBasemap(id) {
       viewer.scene.globe.showGroundAtmosphere = true;
       layers.addImageryProvider(provider);
     }
+    if (window.GsaSpaceWeather) window.GsaSpaceWeather.reapplyImagery();
   } catch (error) {
     if (token !== basemapToken) return;
     console.warn(error);
@@ -364,7 +385,7 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
-  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d"]) {
+  for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d", ...SPACE_KEYS]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
@@ -396,6 +417,15 @@ async function startGlobe() {
       pollAircraft().catch((error) => statusLive(error.message || String(error)));
     }
   });
+  if (window.GsaSpaceWeather) {
+    window.GsaSpaceWeather.init({
+      viewer: () => state.viewer,
+      sourceFor: (key) => state.live[key] && state.live[key].source,
+      setCount,
+      statusLive: () => statusLive(),
+      showLive,
+    });
+  }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
@@ -1311,6 +1341,15 @@ function setLayer(layer, on) {
     }
   }
   if (layer === "quakes" && state.layers.quakes) scheduleQuakes();
+  if (SPACE_KEYS.includes(layer) && window.GsaSpaceWeather) {
+    window.GsaSpaceWeather.setActive(layer, state.layers[layer]);
+    const selected = state.viewer && state.viewer.selectedEntity;
+    if (!state.layers[layer] && selected && selected._live && selected._live.layer === layer) {
+      state.viewer.selectedEntity = undefined;
+      const box = document.getElementById("selected");
+      if (box) box.hidden = true;
+    }
+  }
   if (layer === "amfm") {
     if (state.layers.amfm) {
       loadAmfm().catch((error) => statusLive(error.message || String(error)));
@@ -1349,12 +1388,20 @@ const LAYER_LABEL = {
   nuke: "NUCLEAR",
   quakes: "QUAKES",
   streets3d: "STREETS 3D",
+  iss: "ISS POSITION",
+  volcanoes: "VOLCANO ALERTS",
+  disasters: "WORLD DISASTERS",
+  radar: "WEATHER RADAR",
+  nwsalerts: "US WEATHER ALERTS",
+  aurora: "AURORA / SPACE WEATHER",
+  hurricanes: "HURRICANES",
+  wildfires: "WILDFIRES",
 };
 
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "quakes", "streets3d", ...SPACE_KEYS];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -2871,6 +2918,11 @@ function cullAircraftHorizon() {
     state.live.violence.source,
     state.live.nuke.source,
     state.live.streets3d.source,
+    state.live.volcanoes.source,
+    state.live.disasters.source,
+    state.live.nwsalerts.source,
+    state.live.hurricanes.source,
+    state.live.wildfires.source,
     state.outageSource,
     state.hungerSource,
   ];
@@ -3200,7 +3252,10 @@ function showLive(item) {
   const box = document.getElementById("selected");
   box.hidden = false;
   let extra = "";
-  if (item.layer === "quakes") {
+  if (item.sw && window.GsaSpaceWeather) {
+    extra = window.GsaSpaceWeather.popupHtml(item);
+  }
+  else if (item.layer === "quakes") {
     const mag = item.mag != null ? `Magnitude ${item.mag}` : "";
     const bits = [mag, item.place, item.timeText].filter(Boolean).map((part) => esc(String(part)));
     extra = bits.length ? `<br>${bits.join("<br>")}` : "";
@@ -3393,6 +3448,7 @@ function statusLive(error) {
       : "QUAKES",
     state.layers.streets3d ? `STREETS 3D ${state.live.streets3d.points.length}` : "STREETS 3D",
   ];
+  if (window.GsaSpaceWeather) parts.push(...window.GsaSpaceWeather.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
 }
