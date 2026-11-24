@@ -175,7 +175,10 @@
   function renderGroupCount() {
     const el = document.getElementById("sw-on-count");
     if (!el) return;
-    const n = KEYS.filter((key) => st[key].on).length;
+    // Count every switched-on toggle in the group (the space feeds plus
+    // EARTHQUAKES and SATELLITES, which live in this group too).
+    const group = document.getElementById("space-weather");
+    const n = group ? group.querySelectorAll('[data-layer-toggle][aria-pressed="true"]').length : KEYS.filter((key) => st[key].on).length;
     el.textContent = n ? `${n} ON` : "";
   }
 
@@ -766,6 +769,7 @@
     init,
     setActive,
     reapplyImagery,
+    renderGroupCount,
     popupHtml,
     statusParts,
     state: st,
