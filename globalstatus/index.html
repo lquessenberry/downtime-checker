@@ -19,7 +19,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261124i" />
+  <link rel="stylesheet" href="/cesium.css?v=20261124k" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -143,7 +143,10 @@
   <main class="stage">
     <div id="cesium"></div>
     <div id="effects-hud" class="effects-hud" hidden>
-      <h2>Nuke Simulator</h2>
+      <div class="effects-hud-head">
+        <h2>Nuke Simulator</h2>
+        <button type="button" id="effects-hud-close" class="pin-card-close" aria-label="Close">×</button>
+      </div>
       <button type="button" id="effects-sound" class="effects-sound" aria-pressed="true">Sound on</button>
       <p class="effects-lede" id="effects-lede">Tap the globe to choose ground zero, then pick a weapon or type a yield and press Launch Nuke.</p>
       <form id="effects-calc" autocomplete="off">
@@ -294,21 +297,24 @@
       <p id="cc-desc"></p>
       <a id="cc-more" class="cc-more" href="https://www.cfr.org/global-conflict-tracker" target="_blank" rel="noopener noreferrer">LEARN MORE</a>
     </aside>
-    </div>
-    <div class="selected" id="selected" data-map-popup hidden></div>
-    <aside id="aircraft-card" class="aircraft-card" data-map-popup hidden>
+      <aside id="aircraft-card" class="aircraft-card" data-map-popup hidden>
       <div class="ac-top">
         <div>
           <strong id="ac-flight"></strong>
           <div class="ac-hex">Hex: <span id="ac-hex"></span></div>
         </div>
-        <button type="button" id="ac-close" aria-label="Close">×</button>
+        <button type="button" id="ac-close" class="pin-card-close" aria-label="Close">×</button>
       </div>
       <a id="ac-link" href="#" target="_blank" rel="noreferrer">adsb.lol</a>
       <img id="ac-photo" alt="" hidden />
       <p id="ac-credit" hidden></p>
       <dl id="ac-facts"></dl>
     </aside>
+    </div>
+    <div class="selected" id="selected" data-map-popup hidden>
+      <button type="button" id="selected-close" class="pin-card-close" aria-label="Close">×</button>
+      <div class="selected-body" id="selected-body"></div>
+    </div>
     <div class="progress-wrap"><div class="progress" id="progress"></div></div>
     <p class="jam-credit" hidden><span class="jam-credit-track">GPS interference from <a href="https://gpsinterference.com/" target="_blank" rel="noreferrer">GPSInterference.com</a> (adsb.lol globe history, ODbL)</span></p>
     <p class="air-credit" hidden><span class="air-credit-track">Aircraft from <a href="https://www.adsb.lol/docs/open-data/api" target="_blank" rel="noreferrer">adsb.lol</a> (ODbL 1.0)</span></p>
@@ -453,9 +459,9 @@
   <script src="/sats.js"></script>
   <script src="/spaceweather.js?v=20261124i"></script>
   <script src="/infra.js?v=20261124i"></script>
-  <script src="/firearms.js?v=20261124j"></script>
+  <script src="/firearms.js?v=20261124k"></script>
   <script src="/geocoder.js?v=20261124i"></script>
   <script src="/nearby.js?v=20261124i"></script>
-  <script src="/cesium.js?v=20261124j"></script>
+  <script src="/cesium.js?v=20261124k"></script>
 </body>
 </html>
