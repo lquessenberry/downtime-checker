@@ -15,12 +15,20 @@ if (!is_dir($dataDir)) {
 
 require $root . '/poll-lib.php';
 
-$gsaHttp = PHP_SAPI !== 'cli' && !defined('GSA_RUNNER');
-if ($gsaHttp) {
+// Web requests only. poll-runner.php (cron) loads this file for its functions.
+if (!defined('GSA_RUNNER')) {
+    gsa_http_routes();
+}
+
+function gsa_http_routes()
+{
+    global $root;
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 
     if ($path === '/api/events' && $method === 'GET') {
+        // Left for pages still open from before the switch. The new page
+        // does not open this stream.
         stream_events();
     }
     if ($path === '/api/scan' && $method === 'POST') {
@@ -28,15 +36,22 @@ if ($gsaHttp) {
     }
     if ($path === '/api/scan-state' && $method === 'GET') {
         $id = isset($_GET['id']) ? (string) $_GET['id'] : 'everything';
-        $country = isset($_GET['country']) ? trim((string) $_GET['country']) : '';
+        $country = clean_country($_GET['country'] ?? '');
+        if (!scan_allowed_id($id)) {
+            json_out(400, array('error' => 'Unknown check'));
+        }
         json_out(200, gsa_filter_scan_state(gsa_scan_cache_read(), $id, $country));
     }
     if ($path === '/api/poll-status' && $method === 'GET') {
         json_out(200, gsa_poll_status_read());
     }
     if ($path === '/api/stop' && $method === 'POST') {
-        file_put_contents($stopFile, '1');
-        json_out(200, array('ok' => true));
+        // Stop is local to each visitor now. Visitors can no longer write
+        // data/stop.flag, so nobody can abort the scheduled pass.
+        json_out(200, array('ok' => true, 'local' => true));
+    }
+    if ($path === '/api/aircraft' && $method === 'GET') {
+        json_out(200, gsa_aircraft_snapshot());
     }
     if (preg_match('#^/api/aircraft/([0-9a-fA-F]{6})$#', $path, $match) && $method === 'GET') {
         json_out(200, aircraft_detail(strtolower($match[1]), $_GET));
@@ -56,8 +71,14 @@ if ($gsaHttp) {
     if ($path === '/api/animal' && $method === 'GET') {
         json_out(200, animal_snapshot());
     }
+
+    // SPACE & WEATHER caches written by the */5 cron (poll-lib.php).
+    if (preg_match('#^/api/space/(nws|hurricanes|wildfires|tsunami|rivers|coastal)$#', $path, $match) && $method === 'GET') {
+        json_out(200, gsa_space_snapshot($match[1]));
+    }
+
     if ($path === '/api/feeds' && $method === 'GET') {
-        json_out(200, feeds_snapshot());
+        json_out(200, feeds_with_live_layers());
     }
 
     $files = array(
@@ -69,12 +90,7 @@ if ($gsaHttp) {
         '/api/radio' => 'api/radio.json',
         '/api/streams' => 'api/streams.json',
         '/api/amfm' => 'api/amfm.json',
-        '/api/designations' => 'api/designations.json',
-        '/api/violence' => 'api/violence.json',
-        '/api/zones' => 'api/zones.json',
-        '/api/claims' => 'api/claims.json',
     );
-
     if (isset($files[$path]) && $method === 'GET') {
         $file = $root . '/' . $files[$path];
         if (!is_file($file)) {
@@ -268,6 +284,12 @@ function target_matches($row, $id, $country)
     return has_kind($row, $kind);
 }
 
+function clean_country($country)
+{
+    $country = trim((string) $country);
+    return (string) preg_replace('/[^\p{L}\p{N} .()\'’-]/u', '', $country);
+}
+
 function scan_allowed_id($id)
 {
     $allowed = array(
@@ -281,6 +303,7 @@ function scan_allowed_id($id)
     return in_array($id, $allowed, true);
 }
 
+// LOCK & SCAN: serve the last scheduled pass for this test. No new scan.
 function begin_scan()
 {
     $body = json_decode((string) file_get_contents('php://input'), true);
@@ -288,14 +311,13 @@ function begin_scan()
         $body = array();
     }
     $id = isset($body['id']) ? (string) $body['id'] : '';
-    $country = isset($body['country']) ? trim((string) $body['country']) : '';
-    $country = preg_replace('/[^\p{L}\p{N} .()\'’-]/u', '', $country);
+    $country = clean_country($body['country'] ?? '');
     if (!scan_allowed_id($id)) {
         json_out(400, array('error' => 'Unknown check'));
     }
     $snap = gsa_scan_cache_read();
     $filtered = gsa_filter_scan_state($snap, $id, $country);
-    $pending = !$snap || empty($snap['results']);
+    $pending = !empty($filtered['pending']);
     json_out(200, array(
         'ok' => true,
         'replay' => true,
@@ -303,6 +325,58 @@ function begin_scan()
         'state' => $filtered,
         'error' => $pending ? 'Grid pass not ready yet' : null,
     ));
+}
+
+// Cron only (poll-runner.php grid). Same lock as before, so passes never overlap.
+function run_scheduled_scan($id = 'everything', $country = '', $slice = 0)
+{
+    global $lockFile, $stopFile;
+    $lock = fopen($lockFile, 'c');
+    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+        if ($lock) {
+            fclose($lock);
+        }
+        return array('ok' => false, 'busy' => true, 'error' => 'A pass is already running');
+    }
+    @unlink($stopFile);
+    $targets = select_targets($id, $country);
+    if ($slice > 0) {
+        $targets = array_slice($targets, 0, $slice);
+    }
+    $state = blank_state();
+    $state['running'] = true;
+    $state['scanId'] = time();
+    $state['heading'] = catalog_label($id);
+    $state['searchId'] = $id;
+    $state['total'] = count($targets);
+    $state['startedAt'] = (int) round(microtime(true) * 1000);
+    $state['results'] = array_fill(0, count($targets), null);
+    $state = run_scan($state, $targets, $lock, false, microtime(true) + GSA_GRID_MAX_SEC);
+    $info = array(
+        'up' => $state['up'],
+        'down' => $state['down'],
+        'done' => $state['done'],
+        'total' => $state['total'],
+        'mode' => $state['mode'] ?? '',
+        'ms' => $state['ms'] ?? 0,
+    );
+    $problem = gsa_pass_problem($state);
+    if ($problem === null && $slice > 0) {
+        $problem = 'Test slice, not published';
+    }
+    if ($problem !== null) {
+        $info['ok'] = false;
+        $info['published'] = false;
+        $info['error'] = $problem;
+        $info['kept'] = is_file(gsa_scan_cache_file()) ? 'last good pass' : 'nothing saved yet';
+        return $info;
+    }
+    $put = gsa_cache_put(gsa_scan_cache_file(), $state);
+    $info['ok'] = empty($put['error']);
+    $info['published'] = $info['ok'];
+    $info['bytes'] = $put['bytes'] ?? 0;
+    $info['error'] = $put['error'] ?? null;
+    return $info;
 }
 
 function close_http($payload, $code)
@@ -328,7 +402,7 @@ function close_http($payload, $code)
     flush();
 }
 
-function run_scan($state, $targets, $lock, $halt = true)
+function run_scan($state, $targets, $lock, $halt = true, $deadline = 0)
 {
     global $stopFile;
     @set_time_limit(0);
@@ -336,13 +410,18 @@ function run_scan($state, $targets, $lock, $halt = true)
     $started = microtime(true);
     $mode = probe_mode();
     $batchSize = $mode === 'ping' ? 20 : 16;
+    $state['mode'] = $mode;
+    $state['batchSize'] = $batchSize;
     $count = count($targets);
-    $emit = $halt;
     for ($offset = 0; $offset < $count; $offset += $batchSize) {
-        if (is_file($stopFile)) {
+        $late = $deadline > 0 && microtime(true) >= $deadline;
+        if (is_file($stopFile) || $late) {
             $state['running'] = false;
+            $state['stopped'] = !$late;
+            $state['timedOut'] = $late;
             $state['finishedAt'] = (int) round(microtime(true) * 1000);
-            if ($emit) {
+            $state['ms'] = (int) round((microtime(true) - $started) * 1000);
+            if ($halt) {
                 emit_event($state, array('type' => 'scan-stop', 'scanId' => $state['scanId']));
             } else {
                 write_state($state);
@@ -385,7 +464,7 @@ function run_scan($state, $targets, $lock, $halt = true)
                 'index' => $index,
             );
             $state['results'][$index] = $result;
-            if ($emit) {
+            if ($halt) {
                 emit_event($state, array(
                     'type' => 'result',
                     'scanId' => $state['scanId'],
@@ -396,14 +475,11 @@ function run_scan($state, $targets, $lock, $halt = true)
                 ));
             }
         }
-        if (!$emit) {
-            write_state($state);
-        }
     }
     $state['running'] = false;
     $state['finishedAt'] = (int) round(microtime(true) * 1000);
     $state['ms'] = (int) round((microtime(true) - $started) * 1000);
-    if ($emit) {
+    if ($halt) {
         emit_event($state, array(
             'type' => 'scan-done',
             'scanId' => $state['scanId'],
@@ -412,8 +488,6 @@ function run_scan($state, $targets, $lock, $halt = true)
             'total' => $state['total'],
             'ms' => $state['ms'],
         ));
-    } else {
-        write_state($state);
     }
     flock($lock, LOCK_UN);
     fclose($lock);
@@ -425,6 +499,10 @@ function run_scan($state, $targets, $lock, $halt = true)
 
 function probe_mode()
 {
+    $forced = getenv('GSA_PROBE_MODE');
+    if ($forced === 'https' || $forced === 'ping') {
+        return $forced;
+    }
     if (!function_exists('proc_open')) {
         return 'https';
     }
@@ -618,12 +696,29 @@ function outage_credit_text()
 
 function outages_snapshot()
 {
+    global $dataDir;
+    $lock = fopen($dataDir . '/outages.lock', 'c');
+    if ($lock) {
+        flock($lock, LOCK_EX);
+    }
+    try {
+        return outages_snapshot_locked();
+    } finally {
+        if ($lock) {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+}
+
+function outages_snapshot_locked()
+{
     global $root, $dataDir;
     $cacheFile = $dataDir . '/outages-cache.json';
-    $ttl = 180;
-    if (!gsa_runner_mode()) {
-        $hit = gsa_cache_serve($cacheFile, $ttl);
-        return $hit ?: gsa_awaiting('ODIN', 'https://odin.ornl.gov/', 'Awaiting poller');
+    $ttl = 300;
+    $http = gsa_http_serve_cache($cacheFile, $ttl, 'ODIN', 'https://odin.ornl.gov/');
+    if ($http !== null) {
+        return $http;
     }
     $cached = null;
     if (is_file($cacheFile)) {
@@ -653,12 +748,16 @@ function outages_snapshot()
             'points' => array(),
         ), true);
         if (!empty($built['points'])) {
-            gsa_cache_put($cacheFile, $built);
+            $stored = $built;
+            $stored['fetchedAt'] = time();
+            gsa_atomic_write($cacheFile, json_encode($stored));
         }
         return $built;
     }
     $built = outages_attach_world(outages_build($root, $raw), false);
-    gsa_cache_put($cacheFile, $built);
+    $stored = $built;
+    $stored['fetchedAt'] = time();
+    gsa_atomic_write($cacheFile, json_encode($stored));
     unset($built['fetchedAt']);
     return $built;
 }
@@ -1154,145 +1253,103 @@ function outages_build($root, $raw)
     );
 }
 
-function military_snapshot()
+function feeds_with_live_layers()
 {
-    global $dataDir;
-    $lock = fopen($dataDir . '/mil.lock', 'c');
-    if ($lock) {
-        flock($lock, LOCK_EX);
-    }
-    try {
-        return military_snapshot_locked();
-    } finally {
-        if ($lock) {
-            flock($lock, LOCK_UN);
-            fclose($lock);
+    global $root;
+    $file = $root . '/api/feeds.json';
+    $pack = array();
+    if (is_file($file)) {
+        $decoded = json_decode((string) file_get_contents($file), true);
+        if (is_array($decoded)) {
+            $pack = $decoded;
         }
     }
+    // Ships and conflicts stay as they are in the static file.
+    // Aircraft and jamming come from the cron caches so visitors never
+    // trigger adsb.lol or api.gpsinterference.com.
+    $pack['aircraft'] = gsa_aircraft_snapshot();
+    $pack['jamming'] = gsa_jamming_snapshot();
+    return $pack;
 }
 
-function military_snapshot_locked()
+function feeds_with_live_aircraft()
 {
-    global $dataDir;
-    $cacheFile = $dataDir . '/mil-cache.json';
-    // adsb.lol allows 500 requests a day from one address. Three minutes
-    // keeps a day of military viewing under that cap. Visitors share this cache.
-    $ttl = 180;
-    if (!gsa_runner_mode()) {
-        $hit = gsa_cache_serve($cacheFile, $ttl);
-        return $hit ?: gsa_awaiting('adsb.lol', 'https://api.adsb.lol/v2/mil', 'Awaiting poller');
-    }
-    $cached = null;
-    if (is_file($cacheFile)) {
-        $cached = json_decode((string) file_get_contents($cacheFile), true);
-    }
-    if (is_array($cached) && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $ttl && !empty($cached['points'])) {
-        unset($cached['fetchedAt']);
-        $cached['stale'] = false;
-        return $cached;
-    }
-    $raw = outage_fetch('https://api.adsb.lol/v2/mil', browser_agent());
-    $rows = is_array($raw) ? ($raw['ac'] ?? null) : null;
-    if (!is_array($rows)) {
-        if (is_array($cached) && !empty($cached['points'])) {
-            unset($cached['fetchedAt']);
-            $cached['stale'] = true;
-            return $cached;
-        }
-        return array(
-            'source' => 'adsb.lol',
-            'sourceUrl' => 'https://api.adsb.lol/v2/mil',
-            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
-            'stale' => true,
-            'error' => 'Military feed did not answer',
-            'count' => 0,
-            'points' => array(),
-        );
-    }
+    return feeds_with_live_layers();
+}
+
+function military_snapshot()
+{
+    $snap = gsa_aircraft_snapshot();
     $points = array();
-    foreach ($rows as $row) {
-        if (!is_array($row) || !isset($row['lat'], $row['lon'])) {
-            continue;
+    foreach (($snap['points'] ?? array()) as $point) {
+        if (is_array($point) && !empty($point['mil'])) {
+            $points[] = $point;
         }
-        $lat = (float) $row['lat'];
-        $lon = (float) $row['lon'];
-        if ($lat == 0.0 && $lon == 0.0) {
-            continue;
-        }
-        $alt = $row['alt_baro'] ?? 0;
-        if ($alt === 'ground') {
-            $altM = 0;
-        } elseif (is_numeric($alt)) {
-            $altM = round(((float) $alt) * 0.3048, 2);
-        } else {
-            $alt = 0;
-            $altM = 0;
-        }
-        $flags = (int) ($row['dbFlags'] ?? 0);
-        $emergency = $row['emergency'] ?? null;
-        if ($emergency === 'none' || $emergency === '') {
-            $emergency = null;
-        }
-        $points[] = array(
-            'lat' => $lat,
-            'lon' => $lon,
-            'hex' => strtolower((string) ($row['hex'] ?? '')),
-            'name' => trim((string) ($row['flight'] ?? '')),
-            'r' => (string) ($row['r'] ?? ''),
-            't' => (string) ($row['t'] ?? ''),
-            'alt' => $alt,
-            'altM' => $altM,
-            'track' => $row['track'] ?? 0,
-            'gs' => $row['gs'] ?? 0,
-            'squawk' => (string) ($row['squawk'] ?? ''),
-            'emergency' => $emergency,
-            'category' => (string) ($row['category'] ?? ''),
-            'src' => (string) ($row['type'] ?? ''),
-            'mil' => true,
-            'interesting' => (bool) ($flags & 2),
-            'pia' => (bool) ($flags & 4),
-            'ladd' => (bool) ($flags & 8),
-            'baro_rate' => $row['baro_rate'] ?? null,
-            'seen_pos' => $row['seen_pos'] ?? null,
-        );
     }
-    if (!$points) {
-        if (is_array($cached) && !empty($cached['points'])) {
-            unset($cached['fetchedAt']);
-            $cached['stale'] = true;
-            return $cached;
-        }
-        return array(
-            'source' => 'adsb.lol',
-            'sourceUrl' => 'https://api.adsb.lol/v2/mil',
-            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
-            'stale' => true,
-            'error' => 'Military feed had no positions',
-            'count' => 0,
-            'points' => array(),
-        );
+    $error = $snap['error'] ?? null;
+    if (!$points && $error === null && empty($snap['points'])) {
+        $error = 'Awaiting poller';
     }
-    $built = array(
+    return array(
         'source' => 'adsb.lol',
         'sourceUrl' => 'https://api.adsb.lol/v2/mil',
-        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
-        'stale' => false,
+        'updated' => $snap['updated'] ?? null,
+        'attribution' => 'adsb.lol (ODbL 1.0)',
+        'stale' => !empty($snap['stale']) || !$points,
+        'error' => $error,
         'count' => count($points),
         'points' => $points,
+        'ageSec' => $snap['ageSec'] ?? null,
     );
-    gsa_cache_put($cacheFile, $built);
-    return $built;
 }
 
 function aircraft_detail($hex, $query)
 {
-    $detail = array('hex' => $hex, 'live' => null, 'photo' => null, 'route' => null, 'typeInfo' => null);
-    $live = remote_json('https://api.adsb.lol/v2/hex/' . $hex);
+    global $root;
+    $detail = array('hex' => $hex, 'live' => null, 'photo' => null, 'route' => null, 'typeInfo' => null, 'cached' => true);
     $aircraft = null;
-    if (is_array($live) && !empty($live['ac'][0]) && is_array($live['ac'][0])) {
-        $aircraft = $live['ac'][0];
-        $detail['live'] = $aircraft;
+    $snap = gsa_aircraft_snapshot();
+    foreach (($snap['points'] ?? array()) as $point) {
+        if (is_array($point) && strtolower((string) ($point['hex'] ?? '')) === $hex) {
+            $aircraft = $point;
+            break;
+        }
     }
+    if (is_array($aircraft)) {
+        $detail['live'] = array(
+            'hex' => $hex,
+            'flight' => $aircraft['name'] ?? '',
+            'r' => $aircraft['r'] ?? '',
+            't' => $aircraft['t'] ?? '',
+            'squawk' => $aircraft['squawk'] ?? '',
+            'gs' => $aircraft['gs'] ?? null,
+            'alt_baro' => $aircraft['alt'] ?? null,
+            'track' => $aircraft['track'] ?? null,
+            'lat' => $aircraft['lat'] ?? null,
+            'lon' => $aircraft['lon'] ?? null,
+            'baro_rate' => $aircraft['baro_rate'] ?? null,
+            'seen_pos' => $aircraft['seen_pos'] ?? null,
+            'type' => $aircraft['src'] ?? '',
+            'emergency' => $aircraft['emergency'] ?? null,
+            'category' => $aircraft['category'] ?? '',
+            'mil' => !empty($aircraft['mil']),
+        );
+    }
+    $typeCode = is_array($aircraft) ? strtoupper(trim((string) ($aircraft['t'] ?? ''))) : '';
+    if ($typeCode === '' && isset($query['type'])) {
+        $typeCode = strtoupper(trim((string) $query['type']));
+    }
+    if ($typeCode !== '') {
+        $types = json_decode((string) @file_get_contents($root . '/api/icao_aircraft_types.json'), true);
+        if (is_array($types) && isset($types[$typeCode]) && is_array($types[$typeCode])) {
+            $detail['typeInfo'] = array(
+                'desc' => $types[$typeCode]['desc'] ?? '',
+                'wtc' => $types[$typeCode]['wtc'] ?? '',
+            );
+        }
+    }
+    // Photos come from PlaneSpotters, not adsb.lol, and do not spend the
+    // 500/day cap. Skip quietly if the photo service is down.
     $photos = remote_json('https://api.planespotters.net/pub/photos/hex/' . strtoupper($hex));
     if (is_array($photos) && !empty($photos['photos'][0]) && is_array($photos['photos'][0])) {
         $photo = $photos['photos'][0];
@@ -1303,59 +1360,6 @@ function aircraft_detail($hex, $query)
                 'src' => $src,
                 'link' => $photo['link'] ?? '',
                 'photographer' => $photo['photographer'] ?? '',
-            );
-        }
-    }
-    $callsign = '';
-    if (is_array($aircraft)) {
-        $callsign = strtoupper(trim((string) ($aircraft['flight'] ?? '')));
-    }
-    if ($callsign === '' && isset($query['callsign'])) {
-        $callsign = strtoupper(trim((string) $query['callsign']));
-    }
-    $callsign = substr(preg_replace('/[^A-Z0-9]/', '', $callsign), 0, 8);
-    if ($callsign !== '') {
-        $lat = is_array($aircraft) ? ($aircraft['lat'] ?? null) : null;
-        $lon = is_array($aircraft) ? ($aircraft['lon'] ?? null) : null;
-        if ($lat === null && isset($query['lat'])) {
-            $lat = (float) $query['lat'];
-        }
-        if ($lon === null && isset($query['lon'])) {
-            $lon = (float) $query['lon'];
-        }
-        $routes = remote_json('https://adsb.im/api/0/routeset', json_encode(array(
-            'planes' => array(array('callsign' => $callsign, 'lat' => $lat, 'lng' => $lon)),
-        )));
-        if (is_array($routes) && isset($routes[0]) && is_array($routes[0]) && ($routes[0]['plausible'] ?? true) !== false) {
-            $route = $routes[0];
-            $iata = (string) ($route['_airport_codes_iata'] ?? '');
-            $icao = (string) ($route['airport_codes'] ?? '');
-            if (strtolower($iata) === 'unknown') {
-                $iata = '';
-            }
-            if (strtolower($icao) === 'unknown') {
-                $icao = '';
-            }
-            if ($iata !== '' || $icao !== '') {
-                $detail['route'] = array(
-                    'iata' => $iata,
-                    'icao' => $icao,
-                    'airline' => $route['airline_code'] ?? '',
-                );
-            }
-        }
-    }
-    $typeCode = is_array($aircraft) ? strtoupper(trim((string) ($aircraft['t'] ?? ''))) : '';
-    if ($typeCode === '' && isset($query['type'])) {
-        $typeCode = strtoupper(trim((string) $query['type']));
-    }
-    if ($typeCode !== '') {
-        global $root;
-        $types = json_decode((string) @file_get_contents($root . '/api/icao_aircraft_types.json'), true);
-        if (is_array($types) && isset($types[$typeCode]) && is_array($types[$typeCode])) {
-            $detail['typeInfo'] = array(
-                'desc' => $types[$typeCode]['desc'] ?? '',
-                'wtc' => $types[$typeCode]['wtc'] ?? '',
             );
         }
     }
@@ -1398,10 +1402,10 @@ function mesh_snapshot_locked()
 {
     global $dataDir;
     $cacheFile = $dataDir . '/mesh-cache.json';
-    $ttl = 90;
-    if (!gsa_runner_mode()) {
-        $hit = gsa_cache_serve($cacheFile, $ttl);
-        return $hit ?: gsa_awaiting('meshmap.net', 'https://meshmap.net/', 'Awaiting poller');
+    $ttl = 300;
+    $http = gsa_http_serve_cache($cacheFile, $ttl, 'meshmap.net', 'https://meshmap.net/');
+    if ($http !== null) {
+        return $http;
     }
     $cached = null;
     if (is_file($cacheFile)) {
@@ -1500,7 +1504,9 @@ function mesh_snapshot_locked()
         'count' => count($points),
         'points' => $points,
     );
-    gsa_cache_put($cacheFile, $built);
+    $stored = $built;
+    $stored['fetchedAt'] = time();
+    gsa_atomic_write($cacheFile, json_encode($stored));
     return $built;
 }
 
@@ -1561,9 +1567,9 @@ function outbreak_fetch($url, $timeout)
 
 function outbreak_cached($cacheFile, $ttl, $fetch, $emptyError, $source, $sourceUrl)
 {
-    if (!gsa_runner_mode()) {
-        $hit = gsa_cache_serve($cacheFile, $ttl);
-        return $hit ?: gsa_awaiting($source, $sourceUrl, 'Awaiting poller');
+    $http = gsa_http_serve_cache($cacheFile, $ttl, $source, $sourceUrl);
+    if ($http !== null) {
+        return $http;
     }
     $cached = null;
     if (is_file($cacheFile)) {
@@ -1599,7 +1605,9 @@ function outbreak_cached($cacheFile, $ttl, $fetch, $emptyError, $source, $source
         'count' => count($points),
         'points' => $points,
     );
-    gsa_cache_put($cacheFile, $built);
+    $stored = $built;
+    $stored['fetchedAt'] = time();
+    gsa_atomic_write($cacheFile, json_encode($stored));
     return $built;
 }
 
@@ -1675,7 +1683,7 @@ function disease_snapshot()
     return outbreak_lock('disease', function () use ($dataDir) {
         return outbreak_cached(
             $dataDir . '/disease-cache.json',
-            180,
+            300,
             function () {
                 $query = 'category%5B%5D=1&category%5B%5D=2&category%5B%5D=29&time_interval=1%20week&heatscore=1';
                 $raw = outbreak_fetch('https://www.healthmap.org/getAlerts.php?' . $query, 25);
@@ -1779,283 +1787,4 @@ function animal_snapshot()
             'https://app.gideononline.com/updates/outbreaks'
         );
     });
-}
-
-function feeds_pack()
-{
-    global $root, $dataDir;
-    $hit = gsa_cache_serve($dataDir . '/feeds-cache.json', 180);
-    if ($hit) {
-        return $hit;
-    }
-    $file = $root . '/api/feeds.json';
-    if (!is_file($file)) {
-        return array(
-            'jamming' => gsa_awaiting('gpsinterference.com', 'https://api.gpsinterference.com/', 'Awaiting poller'),
-            'aircraft' => gsa_awaiting('adsb.lol', 'https://api.adsb.lol/', 'Awaiting poller'),
-            'ships' => array('points' => array(), 'count' => 0),
-            'conflicts' => array('points' => array(), 'count' => 0),
-        );
-    }
-    $decoded = json_decode((string) file_get_contents($file), true);
-    return is_array($decoded) ? $decoded : array();
-}
-
-function feeds_snapshot()
-{
-    return feeds_pack();
-}
-
-function feeds_write($pack)
-{
-    global $dataDir;
-    $pack['updated'] = gmdate('Y-m-d\TH:i:s\Z');
-    return gsa_cache_put($dataDir . '/feeds-cache.json', $pack);
-}
-
-function jamming_sample($jammed)
-{
-    usort($jammed, function ($a, $b) {
-        return ($b['pct'] <=> $a['pct']);
-    });
-    $purple = array();
-    $red = array();
-    $yellow = array();
-    foreach ($jammed as $point) {
-        if ($point['band'] === 'p') {
-            $purple[] = $point;
-        } elseif ($point['band'] === 'r') {
-            $red[] = $point;
-        } else {
-            $yellow[] = $point;
-        }
-    }
-    $picked = array_merge($purple, $red);
-    $cap = 700;
-    $n = count($yellow);
-    if ($n <= $cap) {
-        $picked = array_merge($picked, $yellow);
-    } else {
-        $step = $n / $cap;
-        for ($i = 0; $i < $cap; $i++) {
-            $picked[] = $yellow[(int) floor($i * $step)];
-        }
-    }
-    return array_slice($picked, 0, 1400);
-}
-
-function jamming_refresh()
-{
-    $raw = outage_fetch('https://api.gpsinterference.com/v1/interference/latest', browser_agent());
-    $jammed = array();
-    foreach ((is_array($raw) ? ($raw['hexes'] ?? array()) : array()) as $hex) {
-        if (!is_array($hex) || ($hex['c'] ?? '') === 'g' || !isset($hex['poly']) || !is_array($hex['poly']) || count($hex['poly']) < 3) {
-            continue;
-        }
-        $lat = 0;
-        $lon = 0;
-        foreach ($hex['poly'] as $pt) {
-            $lat += (float) $pt[0];
-            $lon += (float) $pt[1];
-        }
-        $n = count($hex['poly']);
-        $band = (string) ($hex['c'] ?? 'y');
-        $jammed[] = array(
-            'lat' => $lat / $n,
-            'lon' => $lon / $n,
-            'band' => $band,
-            'bad' => (float) ($hex['b'] ?? 0),
-            'good' => (float) ($hex['g'] ?? 0),
-            'pct' => (float) ($hex['p'] ?? 0),
-            'name' => 'GPS ' . ($band === 'p' ? 'severe' : ($band === 'r' ? 'heavy' : 'degraded')),
-        );
-    }
-    $points = jamming_sample($jammed);
-    $layer = array(
-        'points' => $points,
-        'count' => count($jammed),
-        'updated' => is_array($raw) ? ($raw['updated'] ?? gmdate('Y-m-d\TH:i:s\Z')) : gmdate('Y-m-d\TH:i:s\Z'),
-        'source' => 'GPSInterference.com',
-        'error' => $raw ? null : 'GPSInterference did not answer',
-        'at' => (int) round(microtime(true) * 1000),
-    );
-    $pack = feeds_pack();
-    $pack['jamming'] = $layer;
-    $put = feeds_write($pack);
-    $put['count'] = $layer['count'];
-    return $put;
-}
-
-function map_adsb_point($row, $tag)
-{
-    if (!is_array($row) || !isset($row['lat'], $row['lon'])) {
-        return null;
-    }
-    $lat = (float) $row['lat'];
-    $lon = (float) $row['lon'];
-    if ($lat == 0.0 && $lon == 0.0) {
-        return null;
-    }
-    $alt = $row['alt_baro'] ?? 0;
-    $ground = $alt === 'ground';
-    $altM = $ground ? 0 : (is_numeric($alt) ? round(((float) $alt) * 0.3048, 2) : 0);
-    $flags = (int) ($row['dbFlags'] ?? 0);
-    $emergency = $row['emergency'] ?? null;
-    if ($emergency === 'none' || $emergency === '') {
-        $emergency = null;
-    }
-    $hex = strtolower((string) ($row['hex'] ?? ''));
-    return array(
-        'lat' => $lat,
-        'lon' => $lon,
-        'hex' => $hex,
-        'name' => trim((string) ($row['flight'] ?? $row['r'] ?? $row['hex'] ?? 'aircraft')),
-        'r' => (string) ($row['r'] ?? ''),
-        't' => (string) ($row['t'] ?? ''),
-        'alt' => $alt,
-        'altM' => $altM,
-        'track' => $row['track'] ?? 0,
-        'gs' => $row['gs'] ?? 0,
-        'squawk' => (string) ($row['squawk'] ?? ''),
-        'emergency' => $emergency,
-        'category' => (string) ($row['category'] ?? ''),
-        'src' => (string) ($row['type'] ?? ''),
-        'mil' => (bool) ($flags & 1) || $tag === 'mil',
-        'interesting' => (bool) ($flags & 2),
-        'pia' => (bool) ($flags & 4) || $tag === 'pia',
-        'ladd' => (bool) ($flags & 8) || $tag === 'ladd',
-        'baro_rate' => $row['baro_rate'] ?? null,
-        'seen_pos' => $row['seen_pos'] ?? null,
-        'ts' => (int) round(microtime(true) * 1000),
-    );
-}
-
-function aircraft_live_file()
-{
-    global $dataDir;
-    return $dataDir . '/aircraft-live.json';
-}
-
-function aircraft_live_load()
-{
-    $file = aircraft_live_file();
-    if (!is_file($file)) {
-        return array();
-    }
-    $decoded = json_decode((string) file_get_contents($file), true);
-    return is_array($decoded) ? $decoded : array();
-}
-
-function aircraft_live_prune($map)
-{
-    $cut = (int) round(microtime(true) * 1000) - 15 * 60 * 1000;
-    $kept = array();
-    foreach ($map as $key => $point) {
-        if (is_array($point) && (int) ($point['ts'] ?? 0) >= $cut) {
-            $kept[$key] = $point;
-        }
-    }
-    return $kept;
-}
-
-function adsb_cycle_job()
-{
-    global $dataDir;
-    $stepFile = $dataDir . '/adsb-step.json';
-    $step = 0;
-    if (is_file($stepFile)) {
-        $decoded = json_decode((string) file_get_contents($stepFile), true);
-        $step = (int) ($decoded['step'] ?? 0);
-    }
-    $cycle = array('origin', 'mil', 'ladd', 'pia', 'squawk7700');
-    $kind = $cycle[$step % count($cycle)];
-    file_put_contents($stepFile, json_encode(array('step' => $step + 1)), LOCK_EX);
-    if ($kind === 'origin') {
-        return array('tag' => 'origin', 'url' => 'https://api.adsb.lol/v2/point/35.84/-90.7/250');
-    }
-    if ($kind === 'mil') {
-        return array('tag' => 'mil', 'url' => 'https://api.adsb.lol/v2/mil');
-    }
-    if ($kind === 'ladd') {
-        return array('tag' => 'ladd', 'url' => 'https://api.adsb.lol/v2/ladd');
-    }
-    if ($kind === 'pia') {
-        return array('tag' => 'pia', 'url' => 'https://api.adsb.lol/v2/pia');
-    }
-    return array('tag' => 'squawk7700', 'url' => 'https://api.adsb.lol/v2/squawk/7700');
-}
-
-function aircraft_refresh()
-{
-    $job = adsb_cycle_job();
-    $raw = outage_fetch($job['url'], browser_agent());
-    $rows = is_array($raw) ? ($raw['ac'] ?? array()) : array();
-    $map = aircraft_live_prune(aircraft_live_load());
-    foreach ($rows as $row) {
-        $point = map_adsb_point($row, $job['tag']);
-        if (!$point) {
-            continue;
-        }
-        $key = $point['hex'] !== '' ? $point['hex'] : ($point['lat'] . ',' . $point['lon']);
-        $map[$key] = $point;
-    }
-    file_put_contents(aircraft_live_file(), json_encode($map), LOCK_EX);
-    $points = array_values($map);
-    usort($points, function ($a, $b) {
-        return ((int) ($b['ts'] ?? 0)) <=> ((int) ($a['ts'] ?? 0));
-    });
-    if (count($points) > 2500) {
-        $points = array_slice($points, 0, 2500);
-    }
-    $layer = array(
-        'points' => $points,
-        'count' => count($map),
-        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
-        'source' => 'adsb.lol ' . $job['tag'],
-        'error' => $raw ? null : 'adsb.lol did not answer',
-        'at' => (int) round(microtime(true) * 1000),
-    );
-    $pack = feeds_pack();
-    $pack['aircraft'] = $layer;
-    $put = feeds_write($pack);
-    $put['count'] = $layer['count'];
-    $put['tag'] = $job['tag'];
-    return $put;
-}
-
-function run_scheduled_scan($id = 'everything', $country = '', $slice = 0)
-{
-    global $lockFile, $stopFile;
-    if (!scan_allowed_id($id)) {
-        return array('error' => 'Unknown check');
-    }
-    $lock = fopen($lockFile, 'c');
-    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
-        if ($lock) {
-            fclose($lock);
-        }
-        return array('error' => 'A check is already running');
-    }
-    @unlink($stopFile);
-    $targets = select_targets($id, $country);
-    if ($slice > 0) {
-        $targets = array_slice($targets, 0, $slice);
-    }
-    $heading = $id === 'country' ? $country : catalog_label($id);
-    $state = blank_state();
-    $state['running'] = true;
-    $state['scanId'] = time();
-    $state['heading'] = $heading;
-    $state['searchId'] = $id;
-    $state['total'] = count($targets);
-    $state['startedAt'] = (int) round(microtime(true) * 1000);
-    $state['results'] = array_fill(0, count($targets), null);
-    write_state($state);
-    $state = run_scan($state, $targets, $lock, false);
-    $put = gsa_cache_put(gsa_scan_cache_file(), $state);
-    $put['up'] = $state['up'];
-    $put['down'] = $state['down'];
-    $put['total'] = $state['total'];
-    $put['ms'] = $state['ms'] ?? 0;
-    return $put;
 }

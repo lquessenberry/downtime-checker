@@ -3,7 +3,9 @@
 #   docker build -f deploy/frankenphp/Dockerfile -t globalstatus-franken .
 FROM dunglas/frankenphp:1-php8.4-alpine
 
-RUN apk add --no-cache zstd brotli \
+# iputils: real ICMP ping for the grid pass (otherwise probe_mode falls back to HTTPS).
+# su-exec: start as root to chown the Fly volume, then drop to user app.
+RUN apk add --no-cache zstd brotli iputils su-exec \
  && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
 COPY deploy/frankenphp/php.ini $PHP_INI_DIR/conf.d/zz-globalstatus.ini
@@ -13,6 +15,7 @@ COPY globalstatus/ /app/public/
 
 # Precompress the big static files once, so requests never compress them live.
 # index.js / index.cjs are npm entry points the page never loads.
+# Stay root so start.sh can chown a mounted volume, then drop privileges.
 RUN rm -f /app/public/vendor/cesium/index.js /app/public/vendor/cesium/index.cjs \
           /app/public/dev-router.php /app/public/.htaccess /app/public/data/.htaccess \
  && find /app/public -type f \( -name '*.js' -o -name '*.json' -o -name '*.css' -o -name '*.html' -o -name '*.svg' -o -name '*.geojson' -o -name '*.webmanifest' \) \
@@ -21,9 +24,8 @@ RUN rm -f /app/public/vendor/cesium/index.js /app/public/vendor/cesium/index.cjs
  && chmod +x /usr/local/bin/gsa-start \
  && adduser -D -H -u 10001 app \
  && mkdir -p /app/public/data /data/caddy /config/caddy \
- && chown -R app:app /app/public/data /data/caddy /config/caddy
+ && chown -R app:app /app/public /data/caddy /config/caddy
 
-USER app
 ENV PORT=8080 XDG_DATA_HOME=/data XDG_CONFIG_HOME=/config
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1

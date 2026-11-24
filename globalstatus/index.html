@@ -19,7 +19,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css" />
+  <link rel="stylesheet" href="/cesium.css?v=20261123f" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -73,28 +73,41 @@
       <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="layer-name"><span class="swatch disease"></span> DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="disease">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="layer-name"><span class="swatch animal"></span> ANIMAL DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="animal">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="layer-name"><span class="swatch amfm"></span> AM FM TOWERS</span><span class="layer-meta"><em data-count="amfm">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="designations" aria-pressed="false"><span class="layer-name"><span class="swatch designations"></span> DESIGNATIONS</span><span class="layer-meta"><em data-count="designations">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="violence" aria-pressed="false"><span class="layer-name"><span class="swatch violence"></span> ATTRIBUTED VIOLENCE</span><span class="layer-meta"><em data-count="violence">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="nuke" aria-pressed="false"><span class="layer-name"><span class="swatch nuke"></span> NUCLEAR</span><span class="layer-meta"><em data-count="nuke">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="effects" aria-pressed="false"><span class="layer-name"><span class="swatch effects"></span> NUKE SIMULATOR</span><span class="layer-meta"><em data-count="effects">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="layer-name"><span class="swatch quakes"></span> QUAKES</span><span class="layer-meta"><em data-count="quakes">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="streets3d" aria-pressed="false"><span class="layer-name"><span class="swatch streets3d"></span> STREETS 3D</span><span class="layer-meta"><em data-count="streets3d">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="daynight" aria-pressed="false"><span class="layer-name"><span class="swatch daynight"></span> DAY / NIGHT</span><span class="layer-meta"><em data-count="daynight">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <details class="layer-group" id="space-weather">
+        <summary class="layer-group-head"><span>SPACE &amp; WEATHER</span><em id="sw-on-count"></em></summary>
+        <button type="button" class="layer" data-layer-toggle="iss" aria-pressed="false"><span class="layer-name"><span class="swatch sw-iss"></span> ISS POSITION</span><span class="layer-meta"><em data-count="iss">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="iss" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="sats" aria-pressed="false"><span class="layer-name"><span class="swatch sats"></span> SATELLITES</span><span class="layer-meta"><em data-count="sats">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="volcanoes" aria-pressed="false"><span class="layer-name"><span class="swatch sw-volcanoes"></span> VOLCANO ALERTS</span><span class="layer-meta"><em data-count="volcanoes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="volcanoes" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="disasters" aria-pressed="false"><span class="layer-name"><span class="swatch sw-disasters"></span> WORLD DISASTERS</span><span class="layer-meta"><em data-count="disasters">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="disasters" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="layer-name"><span class="swatch quakes"></span> EARTHQUAKES</span><span class="layer-meta"><em data-count="quakes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="radar" aria-pressed="false"><span class="layer-name"><span class="swatch sw-radar"></span> WEATHER RADAR</span><span class="layer-meta"><em data-count="radar">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="radar" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="nwsalerts" aria-pressed="false"><span class="layer-name"><span class="swatch sw-nwsalerts"></span> US WEATHER ALERTS</span><span class="layer-meta"><em data-count="nwsalerts">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="nwsalerts" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="rivers" aria-pressed="false"><span class="layer-name"><span class="swatch sw-rivers"></span> RIVER GAUGES IN FLOOD (US)</span><span class="layer-meta"><em data-count="rivers">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="rivers" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="coastal" aria-pressed="false"><span class="layer-name"><span class="swatch sw-coastal"></span> COASTAL WATER LEVELS (US)</span><span class="layer-meta"><em data-count="coastal">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="coastal" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="aurora" aria-pressed="false"><span class="layer-name"><span class="swatch sw-aurora"></span> AURORA / SPACE WEATHER</span><span class="layer-meta"><em data-count="aurora">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="aurora" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="tsunami" aria-pressed="false"><span class="layer-name"><span class="swatch sw-tsunami"></span> TSUNAMI ALERTS</span><span class="layer-meta"><em data-count="tsunami">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="tsunami" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="hurricanes" aria-pressed="false"><span class="layer-name"><span class="swatch sw-hurricanes"></span> HURRICANES</span><span class="layer-meta"><em data-count="hurricanes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="hurricanes" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="wildfires" aria-pressed="false"><span class="layer-name"><span class="swatch sw-wildfires"></span> WILDFIRES</span><span class="layer-meta"><em data-count="wildfires">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="wildfires" hidden></p>
+      </details>
       <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
     </div>
   </aside>
 
   <main class="stage">
     <div id="cesium"></div>
-    <div id="nuke-hud" class="nuke-hud" hidden>
-      <div class="defcon-lamp" id="defcon-lamp" data-defcon="5">DEFCON <strong id="defcon-level">5</strong></div>
-      <label class="nuke-yield">
-        <span id="nuke-yield-label">15 kt</span>
-        <input type="range" id="nuke-yield" min="0" max="4" value="0" step="1" />
-      </label>
-      <button type="button" id="nuke-burst" class="nuke-burst" aria-pressed="true">AIR</button>
-      <p class="nuke-hint" id="nuke-hint">TAP THE GLOBE</p>
-      <pre id="nuke-card" class="nuke-card" hidden></pre>
-    </div>
     <div id="effects-hud" class="effects-hud" hidden>
       <h2>Nuke Simulator</h2>
       <button type="button" id="effects-sound" class="effects-sound" aria-pressed="true">Sound on</button>
@@ -263,7 +276,10 @@
       <dl id="ac-facts"></dl>
     </aside>
     <div class="progress-wrap"><div class="progress" id="progress"></div></div>
+    <p class="jam-credit" hidden><span class="jam-credit-track">GPS interference from <a href="https://gpsinterference.com/" target="_blank" rel="noreferrer">GPSInterference.com</a> (adsb.lol globe history, ODbL)</span></p>
+    <p class="air-credit" hidden><span class="air-credit-track">Aircraft from <a href="https://www.adsb.lol/docs/open-data/api" target="_blank" rel="noreferrer">adsb.lol</a> (ODbL 1.0)</span></p>
     <p class="ship-credit" hidden><span class="ship-credit-track">Positions from <a href="https://openwaters.io/ais/#license" target="_blank" rel="noreferrer">Open Waters AIS</a></span></p>
+    <p class="sw-credit" hidden><span class="sw-credit-track"></span></p>
     <div class="view-settings" id="view-settings">
       <div class="view-head">
         <span>VIEW</span>
@@ -278,8 +294,8 @@
         <select id="basemap">
           <option value="natural">Natural Earth II</option>
           <option value="plain">Plain globe</option>
-          <option value="osm" selected>OpenStreetMap</option>
-          <option value="streets">Street map (Esri, optional)</option>
+          <option value="osm">OpenStreetMap</option>
+          <option value="streets" selected>Street map</option>
           <option value="satellite">Aerial photo</option>
           <option value="sentinel">Sentinel-2</option>
           <option value="marble">Blue Marble</option>
@@ -364,12 +380,10 @@
       <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="swatch disease"></span> DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="swatch animal"></span> ANIMAL DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="swatch amfm"></span> AM FM TOWERS <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="designations" aria-pressed="false"><span class="swatch designations"></span> DESIGNATIONS <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="violence" aria-pressed="false"><span class="swatch violence"></span> ATTRIBUTED VIOLENCE <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="nuke" aria-pressed="false"><span class="swatch nuke"></span> NUCLEAR <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="effects" aria-pressed="false"><span class="swatch effects"></span> NUKE SIMULATOR <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="swatch quakes"></span> QUAKES <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="streets3d" aria-pressed="false"><span class="swatch streets3d"></span> STREETS 3D <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="daynight" aria-pressed="false"><span class="swatch daynight"></span> DAY / NIGHT <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="sats" aria-pressed="false"><span class="swatch sats"></span> SATELLITES <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="swatch quakes"></span> EARTHQUAKES <span class="switch" aria-hidden="true"></span></button>
     </div>
     <div id="status-line"><span id="status-track">CESIUM READY · LOADING POWER OUTAGES, JAMMED GPS SIGNALS, AND CONFLICT TRACKER</span></div>
   </footer>
@@ -407,9 +421,10 @@
     </div>
   </div>
 
-  <script src="/blast.js"></script>
-  <script src="/quakes.js"></script>
   <script src="/effects-radius.js"></script>
-  <script src="/cesium.js"></script>
+  <script src="/quakes.js"></script>
+  <script src="/sats.js"></script>
+  <script src="/spaceweather.js?v=20261124a"></script>
+  <script src="/cesium.js?v=20261124a"></script>
 </body>
 </html>

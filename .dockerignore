@@ -18,3 +18,10 @@ globalstatus/data/aircraft-live.json
 globalstatus/data/adsb-step.json
 globalstatus/data/disease-cache.json
 globalstatus/data/animal-cache.json
+globalstatus/data/*.json
+globalstatus/data/*.jsonl
+globalstatus/data/*.lock
+globalstatus/data/*.flag
+globalstatus/data/*.tmp
+globalstatus/data/*-state.json
+globalstatus/data/*-cache.json
