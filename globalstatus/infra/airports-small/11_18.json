@@ -1,0 +1,1 @@
+{"source":"OurAirports","license":"Public domain","url":"https://ourairports.com/data/","built":"2026-11-24","fields":["ident","name","type","lat","lon","elev_ft","city","cc","iata"],"tile":"11_18","rows":[["UODL","Cape Chelyuskin Airfield","S",77.712,104.24,60,"Chelyuskin Polar Station","RU",""],["UODS","Sredniy Island Air Base","S",79.5296,91.075,26,"Khatanga","RU",""]]}

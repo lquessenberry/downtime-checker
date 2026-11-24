@@ -19,7 +19,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261123f" />
+  <link rel="stylesheet" href="/cesium.css?v=20261123t" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -102,6 +102,13 @@
         <p class="sw-note" data-sw-note="hurricanes" hidden></p>
         <button type="button" class="layer" data-layer-toggle="wildfires" aria-pressed="false"><span class="layer-name"><span class="swatch sw-wildfires"></span> WILDFIRES</span><span class="layer-meta"><em data-count="wildfires">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-sw-note="wildfires" hidden></p>
+      </details>
+      <details class="layer-group" id="infrastructure">
+        <summary class="layer-group-head"><span>INFRASTRUCTURE</span><em id="infra-on-count"></em></summary>
+        <button type="button" class="layer" data-layer-toggle="airports" aria-pressed="false"><span class="layer-name"><span class="swatch infra-airports"></span> AIRPORTS</span><span class="layer-meta"><em data-count="airports">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-infra-note="airports" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="bases" aria-pressed="false"><span class="layer-name"><span class="swatch infra-bases"></span> MILITARY BASES</span><span class="layer-meta"><em data-count="bases">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-infra-note="bases" hidden></p>
       </details>
       <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
     </div>
@@ -189,6 +196,7 @@
     <p class="air-credit" hidden><span class="air-credit-track">Aircraft from <a href="https://www.adsb.lol/docs/open-data/api" target="_blank" rel="noreferrer">adsb.lol</a> (ODbL 1.0)</span></p>
     <p class="ship-credit" hidden><span class="ship-credit-track">Positions from <a href="https://openwaters.io/ais/#license" target="_blank" rel="noreferrer">Open Waters AIS</a></span></p>
     <p class="sw-credit" hidden><span class="sw-credit-track"></span></p>
+    <p class="infra-credit" hidden><span class="infra-credit-track"></span></p>
     <div class="view-settings" id="view-settings">
       <div class="view-head">
         <span>VIEW</span>
@@ -333,7 +341,8 @@
 
   <script src="/blast.js"></script>
   <script src="/quakes.js"></script>
-  <script src="/spaceweather.js?v=20261123f"></script>
-  <script src="/cesium.js?v=20261123f"></script>
+  <script src="/spaceweather.js?v=20261123t"></script>
+  <script src="/infra.js?v=20261123t"></script>
+  <script src="/cesium.js?v=20261123t"></script>
 </body>
 </html>

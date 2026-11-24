@@ -82,6 +82,9 @@ const state = {
     rivers: false,
     coastal: false,
     tsunami: false,
+    // INFRASTRUCTURE (infra.js): static point layers.
+    airports: false,
+    bases: false,
   },
   nuke: { shots: [], yieldIdx: 0, airburst: true },
   openKind: "",
@@ -105,6 +108,8 @@ const state = {
 
 // SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
 const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
+// INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
+const INFRA_KEYS = ["airports", "bases"];
 
 const COLORS = {
   up: Cesium.Color.fromCssColorString("#3dff9a"),
@@ -432,6 +437,13 @@ async function startGlobe() {
       showLive,
     });
   }
+  if (window.GsaInfra) {
+    window.GsaInfra.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
@@ -442,6 +454,13 @@ async function startGlobe() {
   const popupClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   popupClicks.setInputAction((click) => {
     if (state.layers.nuke && placeNukeAt(click.position)) return;
+    const infraHit = window.GsaInfra && window.GsaInfra.pick(click.position);
+    if (infraHit) {
+      if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+      closeMapPopups();
+      showLive(infraHit);
+      return;
+    }
     if (pickedMapPin(click.position)) return;
     closeMapPopups();
     if (viewer.selectedEntity) viewer.selectedEntity = undefined;
@@ -1372,6 +1391,9 @@ function setLayer(layer, on) {
       }
     }
   }
+  if (INFRA_KEYS.includes(layer) && window.GsaInfra) {
+    window.GsaInfra.setActive(layer, state.layers[layer]);
+  }
   if (layer === "outages" && state.layers.outages && !state.outageMeta) {
     loadOutages().catch((error) => statusLive(error.message || String(error)));
   }
@@ -1409,6 +1431,8 @@ const LAYER_LABEL = {
   rivers: "RIVER GAUGES IN FLOOD (US)",
   coastal: "COASTAL WATER LEVELS (US)",
   tsunami: "TSUNAMI ALERTS",
+  airports: "AIRPORTS",
+  bases: "MILITARY BASES",
 };
 
 function setupLegendScroll() {
@@ -1429,7 +1453,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "streets3d", "iss", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "designations", "violence", "nuke", "streets3d", "iss", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -3286,6 +3310,9 @@ function showLive(item) {
   if (item.sw && window.GsaSpaceWeather) {
     extra = window.GsaSpaceWeather.popupHtml(item);
   }
+  else if (item.infra && window.GsaInfra) {
+    extra = window.GsaInfra.popupHtml(item);
+  }
   else if (item.layer === "quakes") {
     const mag = item.mag != null ? `Magnitude ${item.mag}` : "";
     const bits = [mag, item.place, item.timeText].filter(Boolean).map((part) => esc(String(part)));
@@ -3480,6 +3507,7 @@ function statusLive(error) {
     state.layers.streets3d ? `STREETS 3D ${state.live.streets3d.points.length}` : "STREETS 3D",
   ];
   if (window.GsaSpaceWeather) parts.push(...window.GsaSpaceWeather.statusParts());
+  if (window.GsaInfra) parts.push(...window.GsaInfra.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
 }
