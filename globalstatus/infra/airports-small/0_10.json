@@ -1,0 +1,1 @@
+{"source":"OurAirports","license":"Public domain","url":"https://ourairports.com/data/","built":"2026-11-24","fields":["ident","name","type","lat","lon","elev_ft","city","cc","iata"],"tile":"0_10","rows":[["EGAH","Halley Research Station","S",-75.5674,-25.5164,103,"Halley Research Station","AQ",""]]}

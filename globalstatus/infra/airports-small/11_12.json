@@ -1,0 +1,1 @@
+{"source":"OurAirports","license":"Public domain","url":"https://ourairports.com/data/","built":"2026-11-24","fields":["ident","name","type","lat","lon","elev_ft","city","cc","iata"],"tile":"11_12","rows":[["ENAS","Ny-Ålesund Airport, Hamnerabben","S",78.9275,11.8743,50,"Ny-Ålesund","NO",""]]}

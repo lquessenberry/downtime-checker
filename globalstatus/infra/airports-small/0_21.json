@@ -1,0 +1,1 @@
+{"source":"OurAirports","license":"Public domain","url":"https://ourairports.com/data/","built":"2026-11-24","fields":["ident","name","type","lat","lon","elev_ft","city","cc","iata"],"tile":"0_21","rows":[["AQ-0012","Navaid","S",-89.998,139.273,null,"","AQ",""]]}

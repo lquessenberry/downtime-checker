@@ -1,0 +1,1 @@
+{"source":"OurAirports","license":"Public domain","url":"https://ourairports.com/data/","built":"2026-11-24","fields":["ident","name","type","lat","lon","elev_ft","city","cc","iata"],"tile":"5_16","rows":[["VRMF","Fuvahmulah Airport","S",-0.3097,73.435,17,"Fuvahmulah Island","MV","FVM"]]}
