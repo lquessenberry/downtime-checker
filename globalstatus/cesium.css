@@ -1251,8 +1251,8 @@ button:hover { border-color: #9fd4e2; }
   -webkit-user-drag: none;
 }
 
-/* SPACE & WEATHER group (spaceweather.js). Collapsed by default so the
-   layer list stays the same length until someone opens it. */
+/* MENU categories: every layer sits in a collapsible group, all collapsed
+   by default; the header shows how many of its layers are on. */
 .layer-group {
   margin-top: 6px;
   border-top: 1px solid var(--line);
@@ -1278,6 +1278,7 @@ button:hover { border-color: #9fd4e2; }
 .layer-group[open] > summary::before { content: "▾"; }
 .layer-group > summary > span { flex: 1; }
 .layer-group > summary em { font-style: normal; color: #3dff9a; font-size: 10px; }
+.rail-head + .layer-group { margin-top: 0; border-top: 0; }
 .layer-group .layer { width: 100%; letter-spacing: 0.04em; }
 .sw-note {
   margin: 0 10px 6px 30px;

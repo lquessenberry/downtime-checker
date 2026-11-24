@@ -197,13 +197,8 @@
   }
 
   function renderGroupCount() {
-    const el = document.getElementById("sw-on-count");
-    if (!el) return;
-    // Count every switched-on toggle in the group (the space feeds plus
-    // EARTHQUAKES and SATELLITES, which live in this group too).
-    const group = document.getElementById("space-weather");
-    const n = group ? group.querySelectorAll('[data-layer-toggle][aria-pressed="true"]').length : KEYS.filter((key) => st[key].on).length;
-    el.textContent = n ? `${n} ON` : "";
+    // MENU category headers ("N ON") are counted for every group by cesium.js.
+    if (typeof window.gsSyncLayerGroups === "function") window.gsSyncLayerGroups();
   }
 
   function settle(key, data) {

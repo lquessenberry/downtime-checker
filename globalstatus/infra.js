@@ -151,10 +151,8 @@
   }
 
   function renderGroupCount() {
-    const el = document.getElementById("infra-on-count");
-    if (!el) return;
-    const n = KEYS.filter((key) => st[key].on).length;
-    el.textContent = n ? `${n} ON` : "";
+    // MENU category headers ("N ON") are counted for every group by cesium.js.
+    if (typeof window.gsSyncLayerGroups === "function") window.gsSyncLayerGroups();
   }
 
   function fail(key, error) {
