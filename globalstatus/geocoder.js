@@ -285,6 +285,7 @@
     lastPicked = info.name;
     if (viewerRef && viewerRef.geocoder) viewerRef.geocoder.viewModel.searchText = info.name;
     dropPin(info);
+    if (root.GsaOrigin) root.GsaOrigin.set(info);
     if (root.GsaNearby) root.GsaNearby.start(info);
     else if (viewerRef) viewerRef.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(info.lon, info.lat, 60000) });
   }
@@ -305,26 +306,110 @@
     }
   }
 
+  function ipWhere(d, lat, lon) {
+    const region = (d && (d.region || d.region_name || d.regionName)) || "";
+    const country = (d && (d.country || d.country_name || d.countryName)) || "";
+    const where = [d && d.city, region, country].filter(Boolean).join(", ");
+    return where || `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+  }
+
+  function parseIpFix(svc, d) {
+    const parsed = svc.parse(d);
+    const lat = Number(parsed && parsed.latitude);
+    const lon = Number(parsed && parsed.longitude);
+    if (!parsed || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) return null;
+    return { name: `≈ ${ipWhere(parsed, lat, lon)}`, lat, lon, approx: true, service: svc.name };
+  }
+
+  async function fetchIpService(svc) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), LOCATE_TIMEOUT_MS);
+    try {
+      const res = await fetch(svc.url, { signal: ctl.signal, cache: "no-store", credentials: "omit" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const info = parseIpFix(svc, await res.json());
+      if (!info) throw new Error("no location");
+      return info;
+    } catch (err) {
+      stats.locateErrors = (stats.locateErrors || 0) + 1;
+      return null;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  function ipDistanceKm(a, b) {
+    const rad = Math.PI / 180;
+    const dlat = (b.lat - a.lat) * rad;
+    const dlon = (b.lon - a.lon) * rad;
+    const s = Math.sin(dlat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dlon / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(s)));
+  }
+
+  // Fresh lookup every time (cache: no-store). Both providers run in parallel so a
+  // failure or timeout on one does not add a second wait. If they agree, use the
+  // first provider (ipwho.is). If they disagree, still use ipwho.is; IP location
+  // is city-level at best. If only one answers, use that one.
   async function ipLocate() {
-    for (const svc of IP_SERVICES) {
-      const ctl = new AbortController();
-      const t = setTimeout(() => ctl.abort(), LOCATE_TIMEOUT_MS);
-      try {
-        const res = await fetch(svc.url, { signal: ctl.signal, cache: "no-store", credentials: "omit" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const d = svc.parse(await res.json());
-        const lat = Number(d && d.latitude);
-        const lon = Number(d && d.longitude);
-        if (!d || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) throw new Error("no location");
-        const where = [d.city, d.region, d.country].filter(Boolean).join(", ") || `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
-        return { name: `≈ ${where}`, lat, lon, approx: true, service: svc.name };
-      } catch (err) {
-        stats.locateErrors = (stats.locateErrors || 0) + 1;
-      } finally {
-        clearTimeout(t);
+    const found = (await Promise.all(IP_SERVICES.map(fetchIpService))).filter(Boolean);
+    if (!found.length) return null;
+    if (found.length >= 2 && ipDistanceKm(found[0], found[1]) > 250) {
+      return found[0];
+    }
+    return found[0];
+  }
+
+  async function geoPermission() {
+    try {
+      const perms = root.navigator && root.navigator.permissions;
+      if (!perms || !perms.query) return "unknown";
+      const status = await perms.query({ name: "geolocation" });
+      return (status && status.state) || "unknown";
+    } catch (err) {
+      return "unknown";
+    }
+  }
+
+  function silentExact() {
+    const geo = root.navigator && root.navigator.geolocation;
+    if (!geo || !root.isSecureContext) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      geo.getCurrentPosition(
+        (pos) => resolve({
+          name: "My location",
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          approx: false,
+          accuracy: Math.round(pos.coords.accuracy || 0),
+        }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: EXACT_TIMEOUT_MS, maximumAge: 0 }
+      );
+    });
+  }
+
+  // On every page open: if the browser already granted GPS, use it silently (no
+  // prompt). Otherwise a fresh IP lookup. If that fails, return null so the map
+  // keeps a neutral world view and no pin. Never reuse a saved or default city.
+  async function locateStartup() {
+    const seq = ++locateSeq;
+    const perm = await geoPermission();
+    if (seq !== locateSeq) return null;
+    if (perm === "granted") {
+      const exact = await silentExact();
+      if (seq !== locateSeq) return null;
+      if (exact) {
+        if (root.GsaOrigin) root.GsaOrigin.set(exact);
+        note("Your exact location.", 8000);
+        return exact;
       }
     }
-    return null;
+    const info = await ipLocate();
+    if (seq !== locateSeq) return null;
+    if (!info) return null;
+    if (root.GsaOrigin) root.GsaOrigin.set(info);
+    note("Approximate, from your internet connection" + (info.service ? `, via ${info.service}` : "") + ".", 15000);
+    return info;
   }
 
   // seq: the locate request this lookup belongs to (a newer tap, CLEAR or a GPS fix
@@ -437,6 +522,7 @@
     stats: () => ({ ...stats }),
     locateApprox,
     locateExact,
+    locateStartup,
     IP_SERVICES: IP_SERVICES.map((s) => s.name),
     _parseLatLon: parseLatLon,
   };
