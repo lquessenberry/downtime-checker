@@ -82,6 +82,10 @@ const state = {
     // INFRASTRUCTURE (infra.js): static point layers.
     airports: false,
     bases: false,
+    // USA CELL TOWERS (infra.js): FCC tower records, point primitives in tiles.
+    celltowers: false,
+    // USA POWER LINES (powerlines.js): HIFLD transmission lines, batched polylines.
+    powerlines: false,
     // FIREARMS (firearms.js): saved static pin layers, not a live feed.
     gunsusa: false,
     gunsworld: false,
@@ -156,9 +160,10 @@ async function fetchLayer(name, url) {
 // SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
 const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
 // INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
-const INFRA_KEYS = ["airports", "bases"];
+const INFRA_KEYS = ["airports", "bases", "celltowers"];
 const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
 const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "militiainactive"];
+const POWERLINES_KEYS = ["powerlines"];
 
 const COLORS = {
   up: Cesium.Color.fromCssColorString("#3dff9a"),
@@ -528,6 +533,13 @@ async function startGlobe() {
       statusLive: () => statusLive(),
     });
   }
+  if (window.GsaPowerLines) {
+    window.GsaPowerLines.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
@@ -547,6 +559,14 @@ async function startGlobe() {
       if (viewer.selectedEntity) viewer.selectedEntity = undefined;
       closeMapPopups();
       showLive(infraHit);
+      return;
+    }
+    // USA POWER LINES: a line under the tap opens the shared card (details load on first click).
+    const powerHit = window.GsaPowerLines && window.GsaPowerLines.pick(click.position);
+    if (powerHit) {
+      if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+      closeMapPopups();
+      window.GsaPowerLines.open(powerHit, showLive);
       return;
     }
     if (pickedMapPin(click.position)) return;
@@ -1509,6 +1529,9 @@ function setLayer(layer, on) {
   if (MILITIAS_KEYS.includes(layer) && window.GsaMilitias) {
     window.GsaMilitias.setActive(layer, state.layers[layer]);
   }
+  if (POWERLINES_KEYS.includes(layer) && window.GsaPowerLines) {
+    window.GsaPowerLines.setActive(layer, state.layers[layer]);
+  }
   if ((layer === "quakes" || layer === "sats") && window.GsaSpaceWeather && window.GsaSpaceWeather.renderGroupCount) {
     window.GsaSpaceWeather.renderGroupCount();
   }
@@ -1563,6 +1586,8 @@ const LAYER_LABEL = {
   tsunami: "TSUNAMI ALERTS",
   airports: "AIRPORTS",
   bases: "MILITARY BASES",
+  celltowers: "USA CELL TOWERS",
+  powerlines: "USA POWER LINES",
   gunsusa: "USA GUN OWNERSHIP",
   gunsworld: "WORLD GUN OWNERSHIP",
   militianational: "NATIONAL GROUPS",
@@ -1589,7 +1614,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -3414,6 +3439,9 @@ function liveHtml(item, opts = {}) {
   else if (item.militias && window.GsaMilitias) {
     extra = window.GsaMilitias.popupHtml(item, opts);
   }
+  else if (item.power && window.GsaPowerLines) {
+    extra = window.GsaPowerLines.popupHtml(item, opts);
+  }
   else if (item.layer === "quakes") {
     const mag = item.mag != null ? `Magnitude ${Number(item.mag).toFixed(1)}` : "";
     const depth = Number.isFinite(item.depthKm) ? `Depth ${Math.round(item.depthKm)} km` : "";
@@ -3810,6 +3838,7 @@ function statusLive(error) {
   if (window.GsaInfra) parts.push(...window.GsaInfra.statusParts());
   if (window.GsaFirearms) parts.push(...window.GsaFirearms.statusParts());
   if (window.GsaMilitias) parts.push(...window.GsaMilitias.statusParts());
+  if (window.GsaPowerLines) parts.push(...window.GsaPowerLines.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
 }

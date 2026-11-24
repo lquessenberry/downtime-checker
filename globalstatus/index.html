@@ -19,7 +19,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261124l" />
+  <link rel="stylesheet" href="/cesium.css?v=20261124o" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -114,6 +114,10 @@
         <button type="button" class="layer" data-layer-toggle="outages" aria-pressed="false"><span class="layer-name"><span class="swatch outage"></span> POWER OUTAGES</span><span class="layer-meta"><em data-count="outages">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="stream" aria-pressed="false"><span class="layer-name"><span class="swatch stream"></span> SCANNERS</span><span class="layer-meta"><em data-count="stream">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="layer-name"><span class="swatch amfm"></span> AM FM TOWERS</span><span class="layer-meta"><em data-count="amfm">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="celltowers" aria-pressed="false"><span class="layer-name"><span class="swatch infra-celltowers"></span> USA CELL TOWERS</span><span class="layer-meta"><em data-count="celltowers">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-infra-note="celltowers" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="powerlines" aria-pressed="false"><span class="layer-name"><span class="swatch powerlines"></span> USA POWER LINES</span><span class="layer-meta"><em data-count="powerlines">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-power-note="powerlines" hidden></p>
         <button type="button" class="layer" data-layer-toggle="mesh" aria-pressed="false"><span class="layer-name"><span class="swatch mesh"></span> MESH NODES</span><span class="layer-meta"><em data-count="mesh">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="jamming" aria-pressed="false"><span class="layer-name"><span class="swatch jam"></span> JAMMED GPS SIGNALS</span><span class="layer-meta"><em data-count="jamming">—</em><span class="switch" aria-hidden="true"></span></span></button>
       </details>
@@ -469,11 +473,12 @@
   <script src="/quakes.js"></script>
   <script src="/sats.js"></script>
   <script src="/spaceweather.js?v=20261124i"></script>
-  <script src="/infra.js?v=20261124i"></script>
+  <script src="/infra.js?v=20261124o"></script>
   <script src="/firearms.js?v=20261124k"></script>
   <script src="/militias.js?v=20261124l"></script>
+  <script src="/powerlines.js?v=20261124o"></script>
   <script src="/geocoder.js?v=20261124m"></script>
   <script src="/nearby.js?v=20261124l"></script>
-  <script src="/cesium.js?v=20261124m"></script>
+  <script src="/cesium.js?v=20261124o"></script>
 </body>
 </html>

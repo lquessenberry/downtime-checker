@@ -7,16 +7,32 @@
  *   MILITARY BASES  OpenStreetMap contributors (ODbL), military=base | barracks |
  *                   airfield | naval_base, /infra/military-bases.json
  *
+ *   USA CELL TOWERS FCC Antenna Structure Registration (public domain) plus FCC
+ *                   cellular license sites (HIFLD Cellular Towers) for carrier names,
+ *                   built by scripts/build_cell_towers.py
+ *                   /infra/cell-towers/overview.json  thinned set for globe distance
+ *                   /infra/cell-towers/<tile>.json    every site, 2-degree tiles,
+ *                   fetched only when zoomed in over that tile
+ *                   Cards are on-screen text only: no links off globalstatus.app.
+ *
  * Drawn with Cesium PointPrimitiveCollections (tens of thousands of points stay
  * cheap on phones). Nothing is fetched until a layer is switched on.
  */
 (function (root) {
-  const KEYS = ["airports", "bases"];
+  const KEYS = ["airports", "bases", "celltowers"];
   const V = "20261123t";
   const BASE_URL = "/infra/";
   // Small airports appear below this camera height (metres above the ellipsoid).
   const SMALL_MAX_HEIGHT = 1200 * 1000;
   const MAX_TILES = 16;
+  const CELL_V = "20261124m";
+  const CELL_URL = "/infra/cell-towers/";
+  // Every cell site appears below this camera height; above it, the thinned overview.
+  const CELL_NEAR_HEIGHT = 450 * 1000;
+  const CELL_MAX_TILES = 40;
+  // Loaded tiles are dropped and refetched after this many, so panning the whole
+  // country does not keep 140,000 points in the per-frame horizon cull.
+  const CELL_KEEP_TILES = 90;
 
   const META = {
     airports: {
@@ -29,7 +45,25 @@
       credit: 'Military bases: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> (ODbL)',
       caption: "Community-mapped from OpenStreetMap — incomplete; a blank area does not mean no base.",
     },
+    celltowers: {
+      label: "USA CELL TOWERS",
+      // Plain text on purpose: nothing in this layer links off globalstatus.app.
+      credit: "Cell towers: FCC Antenna Structure Registration and FCC cellular license sites (public records)",
+      caption: "Constructed towers, monopoles, poles and masts registered with the FCC, US and territories. Most carry cellular antennas; some are broadcast, utility, railroad or public-safety radio towers. Zoom in to see every site. Carriers are named only where an FCC cellular license lists the site; the FCC tower file does not list tenants, so most towers show the owner only.",
+    },
   };
+
+  // FCC ASR structure type codes (build script TYPES order).
+  const CELL_TYPES = ["TOWER", "LTOWER", "MTOWER", "GTOWER", "POLE", "UPOLE", "MAST", "BTWR", "BMAST", "BPOLE", "TREE", "2TOWER", "SITE", "TANK", "B", "BANT", "SILO", "OTHER"];
+  const CELL_TYPE_LABEL = {
+    TOWER: "Tower", LTOWER: "Lattice tower", MTOWER: "Monopole", GTOWER: "Guyed tower",
+    POLE: "Pole", UPOLE: "Utility pole or tower", MAST: "Mast", BTWR: "Tower on a building",
+    BMAST: "Mast on a building", BPOLE: "Pole on a building", TREE: "Tree-style (stealth) tower",
+    "2TOWER": "Two towers", SITE: "Cell site (structure type not listed)", TANK: "Water tank",
+    B: "Building", BANT: "Antenna on a building", SILO: "Silo", OTHER: "Other structure",
+  };
+  const CELL_STYLE = { color: "#3fd0c9", size: 5, far: true };
+  const CELL_CARRIER_STYLE = { color: "#ffcf5a", size: 6, far: true };
 
   const AIRPORT_TYPE = { L: "LARGE AIRPORT", M: "MEDIUM AIRPORT", S: "SMALL AIRPORT", W: "SEAPLANE BASE" };
   const AIRPORT_STYLE = {
@@ -54,6 +88,7 @@
   for (const key of KEYS) st[key] = { on: false, loading: null, ready: false, error: "", count: null, built: "" };
   const air = { major: null, small: null, countries: {}, index: null, indexLoading: null, tiles: new Map(), smallShown: false, smallCount: 0, tileDeg: 15 };
   const mil = { coll: null, countries: {} };
+  const cell = { ov: null, near: null, index: null, indexLoading: null, tiles: new Map(), nearShown: false, nearCount: 0, total: 0, source: "", types: CELL_TYPES };
   let lastShown = null;
 
   // Address-search area check (nearby.js): hidden while loading, then optionally only
@@ -110,6 +145,8 @@
       outlineColor: style.cssOutline || (style.cssOutline = Cesium.Color.fromCssColorString(OUTLINE)),
       outlineWidth: 1,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      // USA CELL TOWERS: smaller dots from far away so the country is not one solid blob.
+      scaleByDistance: style.far ? (style.scale || (style.scale = new Cesium.NearFarScalar(1.5e6, 1.0, 1.2e7, 0.4))) : undefined,
       id,
     });
     // A search-circle filter is on (nearby.js): new points start out filtered, so a tile
@@ -127,6 +164,7 @@
     if (!shown(key)) return "—";
     if (s.count == null) return "…";
     if (key === "airports" && air.smallShown && air.smallCount) return `${fmt(s.count)} + ${fmt(air.smallCount)}`;
+    if (key === "celltowers" && cell.total) return fmt(cell.total);
     return fmt(s.count);
   }
 
@@ -143,6 +181,11 @@
             : `${fmt(s.count)} large and medium airports`);
         }
         if (s.ready && key === "bases") bits.push(`${fmt(s.count)} mapped sites (bases, barracks, airfields, naval bases)`);
+        if (s.ready && key === "celltowers") {
+          bits.push(cell.nearShown
+            ? `${fmt(cell.nearCount)} sites loaded around this view, of ${fmt(cell.total)} in all`
+            : `${fmt(s.count)} of ${fmt(cell.total)} sites shown at this distance. Zoom in to see every site`);
+        }
         if (s.built) bits.push(`Data from ${esc(s.built)}`);
         if (!s.ready && !s.error) bits.push("Loading…");
         if (s.error) bits.push(`<span class="sw-err">${esc(s.error)}</span>`);
@@ -196,10 +239,10 @@
     return carto ? carto.height : Infinity;
   }
 
-  function tileKeysInView() {
+  function tileKeysInView(tileDeg) {
     const v = viewer();
     const Cesium = C();
-    const deg = air.tileDeg;
+    const deg = tileDeg || air.tileDeg;
     let rect = v.camera.computeViewRectangle(v.scene.globe.ellipsoid);
     let west, south, east, north;
     if (rect) {
@@ -303,6 +346,82 @@
     return `${months[Number(m[2]) - 1]} ${Number(m[3])}, 20${m[1]}`;
   }
 
+  // ---------- USA CELL TOWERS ----------
+  function addCellRows(coll, body, tileKey) {
+    const rows = Array.isArray(body.rows) ? body.rows : [];
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i];
+      const carrier = body.carriers && body.carriers[row[7]];
+      addPoint(coll, row[0], row[1], carrier ? CELL_CARRIER_STYLE : CELL_STYLE, { __infra: "celltowers", row, body, tile: tileKey });
+    }
+    return rows.length;
+  }
+
+  async function loadCellTowers() {
+    const body = await getJsonRetry(`${CELL_URL}overview.json?v=${CELL_V}`);
+    cell.ov = newCollection();
+    cell.near = newCollection();
+    st.celltowers.count = addCellRows(cell.ov, body, "overview");
+    cell.total = Number(body.total) || 0;
+    cell.source = body.source || "";
+    st.celltowers.built = body.built || "";
+    st.celltowers.ready = true;
+  }
+
+  async function ensureCellIndex() {
+    if (cell.index) return cell.index;
+    if (!cell.indexLoading) {
+      cell.indexLoading = getJsonRetry(`${CELL_URL}index.json?v=${CELL_V}`).then((body) => {
+        cell.index = body;
+        return body;
+      }).finally(() => { cell.indexLoading = null; });
+    }
+    return cell.indexLoading;
+  }
+
+  function loadCellTile(key) {
+    if (cell.tiles.has(key)) return cell.tiles.get(key);
+    const job = getJsonRetry(`${CELL_URL}${key}.json?v=${CELL_V}`).then((body) => {
+      if (!cell.near || !cell.tiles.has(key)) return 0;
+      const n = addCellRows(cell.near, body, key);
+      cell.nearCount += n;
+      cullSoon();
+      return n;
+    }).catch((error) => {
+      cell.tiles.delete(key);
+      throw error;
+    });
+    cell.tiles.set(key, job);
+    return job;
+  }
+
+  async function updateCellTowers() {
+    if (!st.celltowers.on || !st.celltowers.ready || !cell.near) return;
+    const near = cameraHeight() < CELL_NEAR_HEIGHT;
+    cell.nearShown = near;
+    cell.near.show = near && !hidden("celltowers");
+    cullSoon();
+    if (near) {
+      try {
+        const index = await ensureCellIndex();
+        if (!st.celltowers.on) return;
+        const deg = Number(index.tile_deg) || 2;
+        const inView = tileKeysInView(deg).filter((key) => index.tiles && index.tiles[key]);
+        if (cell.tiles.size + inView.filter((key) => !cell.tiles.has(key)).length > CELL_KEEP_TILES) {
+          cell.near.removeAll();
+          cell.tiles.clear();
+          cell.nearCount = 0;
+        }
+        const want = inView.filter((key) => !cell.tiles.has(key)).slice(0, CELL_MAX_TILES);
+        await Promise.all(want.map((key) => loadCellTile(key)));
+        if (want.length) cullSoon();
+      } catch (error) {
+        st.celltowers.error = `Cell towers: ${error && error.message ? error.message : String(error)}`;
+      }
+    }
+    render("celltowers");
+  }
+
   // ---------- horizon culling ----------
   // Points ignore depth so terrain never hides them; hide the far side instead.
   let cullAt = 0;
@@ -312,7 +431,7 @@
   function cullSoon() { cullDirty = true; }
 
   function collections() {
-    return [air.major, air.small, mil.coll].filter((coll) => coll && coll.show);
+    return [air.major, air.small, mil.coll, cell.ov, cell.near].filter((coll) => coll && coll.show);
   }
 
   function cull() {
@@ -358,6 +477,18 @@
 
   function itemFor(id) {
     const row = id.row;
+    if (id.__infra === "celltowers") {
+      const body = id.body || {};
+      const type = CELL_TYPES[row[2]] || "OTHER";
+      const owner = (body.owners && body.owners[row[4]]) || "";
+      const carriers = (body.carriers && body.carriers[row[7]]) || "";
+      return {
+        infra: true, layer: "celltowers", kind: "CELL TOWER",
+        name: owner || (carriers ? carriers.split(" (")[0] : "") || "FCC cellular license site",
+        lat: row[0], lon: row[1], type, typeLabel: CELL_TYPE_LABEL[type] || type, heightM: row[3],
+        owner, carriers, asr: row[5] || "", place: (body.places && body.places[row[6]]) || "",
+      };
+    }
     if (id.__infra === "airports") {
       const small = id.small;
       const ident = row[0];
@@ -379,8 +510,24 @@
     };
   }
 
+  function cellPopupHtml(item) {
+    // On-screen facts only. No links: the card never takes anyone off globalstatus.app.
+    const lines = [];
+    if (item.owner) lines.push(`Owner: ${item.owner}`);
+    if (item.carriers) lines.push(`Carrier on FCC cellular license: ${item.carriers}`);
+    lines.push(`Structure: ${item.typeLabel}`);
+    if (item.heightM != null && item.heightM !== "") lines.push(`Height: ${fmt(Math.round(item.heightM * 3.28084))} ft (${fmt(item.heightM)} m) above ground`);
+    if (item.place) lines.push(item.place);
+    lines.push(`Coordinates: ${Number(item.lat).toFixed(4)}, ${Number(item.lon).toFixed(4)}`);
+    lines.push(item.asr ? `FCC antenna structure registration #${item.asr}` : "FCC cellular license site (no tower registration on file)");
+    let html = lines.map((line) => `<br>${esc(line)}`).join("");
+    html += `<br><i class="infra-caption">${esc(item.carriers ? "Other carriers may also use this site." : "The FCC tower file does not list which carriers use a tower.")} FCC records show no GSM / LTE / 5G detail.</i>`;
+    return html;
+  }
+
   function popupHtml(item, opts) {
     if (!(opts && opts.list)) lastShown = item; // the nearby list is not the open popup
+    if (item.layer === "celltowers") return cellPopupHtml(item);
     const lines = [];
     let link = "";
     if (item.layer === "airports") {
@@ -419,14 +566,21 @@
       if (air.small) air.small.show = shown(key) && air.smallShown;
     }
     if (key === "bases" && mil.coll) mil.coll.show = shown(key);
+    if (key === "celltowers") {
+      if (cell.ov) cell.ov.show = shown(key);
+      if (cell.near) cell.near.show = shown(key) && cell.nearShown;
+    }
     if (!s.on) hidePopupFor(key);
     if (s.on && !s.ready && !s.loading) {
       s.error = "";
-      s.loading = (key === "airports" ? loadAirports() : loadBases())
+      s.loading = (key === "airports" ? loadAirports() : key === "celltowers" ? loadCellTowers() : loadBases())
         .then(() => {
           if (key === "airports") {
             air.major.show = shown("airports");
             updateSmall();
+          } else if (key === "celltowers") {
+            cell.ov.show = shown("celltowers");
+            updateCellTowers();
           } else mil.coll.show = shown("bases");
           cullSoon();
           if (ctx && ctx.statusLive) ctx.statusLive();
@@ -435,6 +589,8 @@
         .finally(() => { s.loading = null; render(key); });
     } else if (s.on && key === "airports") {
       updateSmall();
+    } else if (s.on && key === "celltowers") {
+      updateCellTowers();
     }
     cullSoon();
     render(key);
@@ -451,6 +607,7 @@
       v.scene.preRender.addEventListener(cull);
       v.camera.moveEnd.addEventListener(() => {
         if (st.airports.on) updateSmall();
+        if (st.celltowers.on) updateCellTowers();
         cullSoon();
       });
       if (v.scene.morphComplete) v.scene.morphComplete.addEventListener(cullSoon);
