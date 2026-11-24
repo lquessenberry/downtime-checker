@@ -77,6 +77,25 @@
       <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="layer-name"><span class="swatch quakes"></span> EARTHQUAKES</span><span class="layer-meta"><em data-count="quakes">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="daynight" aria-pressed="false"><span class="layer-name"><span class="swatch daynight"></span> DAY / NIGHT</span><span class="layer-meta"><em data-count="daynight">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="sats" aria-pressed="false"><span class="layer-name"><span class="swatch sats"></span> SATELLITES</span><span class="layer-meta"><em data-count="sats">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <details class="layer-group" id="space-weather">
+        <summary class="layer-group-head"><span>SPACE &amp; WEATHER</span><em id="sw-on-count"></em></summary>
+        <button type="button" class="layer" data-layer-toggle="iss" aria-pressed="false"><span class="layer-name"><span class="swatch sw-iss"></span> ISS POSITION</span><span class="layer-meta"><em data-count="iss">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="iss" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="volcanoes" aria-pressed="false"><span class="layer-name"><span class="swatch sw-volcanoes"></span> VOLCANO ALERTS</span><span class="layer-meta"><em data-count="volcanoes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="volcanoes" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="disasters" aria-pressed="false"><span class="layer-name"><span class="swatch sw-disasters"></span> WORLD DISASTERS</span><span class="layer-meta"><em data-count="disasters">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="disasters" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="radar" aria-pressed="false"><span class="layer-name"><span class="swatch sw-radar"></span> WEATHER RADAR</span><span class="layer-meta"><em data-count="radar">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="radar" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="nwsalerts" aria-pressed="false"><span class="layer-name"><span class="swatch sw-nwsalerts"></span> US WEATHER ALERTS</span><span class="layer-meta"><em data-count="nwsalerts">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="nwsalerts" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="aurora" aria-pressed="false"><span class="layer-name"><span class="swatch sw-aurora"></span> AURORA / SPACE WEATHER</span><span class="layer-meta"><em data-count="aurora">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="aurora" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="hurricanes" aria-pressed="false"><span class="layer-name"><span class="swatch sw-hurricanes"></span> HURRICANES</span><span class="layer-meta"><em data-count="hurricanes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="hurricanes" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="wildfires" aria-pressed="false"><span class="layer-name"><span class="swatch sw-wildfires"></span> WILDFIRES</span><span class="layer-meta"><em data-count="wildfires">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="wildfires" hidden></p>
+      </details>
       <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
     </div>
   </aside>
@@ -254,6 +273,7 @@
     <p class="jam-credit" hidden><span class="jam-credit-track">GPS interference from <a href="https://gpsinterference.com/" target="_blank" rel="noreferrer">GPSInterference.com</a> (adsb.lol globe history, ODbL)</span></p>
     <p class="air-credit" hidden><span class="air-credit-track">Aircraft from <a href="https://www.adsb.lol/docs/open-data/api" target="_blank" rel="noreferrer">adsb.lol</a> (ODbL 1.0)</span></p>
     <p class="ship-credit" hidden><span class="ship-credit-track">Positions from <a href="https://openwaters.io/ais/#license" target="_blank" rel="noreferrer">Open Waters AIS</a></span></p>
+    <p class="sw-credit" hidden><span class="sw-credit-track"></span></p>
     <div class="view-settings" id="view-settings">
       <div class="view-head">
         <span>VIEW</span>
@@ -398,6 +418,7 @@
   <script src="/effects-radius.js"></script>
   <script src="/quakes.js"></script>
   <script src="/sats.js"></script>
+  <script src="/spaceweather.js?v=20261123"></script>
   <script src="/cesium.js"></script>
 </body>
 </html>

@@ -1197,3 +1197,673 @@ function gsa_jamming_refresh_locked($opts)
         'code' => $got['code'] ?? 0,
     );
 }
+
+
+// ---------------------------------------------------------------------------
+// SPACE & WEATHER server feeds. Same rule as aircraft and jamming: the cron
+// runner is the only process that calls these sources, visitors only read the
+// compact cache files in data/ through router.php (/api/space/<name>).
+// They ride the existing */5 aircraft cron; there is no new cron entry.
+//
+//   nws         api.weather.gov/alerts/active   every run   (<= 288/day)
+//   hurricanes  nhc.noaa.gov/CurrentStorms.json every 15 min (<= 96/day)
+//   wildfires   NASA FIRMS VIIRS NOAA-20 24h    every 3 h   (<= 8/day)
+//
+// A failed pull keeps the last good cache and marks it stale.
+// The browser-only layers (ISS, volcanoes, disasters, radar, aurora) are in
+// spaceweather.js and never touch this server.
+
+defined('GSA_SPACE_SLACK_SEC') || define('GSA_SPACE_SLACK_SEC', 60);
+
+function gsa_space_feeds()
+{
+    return array(
+        'nws' => array(
+            'every' => 5 * 60,
+            'staleSec' => 30 * 60,
+            'source' => 'National Weather Service',
+            'sourceUrl' => 'https://www.weather.gov/',
+            'attribution' => 'Alerts: NOAA National Weather Service (api.weather.gov)',
+        ),
+        'hurricanes' => array(
+            'every' => 15 * 60,
+            'staleSec' => 3 * 60 * 60,
+            'source' => 'National Hurricane Center',
+            'sourceUrl' => 'https://www.nhc.noaa.gov/',
+            'attribution' => 'Storms: NOAA National Hurricane Center',
+        ),
+        'wildfires' => array(
+            'every' => 3 * 60 * 60,
+            'staleSec' => 9 * 60 * 60,
+            'source' => 'NASA FIRMS',
+            'sourceUrl' => 'https://firms.modaps.eosdis.nasa.gov/',
+            'attribution' => "Fires: NASA FIRMS (VIIRS NOAA-20, 24 h), part of NASA's EOSDIS",
+        ),
+    );
+}
+
+function gsa_space_cache_file($name)
+{
+    global $dataDir;
+    return $dataDir . '/space-' . $name . '.json';
+}
+
+function gsa_space_state_file()
+{
+    global $dataDir;
+    return $dataDir . '/space-state.json';
+}
+
+function gsa_space_state_read()
+{
+    $state = array();
+    $file = gsa_space_state_file();
+    if (is_file($file)) {
+        $decoded = json_decode((string) file_get_contents($file), true);
+        if (is_array($decoded)) {
+            $state = $decoded;
+        }
+    }
+    $today = gmdate('Y-m-d');
+    foreach (array_keys(gsa_space_feeds()) as $name) {
+        $row = isset($state[$name]) && is_array($state[$name]) ? $state[$name] : array();
+        $row = array_merge(array('day' => $today, 'requests' => 0, 'lastAt' => 0, 'tryAt' => 0, 'retryAfter' => 0), $row);
+        if ($row['day'] !== $today) {
+            $row['day'] = $today;
+            $row['requests'] = 0;
+        }
+        $state[$name] = $row;
+    }
+    return $state;
+}
+
+function gsa_space_state_write($state)
+{
+    gsa_atomic_write(gsa_space_state_file(), json_encode($state));
+}
+
+function gsa_space_cache_read($name)
+{
+    $file = gsa_space_cache_file($name);
+    if (!is_file($file)) {
+        return null;
+    }
+    $decoded = json_decode((string) file_get_contents($file), true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+function gsa_space_ua()
+{
+    // NWS asks every caller for a User-Agent that says who is calling.
+    return 'GlobalStatusApp/1.0 (https://globalstatus.app; space-weather cache)';
+}
+
+// GET a URL. With $toFile the body streams to disk (FIRMS is ~8 MB).
+function gsa_space_get($url, $accept, $toFile = null, $timeout = 40)
+{
+    if (!function_exists('curl_init')) {
+        return array('code' => 0, 'body' => null, 'error' => 'curl is missing', 'retryAfter' => 0);
+    }
+    $headers = array();
+    $ch = curl_init($url);
+    $fh = null;
+    $opts = array(
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_ENCODING => '',
+        CURLOPT_HTTPHEADER => array('Accept: ' . $accept, 'User-Agent: ' . gsa_space_ua()),
+        CURLOPT_HEADERFUNCTION => function ($curl, $header) use (&$headers) {
+            $parts = explode(':', $header, 2);
+            if (count($parts) === 2) {
+                $headers[strtolower(trim($parts[0]))] = trim($parts[1]);
+            }
+            return strlen($header);
+        },
+    );
+    if ($toFile !== null) {
+        $fh = fopen($toFile, 'wb');
+        if (!$fh) {
+            return array('code' => 0, 'body' => null, 'error' => 'Could not open temp file', 'retryAfter' => 0);
+        }
+        $opts[CURLOPT_FILE] = $fh;
+    } else {
+        $opts[CURLOPT_RETURNTRANSFER] = true;
+    }
+    curl_setopt_array($ch, $opts);
+    $body = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($fh) {
+        fclose($fh);
+    }
+    $retryAfter = 0;
+    if ($code === 429 || $code === 503) {
+        $retryAfter = gsa_adsb_retry_at($headers['retry-after'] ?? '300');
+    }
+    $ok = $body !== false && $code >= 200 && $code < 300;
+    return array(
+        'code' => $code,
+        'body' => ($ok && $toFile === null) ? (string) $body : null,
+        'ok' => $ok,
+        'error' => $ok ? null : ($body === false ? ($err !== '' ? $err : 'No answer') : 'HTTP ' . $code),
+        'retryAfter' => $retryAfter,
+    );
+}
+
+// ---- NWS active alerts -> compact list --------------------------------------
+// The full feed is ~2 MB. Most alerts have no polygon and name counties by
+// SAME/FIPS code, so those are pinned at county centroids
+// (api/county-centroids.json). Storm-based warnings keep their polygon.
+// Marine-only alerts carry no county code and are counted, not pinned.
+
+function gsa_space_county_index()
+{
+    global $root;
+    static $index = null;
+    if ($index !== null) {
+        return $index;
+    }
+    $index = array();
+    $decoded = json_decode((string) @file_get_contents($root . '/api/county-centroids.json'), true);
+    $rows = is_array($decoded) ? ($decoded['counties'] ?? array()) : array();
+    foreach ($rows as $row) {
+        if (!isset($row['geoid'], $row['lat'], $row['lon'])) {
+            continue;
+        }
+        $index[(string) $row['geoid']] = array(
+            'lat' => round((float) $row['lat'], 3),
+            'lon' => round((float) $row['lon'], 3),
+            'name' => trim(($row['name'] ?? '') . ', ' . ($row['usps'] ?? ''), ', '),
+        );
+    }
+    return $index;
+}
+
+function gsa_space_clip($text, $limit)
+{
+    $text = (string) $text;
+    return function_exists('mb_substr') ? mb_substr($text, 0, $limit) : substr($text, 0, $limit);
+}
+
+// Marine and offshore zones (UGC like PZZ110, AMZ040) from the NWS GIS
+// shapefiles, as one centroid per zone. Built once into api/.
+function gsa_space_marine_index()
+{
+    global $root;
+    static $index = null;
+    if ($index !== null) {
+        return $index;
+    }
+    $decoded = json_decode((string) @file_get_contents($root . '/api/marine-zone-centroids.json'), true);
+    $index = is_array($decoded) && isset($decoded['zones']) && is_array($decoded['zones']) ? $decoded['zones'] : array();
+    return $index;
+}
+
+function gsa_space_sev_rank($severity)
+{
+    $map = array('Extreme' => 4, 'Severe' => 3, 'Moderate' => 2, 'Minor' => 1);
+    return $map[$severity] ?? 0;
+}
+
+function gsa_space_ring($ring)
+{
+    $out = array();
+    $n = is_array($ring) ? count($ring) : 0;
+    // Keep at most ~60 vertices per ring.
+    $step = max(1, (int) ceil($n / 60));
+    for ($i = 0; $i < $n; $i += $step) {
+        $pt = $ring[$i];
+        if (is_array($pt) && count($pt) >= 2) {
+            $out[] = array(round((float) $pt[1], 3), round((float) $pt[0], 3));
+        }
+    }
+    return count($out) >= 3 ? $out : null;
+}
+
+function gsa_space_nws_build($raw)
+{
+    $counties = gsa_space_county_index();
+    $marine = gsa_space_marine_index();
+    $alerts = array();
+    $polygons = array();
+    $byCounty = array();
+    $unmapped = 0;
+    $total = 0;
+    foreach (($raw['features'] ?? array()) as $feat) {
+        $p = is_array($feat) ? ($feat['properties'] ?? array()) : array();
+        if (($p['status'] ?? '') !== 'Actual' || ($p['messageType'] ?? '') === 'Cancel') {
+            continue;
+        }
+        $total++;
+        $idx = count($alerts);
+        $alerts[] = array(
+            'e' => (string) ($p['event'] ?? 'Alert'),
+            's' => (string) ($p['severity'] ?? 'Unknown'),
+            'h' => gsa_space_clip($p['headline'] ?? '', 180),
+            'x' => (string) ($p['expires'] ?? ($p['ends'] ?? '')),
+            'u' => (string) ($p['@id'] ?? ($feat['id'] ?? '')),
+        );
+        $geom = $feat['geometry'] ?? null;
+        $placed = false;
+        if (is_array($geom) && ($geom['type'] ?? '') === 'Polygon' && !empty($geom['coordinates'][0])) {
+            $ring = gsa_space_ring($geom['coordinates'][0]);
+            if ($ring) {
+                $polygons[] = array('i' => $idx, 'r' => $ring);
+                $placed = true;
+            }
+        } elseif (is_array($geom) && ($geom['type'] ?? '') === 'MultiPolygon') {
+            foreach (($geom['coordinates'] ?? array()) as $poly) {
+                $ring = gsa_space_ring($poly[0] ?? null);
+                if ($ring) {
+                    $polygons[] = array('i' => $idx, 'r' => $ring);
+                    $placed = true;
+                }
+            }
+        }
+        if (!$placed) {
+            foreach (($p['geocode']['SAME'] ?? array()) as $same) {
+                $fips = substr((string) $same, -5);
+                if (!isset($counties[$fips])) {
+                    continue;
+                }
+                $byCounty[$fips][] = $idx;
+                $placed = true;
+            }
+        }
+        if (!$placed) {
+            foreach (($p['geocode']['UGC'] ?? array()) as $ugc) {
+                $ugc = (string) $ugc;
+                if (!isset($marine[$ugc])) {
+                    continue;
+                }
+                $byCounty['z:' . $ugc][] = $idx;
+                $placed = true;
+            }
+        }
+        if (!$placed) {
+            $unmapped++;
+        }
+    }
+    // Keep only alerts that are drawn, renumbered, so the file stays small.
+    $used = array();
+    foreach ($polygons as $poly) {
+        $used[$poly['i']] = true;
+    }
+    foreach ($byCounty as $list) {
+        foreach ($list as $i) {
+            $used[$i] = true;
+        }
+    }
+    $remap = array();
+    $kept = array();
+    foreach ($alerts as $i => $alert) {
+        if (isset($used[$i])) {
+            $remap[$i] = count($kept);
+            $kept[] = $alert;
+        }
+    }
+    foreach ($polygons as $k => $poly) {
+        $polygons[$k]['i'] = $remap[$poly['i']];
+    }
+    foreach ($byCounty as $fips => $list) {
+        $byCounty[$fips] = array_map(function ($i) use ($remap) {
+            return $remap[$i];
+        }, $list);
+    }
+    $alerts = $kept;
+    $points = array();
+    foreach ($byCounty as $fips => $list) {
+        $list = array_values(array_unique($list));
+        usort($list, function ($a, $b) use ($alerts) {
+            return gsa_space_sev_rank($alerts[$b]['s']) <=> gsa_space_sev_rank($alerts[$a]['s']);
+        });
+        if (strpos((string) $fips, 'z:') === 0) {
+            $z = $marine[substr($fips, 2)];
+            $c = array('lat' => $z['lat'], 'lon' => $z['lon'], 'name' => $z['name'] . ' (' . substr($fips, 2) . ')');
+        } else {
+            $c = $counties[$fips];
+        }
+        $points[] = array('lat' => $c['lat'], 'lon' => $c['lon'], 'n' => $c['name'], 'a' => array_slice($list, 0, 8));
+    }
+    return array(
+        'alerts' => $alerts,
+        'polygons' => $polygons,
+        'points' => $points,
+        'count' => $total,
+        'mapped' => count($alerts),
+        'unmapped' => $unmapped,
+        'updated' => (string) ($raw['updated'] ?? gmdate('Y-m-d\TH:i:s\Z')),
+    );
+}
+
+function gsa_space_fetch_nws()
+{
+    $got = gsa_space_get('https://api.weather.gov/alerts/active', 'application/geo+json', null, 40);
+    if (empty($got['ok'])) {
+        return $got;
+    }
+    $raw = json_decode($got['body'], true);
+    if (!is_array($raw) || !isset($raw['features'])) {
+        return array('ok' => false, 'code' => $got['code'], 'error' => 'NWS answer was not GeoJSON', 'retryAfter' => 0);
+    }
+    $got['layer'] = gsa_space_nws_build($raw);
+    unset($got['body']);
+    return $got;
+}
+
+// ---- NHC CurrentStorms.json ---------------------------------------------------
+
+function gsa_space_hurricanes_build($raw)
+{
+    $storms = array();
+    foreach (($raw['activeStorms'] ?? array()) as $s) {
+        if (!is_array($s)) {
+            continue;
+        }
+        $lat = $s['latitudeNumeric'] ?? null;
+        $lon = $s['longitudeNumeric'] ?? null;
+        if (!is_numeric($lat) || !is_numeric($lon)) {
+            continue;
+        }
+        $storms[] = array(
+            'id' => (string) ($s['id'] ?? ''),
+            'name' => (string) ($s['name'] ?? 'Storm'),
+            'cls' => (string) ($s['classification'] ?? ''),
+            'kt' => is_numeric($s['intensity'] ?? null) ? (int) $s['intensity'] : null,
+            'mb' => is_numeric($s['pressure'] ?? null) ? (int) $s['pressure'] : null,
+            'lat' => round((float) $lat, 2),
+            'lon' => round((float) $lon, 2),
+            'dir' => is_numeric($s['movementDir'] ?? null) ? (int) $s['movementDir'] : null,
+            'mph' => is_numeric($s['movementSpeed'] ?? null) ? (int) $s['movementSpeed'] : null,
+            'at' => (string) ($s['lastUpdate'] ?? ''),
+            'url' => (string) ($s['publicAdvisory']['url'] ?? ($s['forecastGraphics']['url'] ?? 'https://www.nhc.noaa.gov/')),
+        );
+    }
+    return array(
+        'points' => $storms,
+        'count' => count($storms),
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'note' => count($storms) ? null : 'No active storms (Atlantic, East and Central Pacific)',
+    );
+}
+
+function gsa_space_fetch_hurricanes()
+{
+    $mock = (string) ($GLOBALS['GSA_SPACE_MOCK_NHC'] ?? '');
+    if ($mock !== '' && is_file($mock)) {
+        $raw = json_decode((string) file_get_contents($mock), true);
+        return array('ok' => is_array($raw), 'code' => 200, 'mocked' => true, 'error' => null, 'retryAfter' => 0,
+            'layer' => gsa_space_hurricanes_build(is_array($raw) ? $raw : array()));
+    }
+    $got = gsa_space_get('https://www.nhc.noaa.gov/CurrentStorms.json', 'application/json', null, 25);
+    if (empty($got['ok'])) {
+        return $got;
+    }
+    $raw = json_decode($got['body'], true);
+    if (!is_array($raw) || !array_key_exists('activeStorms', $raw)) {
+        return array('ok' => false, 'code' => $got['code'], 'error' => 'NHC answer was not CurrentStorms JSON', 'retryAfter' => 0);
+    }
+    $got['layer'] = gsa_space_hurricanes_build($raw);
+    unset($got['body']);
+    return $got;
+}
+
+// ---- NASA FIRMS 24 h active fires -> 0.25 degree cells -------------------------
+// The public no-key 24 h CSV (VIIRS NOAA-20, ~8 MB, ~70k rows) is streamed to a
+// temp file and binned so the globe gets at most 3,000 points.
+
+defined('GSA_FIRE_CELL') || define('GSA_FIRE_CELL', 0.25);
+defined('GSA_FIRE_CAP') || define('GSA_FIRE_CAP', 3000);
+
+function gsa_space_firms_urls()
+{
+    return array(
+        'VIIRS NOAA-20' => 'https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_Global_24h.csv',
+        'VIIRS NOAA-21' => 'https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-21-viirs-c2/csv/J2_VIIRS_C2_Global_24h.csv',
+        'MODIS' => 'https://firms.modaps.eosdis.nasa.gov/data/active_fire/modis-c6.1/csv/MODIS_C6_1_Global_24h.csv',
+    );
+}
+
+function gsa_space_firms_parse($file, $sensor)
+{
+    $fh = fopen($file, 'rb');
+    if (!$fh) {
+        return null;
+    }
+    $head = fgetcsv($fh, 0, ',', '"', '\\');
+    if (!is_array($head)) {
+        fclose($fh);
+        return null;
+    }
+    $col = array_flip(array_map('trim', $head));
+    if (!isset($col['latitude'], $col['longitude'])) {
+        fclose($fh);
+        return null;
+    }
+    $cells = array();
+    $rows = 0;
+    $latest = '';
+    $cell = GSA_FIRE_CELL;
+    while (($r = fgetcsv($fh, 0, ',', '"', '\\')) !== false) {
+        if (count($r) < count($col)) {
+            continue;
+        }
+        $conf = isset($col['confidence']) ? strtolower(trim((string) $r[$col['confidence']])) : '';
+        // VIIRS: l/n/h; MODIS: 0-100. Skip low-confidence detections.
+        if ($conf === 'l' || (is_numeric($conf) && (int) $conf < 30)) {
+            continue;
+        }
+        $lat = (float) $r[$col['latitude']];
+        $lon = (float) $r[$col['longitude']];
+        $frp = isset($col['frp']) ? (float) $r[$col['frp']] : 0.0;
+        $when = (isset($col['acq_date']) ? $r[$col['acq_date']] : '') . ' ' . (isset($col['acq_time']) ? str_pad($r[$col['acq_time']], 4, '0', STR_PAD_LEFT) : '');
+        if ($when > $latest) {
+            $latest = $when;
+        }
+        $key = (int) floor($lat / $cell) . ':' . (int) floor($lon / $cell);
+        if (!isset($cells[$key])) {
+            $cells[$key] = array(0.0, 0.0, 0, 0.0, 0.0, '');
+        }
+        $c = &$cells[$key];
+        $c[0] += $lat;
+        $c[1] += $lon;
+        $c[2] += 1;
+        $c[3] += $frp;
+        if ($frp > $c[4]) {
+            $c[4] = $frp;
+        }
+        if ($when > $c[5]) {
+            $c[5] = $when;
+        }
+        unset($c);
+        $rows++;
+    }
+    fclose($fh);
+    uasort($cells, function ($a, $b) {
+        return $b[3] <=> $a[3];
+    });
+    $points = array();
+    foreach ($cells as $c) {
+        if (count($points) >= GSA_FIRE_CAP) {
+            break;
+        }
+        $points[] = array(
+            'lat' => round($c[0] / $c[2], 3),
+            'lon' => round($c[1] / $c[2], 3),
+            'n' => $c[2],
+            'frp' => round($c[3], 1),
+            'max' => round($c[4], 1),
+            't' => $c[5],
+        );
+    }
+    $updated = null;
+    if ($latest !== '') {
+        $ts = strtotime(trim($latest) . ' UTC');
+        if ($ts === false) {
+            $ts = strtotime(substr($latest, 0, 10) . ' ' . substr($latest, 11, 2) . ':' . substr($latest, 13, 2) . ' UTC');
+        }
+        $updated = $ts ? gmdate('Y-m-d\TH:i:s\Z', $ts) : null;
+    }
+    return array(
+        'points' => $points,
+        'count' => $rows,
+        'cells' => count($cells),
+        'sensor' => $sensor,
+        'updated' => $updated ?: gmdate('Y-m-d\TH:i:s\Z'),
+    );
+}
+
+function gsa_space_fetch_wildfires()
+{
+    global $dataDir;
+    $tmp = $dataDir . '/space-firms.tmp.' . getmypid();
+    $last = array('ok' => false, 'code' => 0, 'error' => 'FIRMS did not answer', 'retryAfter' => 0);
+    $calls = 0;
+    foreach (gsa_space_firms_urls() as $sensor => $url) {
+        $calls++;
+        $got = gsa_space_get($url, 'text/csv', $tmp, 90);
+        if (!empty($got['ok'])) {
+            $layer = gsa_space_firms_parse($tmp, $sensor);
+            @unlink($tmp);
+            // An all-header file (seen today for Suomi NPP) is not a result.
+            if (is_array($layer) && $layer['count'] > 0) {
+                $got['layer'] = $layer;
+                $got['calls'] = $calls;
+                return $got;
+            }
+            $last = array('ok' => false, 'code' => $got['code'], 'error' => $sensor . ' file had no rows', 'retryAfter' => 0);
+            continue;
+        }
+        @unlink($tmp);
+        $last = $got;
+        if (!empty($got['retryAfter'])) {
+            break;
+        }
+    }
+    $last['calls'] = $calls;
+    return $last;
+}
+
+// ---- generic gate / publish ---------------------------------------------------
+
+function gsa_space_refresh($name, $opts = array())
+{
+    global $dataDir;
+    $feeds = gsa_space_feeds();
+    if (!isset($feeds[$name])) {
+        return array('ok' => false, 'error' => 'Unknown space feed');
+    }
+    $meta = $feeds[$name];
+    if (!is_dir($dataDir)) {
+        mkdir($dataDir, 0755, true);
+    }
+    $lock = fopen($dataDir . '/space-' . $name . '.lock', 'c');
+    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+        if ($lock) {
+            fclose($lock);
+        }
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        $state = gsa_space_state_read();
+        $row = $state[$name];
+        $now = time();
+        $force = !empty($opts['force']);
+        if (!$force && (int) $row['retryAfter'] > $now) {
+            return array('ok' => true, 'skipped' => true, 'reason' => 'retry-after', 'requestsToday' => (int) $row['requests']);
+        }
+        // Gate on the last attempt (good or bad) so a dead source is not hammered.
+        $lastTry = max((int) $row['lastAt'], (int) $row['tryAt']);
+        $age = $lastTry > 0 ? $now - $lastTry : null;
+        // After a failed try, retry sooner (15 min at most) instead of waiting a full cycle.
+        $wait = (int) $row['tryAt'] > (int) $row['lastAt'] ? min($meta['every'], 15 * 60) : $meta['every'];
+        $due = $force || $age === null || $age >= ($wait - GSA_SPACE_SLACK_SEC);
+        if (!$due) {
+            return array('ok' => true, 'skipped' => true, 'reason' => 'not-due', 'ageSec' => $age, 'requestsToday' => (int) $row['requests']);
+        }
+        $t0 = microtime(true);
+        $fn = 'gsa_space_fetch_' . $name;
+        // Test hook (CLI flag --mock-space-fail): no network call, just a failure.
+        $got = !empty($GLOBALS['GSA_SPACE_MOCK_FAIL'])
+            ? array('ok' => false, 'mocked' => true, 'code' => 0, 'error' => 'Mocked fetch failure', 'retryAfter' => 0)
+            : $fn();
+        $row['tryAt'] = $now;
+        if (empty($got['mocked'])) {
+            $row['requests'] = (int) $row['requests'] + (int) ($got['calls'] ?? 1);
+        }
+        $row['retryAfter'] = (int) ($got['retryAfter'] ?? 0);
+        $ms = (int) round((microtime(true) - $t0) * 1000);
+        if (!empty($got['ok']) && isset($got['layer'])) {
+            $layer = $got['layer'];
+            $layer['source'] = $meta['source'];
+            $layer['sourceUrl'] = $meta['sourceUrl'];
+            $layer['attribution'] = $meta['attribution'];
+            $layer['error'] = null;
+            $put = gsa_cache_put(gsa_space_cache_file($name), $layer);
+            $row['lastAt'] = $now;
+            $state[$name] = $row;
+            gsa_space_state_write($state);
+            return array(
+                'ok' => true,
+                'count' => $layer['count'] ?? 0,
+                'published' => isset($layer['points']) ? count($layer['points']) : 0,
+                'bytes' => $put['bytes'] ?? 0,
+                'updated' => $layer['updated'] ?? null,
+                'requestsToday' => (int) $row['requests'],
+                'code' => $got['code'] ?? 200,
+                'mocked' => !empty($got['mocked']),
+                'ms' => $ms,
+            );
+        }
+        $state[$name] = $row;
+        gsa_space_state_write($state);
+        // Keep the last good file, flag it stale.
+        $prev = gsa_space_cache_read($name);
+        if (is_array($prev)) {
+            $prev['stale'] = true;
+            $prev['error'] = $got['error'] ?? 'Fetch failed';
+            gsa_atomic_write(gsa_space_cache_file($name), json_encode($prev));
+        }
+        return array(
+            'ok' => false,
+            'error' => $got['error'] ?? 'Fetch failed',
+            'code' => $got['code'] ?? 0,
+            'retryAfter' => (int) $row['retryAfter'],
+            'requestsToday' => (int) $row['requests'],
+            'keptLastGood' => is_array($prev),
+            'ms' => $ms,
+        );
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+// What visitors get from /api/space/<name>. Never calls the source.
+function gsa_space_snapshot($name)
+{
+    $feeds = gsa_space_feeds();
+    $meta = $feeds[$name];
+    $cached = gsa_space_cache_read($name);
+    if (!is_array($cached)) {
+        return array(
+            'points' => array(),
+            'count' => 0,
+            'updated' => null,
+            'source' => $meta['source'],
+            'sourceUrl' => $meta['sourceUrl'],
+            'attribution' => $meta['attribution'],
+            'stale' => true,
+            'error' => 'Awaiting poller',
+            'ageSec' => null,
+        );
+    }
+    $fetchedAt = (int) ($cached['fetchedAt'] ?? 0);
+    $ageSec = $fetchedAt > 0 ? max(0, time() - $fetchedAt) : null;
+    unset($cached['fetchedAt']);
+    $cached['ageSec'] = $ageSec;
+    $cached['stale'] = $ageSec === null || $ageSec > $meta['staleSec'] || !empty($cached['stale']);
+    return $cached;
+}
