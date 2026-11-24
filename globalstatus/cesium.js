@@ -657,6 +657,7 @@ function hookUi() {
     } else syncGridResultsButton();
     syncInstallButton();
   });
+  setupLegendScroll();
   for (const button of document.querySelectorAll("[data-layer-toggle]")) {
     button.addEventListener("click", () => {
       const layer = button.dataset.layerToggle;
@@ -1397,6 +1398,21 @@ const LAYER_LABEL = {
   hurricanes: "HURRICANES",
   wildfires: "WILDFIRES",
 };
+
+function setupLegendScroll() {
+  // Phone bottom bar: the layer dots scroll sideways. Fade an edge only when
+  // more dots are hidden past it, so the end dots are never dimmed.
+  const row = document.querySelector(".hud-bot .legend");
+  if (!row) return;
+  const sync = () => {
+    const max = row.scrollWidth - row.clientWidth;
+    row.classList.toggle("fade-l", max > 1 && row.scrollLeft > 1);
+    row.classList.toggle("fade-r", max > 1 && row.scrollLeft < max - 1);
+  };
+  row.addEventListener("scroll", sync, { passive: true });
+  window.addEventListener("resize", sync);
+  sync();
+}
 
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
