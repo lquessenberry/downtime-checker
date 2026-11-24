@@ -4,9 +4,13 @@ Review pull requests into `feat/globalstatus-prod` on `lquessenberry/downtime-ch
 Flag these as blocking:
 
 - Secrets, API keys, FTP credentials, or tokens in code, config, or test fixtures.
-- Code copied from NUKEMAP, NukeSim, or Will Casey's private calculator or simulator.
-  First-party cube-root blast math in `downtime-core::blast` / `globalstatus/blast.js` is allowed.
-  The `nuke-sim` cargo feature must stay off in release builds.
+- Code copied from NUKEMAP or NukeSim. NUKEMAP by Alex Wellerstein is an
+  inspiration only, not a source of our calculations or a product we port.
+  The Global Status nuclear simulator and calculator (built by Will Casey and Lee)
+  is first-party. Cube-root blast math in `downtime-core::blast` /
+  `globalstatus/blast.js` is allowed. Do not commit Will's still-private
+  Detonate / `nuke-sim` sources until Will explicitly approves. The `nuke-sim`
+  cargo feature must stay off in release builds.
 - Paid or non-FOSS dependencies on a default path: Cesium ion, Mapbox GL JS v2+,
   Esri-required defaults, ACLED keys, GIDEON REST, AISStream, closed LLM APIs.
 - GADM data in the default web or F-Droid build (non-commercial license).

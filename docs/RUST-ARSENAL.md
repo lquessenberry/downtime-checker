@@ -43,4 +43,4 @@ Hottest first. Network-bound work stays rate-limited even in Rust.
 - Do not vendor php-rust. Do not enable `nuke-sim`.
 - Rapira/Pasir: document, do not depend, unless a cycle is blocked on GoDaddy PHP.
 - Rate-limited feeds (Nominatim, ADS-B caps, one-user poller) stay capped. Rust removes CPU/JSON cost, not the courtesy delay.
-- No paid licenses. Recreate NUKEMAP, ion terrain, Esri defaults, and ion OSM Buildings. See `docs/NO-PAID-LICENSES.md`.
+- No paid licenses. Build our own blast model, free terrain, and OSM buildings rather than licensing ion, Esri defaults, or ion OSM Buildings. NUKEMAP by Alex Wellerstein is an inspiration only, not a product we port. See `docs/NO-PAID-LICENSES.md`.

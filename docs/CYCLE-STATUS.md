@@ -10,7 +10,7 @@ Grok bots **GLOBALSTATUS** (product) and **RUCKUS** (review) watch this file and
 | Pace | 2-hour feature cycles. Cycles **7–18** are features; **19–30** are catch-up. |
 | Priority | Lee (2026-11-22): anything Will Casey suggests goes to the front of the feature cycles. Label: `will-priority`. |
 | Merge | Copilot on current head, or RUCKUS if Copilot `NO_QUOTA_REMAINING`, plus CI green. No force-push. Not Will's upstream. No FTP. |
-| Blast source | First-party `blast.js` / `downtime-core::blast` is public. Will's calculator / Detonate / `nuke-sim` stays out of the public repo until Will explicitly approves. |
+| Blast source | The Global Status nuclear simulator and calculator (Will Casey and Lee) is first-party (`blast.js` / `downtime-core::blast`). Inspired by NUKEMAP by Alex Wellerstein; not a port of NUKEMAP. Detonate / the `nuke-sim` cargo feature stay out of the public repo until Will explicitly approves. |
 
 ## Open for review
 

@@ -1,6 +1,6 @@
 # No paid licenses
 
-We do not buy Mapbox, Cesium ion, Esri, Maxar, NukeSim, NUKEMAP, GIDEON REST, ACLED keys, or AISStream to ship a feature. If a capability is not free (public domain, CC BY, ODbL, government feed, or our own code), **we recreate it** and **later cycles perfect it**.
+We do not buy Mapbox, Cesium ion, Esri, Maxar, GIDEON REST, ACLED keys, or AISStream to ship a feature. We do not license, embed, or port NUKEMAP or NukeSim. If a capability is not free (public domain, CC BY, ODbL, government feed, or our own code), **we build our own** and **later cycles perfect it**.
 
 RUCKUS fails a cycle that adds a required paid token.
 
@@ -8,7 +8,7 @@ RUCKUS fails a cycle that adds a required paid token.
 
 | Feature we want | Paid / restricted | Free / ours | Perfect in |
 | --- | --- | --- | --- |
-| Blast rings, DEFCON HUD | NUKEMAP, NukeSim | `downtime-core::blast` cube-root (Glasstone-scale) | 7, 9, 10, 16 |
+| Blast rings, DEFCON HUD | Third-party maps (NUKEMAP, NukeSim) are not used or ported | Global Status nuclear simulator and calculator (Will Casey and Lee), inspired by NUKEMAP by Alex Wellerstein; `downtime-core::blast` cube-root (Glasstone-scale) | 7, 9, 10, 16 |
 | Globe engine | Cesium ion, Mapbox GL JS v2+ | Vendored Cesium Apache-2.0 `Source/` now; wgpu `globe-native` is the product | 10, 18 |
 | Terrain | Esri Terrain3D, Cesium World Terrain | Mapzen/Nextzen Terrarium, SRTM, Copernicus DEM, NASA | 11, 16 |
 | Streets / 3D buildings | Cesium OSM Buildings (ion), Google Photorealistic | OSM tiles + OSM Buildings GeoJSON (CC BY-SA) | 12, 18 |
