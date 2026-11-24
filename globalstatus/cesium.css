@@ -1597,6 +1597,31 @@ button:hover { border-color: #9fd4e2; }
 .nearby-list em { font-style: normal; color: var(--text); }
 .nearby-list button span { display: inline-flex; align-items: center; min-width: 0; }
 .nearby-list .swatch { flex: none; }
+/* Rows: tap the name to list that layer's pins inside the circle; ON/OFF switches the layer. */
+.nearby-list .nearby-row { margin: 0 0 3px; }
+.nearby-row-main { display: flex; gap: 4px; }
+.nearby-list .nearby-name { flex: 1 1 auto; min-width: 0; margin: 0; align-items: center; opacity: 1; }
+.nearby-list .nearby-name em { margin-left: auto; }
+.nearby-chev { flex: none; font-style: normal; color: var(--dim); }
+.nearby-row.open .nearby-name { border-color: #9fd4e2; }
+.nearby-list .nearby-tog { flex: none; width: auto; min-width: 48px; margin: 0; justify-content: center; align-items: center; font-size: 11px; opacity: 0.6; }
+.nearby-list .nearby-tog.on { opacity: 1; border-color: #9fd4e2; }
+.nearby-pins { list-style: none; margin: 4px 0 6px; padding: 0 0 0 8px; border-left: 1px solid var(--line); }
+.nearby-pins li { padding: 6px 4px; border-bottom: 1px solid rgba(120, 190, 210, 0.12); font-size: 12px; line-height: 1.4; }
+.nearby-pin-head { display: flex; justify-content: space-between; gap: 8px; }
+.nearby-pin-head b { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.nearby-pin-head span { flex: none; color: var(--dim); }
+.nearby-pin-info { color: var(--dim); overflow-wrap: anywhere; }
+.nearby-pin-info a { color: #9fd4e2; }
+.nearby-pin-info i { font-style: normal; }
+.nearby-facts { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; margin: 2px 0; }
+.nearby-facts div { display: contents; }
+.nearby-facts dt { color: var(--dim); }
+.nearby-facts dd { margin: 0; color: var(--text); }
+.nearby-list .nearby-go,
+.nearby-list .nearby-more { width: auto; min-height: 28px; margin: 4px 0 0; padding: 2px 8px; font-size: 10px; opacity: 1; display: inline-flex; align-items: center; justify-content: center; }
+.nearby-list .nearby-more { width: 100%; justify-content: center; }
+.nearby-pins-empty { margin: 4px 0 6px 8px; color: var(--dim); font-size: 11px; }
 .nearby-clear { min-height: 36px; font-size: 12px; }
 .nearby-all { min-height: 32px; font-size: 11px; }
 .nearby-all.on { border-color: #9fd4e2; color: var(--text); }
@@ -1631,6 +1656,7 @@ button:hover { border-color: #9fd4e2; }
   }
   .nearby-radius .chip { min-height: 40px; font-size: 14px; }
   .nearby-list button { min-height: 40px; font-size: 13px; }
+  .nearby-list .nearby-go, .nearby-list .nearby-more { min-height: 36px; font-size: 11px; }
   .nearby-min, .nearby-clear, .nearby-all { min-height: 40px; }
 }
 /* Phones: the open card is a full-screen sheet over the map (CLOSE returns to the map;
@@ -1646,7 +1672,7 @@ button:hover { border-color: #9fd4e2; }
     padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
     border: 0;
     border-radius: 0;
-    background: rgba(6, 10, 15, 0.98);
+    background: var(--bg);
   }
   .nearby-card:not(.is-min) .nearby-head strong { font-size: 14px; }
   .nearby-card:not(.is-min) .nearby-list { flex: 1 1 auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }

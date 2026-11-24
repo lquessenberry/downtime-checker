@@ -379,8 +379,8 @@
     };
   }
 
-  function popupHtml(item) {
-    lastShown = item;
+  function popupHtml(item, opts) {
+    if (!(opts && opts.list)) lastShown = item; // the nearby list is not the open popup
     const lines = [];
     let link = "";
     if (item.layer === "airports") {
@@ -469,6 +469,7 @@
   root.GsaInfra = {
     KEYS,
     setFilter,
+    itemFor,
     init,
     setActive,
     pick,
