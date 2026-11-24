@@ -2986,11 +2986,22 @@ function cullAircraftHorizon() {
     state.outageSource,
     state.hungerSource,
   ];
+  // FIREARMS use the same depth-test-off point markers. Without this cull,
+  // pins on the far side of the earth show through and look stuck on the
+  // screen when the globe is panned or rotated. USA state pins usually
+  // looked fine because they sit together on one side of the globe.
+  if (window.GsaFirearms && window.GsaFirearms.KEYS) {
+    for (const key of window.GsaFirearms.KEYS) {
+      const firearmsSource = window.GsaFirearms.sourceFor(key);
+      if (firearmsSource) sources.push(firearmsSource);
+    }
+  }
   const scene = viewer.scene;
   // Depth-testing these icons at globe distance eats them. Leaving the
   // depth test off draws far-side icons through the earth, so they look
   // stuck on the front when the globe turns. Hide the jammed GPS signals,
-  // aircraft, ships, power outages, and world hunger the ellipsoid blocks.
+  // aircraft, ships, power outages, world hunger, and firearms pins the
+  // ellipsoid blocks.
   if (scene.mode !== Cesium.SceneMode.SCENE3D) {
     for (const source of sources) {
       if (!source) continue;
