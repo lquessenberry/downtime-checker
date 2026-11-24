@@ -95,6 +95,7 @@ function gsa_http_routes()
         '/api/hunger' => 'api/hunger.json',
         '/api/guns-usa' => 'api/guns-usa.json',
         '/api/guns-world' => 'api/guns-world.json',
+        '/api/militias' => 'api/militias.json',
         '/api/radio' => 'api/radio.json',
         '/api/streams' => 'api/streams.json',
         '/api/amfm' => 'api/amfm.json',

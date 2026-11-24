@@ -85,6 +85,11 @@ const state = {
     // FIREARMS (firearms.js): saved static pin layers, not a live feed.
     gunsusa: false,
     gunsworld: false,
+    // MILITIAS (militias.js): saved static pin layers, not a live feed.
+    militianational: false,
+    militiastate: false,
+    militialocal: false,
+    militiainactive: false,
   },
   openKind: "",
   openId: "",
@@ -153,6 +158,7 @@ const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rive
 // INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
 const INFRA_KEYS = ["airports", "bases"];
 const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
+const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "militiainactive"];
 
 const COLORS = {
   up: Cesium.Color.fromCssColorString("#3dff9a"),
@@ -509,6 +515,13 @@ async function startGlobe() {
   }
   if (window.GsaFirearms) {
     window.GsaFirearms.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaMilitias) {
+    window.GsaMilitias.init({
       viewer: () => state.viewer,
       setCount,
       statusLive: () => statusLive(),
@@ -1241,6 +1254,10 @@ function sourceFor(layer) {
     const firearmsSource = window.GsaFirearms.sourceFor(layer);
     if (firearmsSource) return firearmsSource;
   }
+  if (window.GsaMilitias && window.GsaMilitias.sourceFor) {
+    const militiasSource = window.GsaMilitias.sourceFor(layer);
+    if (militiasSource) return militiasSource;
+  }
   return null;
 }
 
@@ -1448,6 +1465,9 @@ function setLayer(layer, on) {
   if (FIREARMS_KEYS.includes(layer) && window.GsaFirearms) {
     window.GsaFirearms.setActive(layer, state.layers[layer]);
   }
+  if (MILITIAS_KEYS.includes(layer) && window.GsaMilitias) {
+    window.GsaMilitias.setActive(layer, state.layers[layer]);
+  }
   if ((layer === "quakes" || layer === "sats") && window.GsaSpaceWeather && window.GsaSpaceWeather.renderGroupCount) {
     window.GsaSpaceWeather.renderGroupCount();
   }
@@ -1504,6 +1524,10 @@ const LAYER_LABEL = {
   bases: "MILITARY BASES",
   gunsusa: "USA GUN OWNERSHIP",
   gunsworld: "WORLD GUN OWNERSHIP",
+  militianational: "NATIONAL GROUPS",
+  militiastate: "STATEWIDE GROUPS",
+  militialocal: "LOCAL GROUPS",
+  militiainactive: "INACTIVE GROUPS",
 };
 
 function setupLegendScroll() {
@@ -1524,7 +1548,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "gunsusa", "gunsworld"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -3085,11 +3109,17 @@ function cullAircraftHorizon() {
       if (firearmsSource) sources.push(firearmsSource);
     }
   }
+  if (window.GsaMilitias && window.GsaMilitias.KEYS) {
+    for (const key of window.GsaMilitias.KEYS) {
+      const militiasSource = window.GsaMilitias.sourceFor(key);
+      if (militiasSource) sources.push(militiasSource);
+    }
+  }
   const scene = viewer.scene;
   // Depth-testing these icons at globe distance eats them. Leaving the
   // depth test off draws far-side icons through the earth, so they look
   // stuck on the front when the globe turns. Hide the jammed GPS signals,
-  // aircraft, ships, power outages, world hunger, and firearms pins the
+  // aircraft, ships, power outages, world hunger, firearms, and militias pins the
   // ellipsoid blocks.
   if (scene.mode !== Cesium.SceneMode.SCENE3D) {
     for (const source of sources) {
@@ -3339,6 +3369,9 @@ function liveHtml(item, opts = {}) {
   }
   else if (item.firearms && window.GsaFirearms) {
     extra = window.GsaFirearms.popupHtml(item, opts);
+  }
+  else if (item.militias && window.GsaMilitias) {
+    extra = window.GsaMilitias.popupHtml(item, opts);
   }
   else if (item.layer === "quakes") {
     const mag = item.mag != null ? `Magnitude ${Number(item.mag).toFixed(1)}` : "";
@@ -3735,6 +3768,7 @@ function statusLive(error) {
   if (window.GsaSpaceWeather) parts.push(...window.GsaSpaceWeather.statusParts());
   if (window.GsaInfra) parts.push(...window.GsaInfra.statusParts());
   if (window.GsaFirearms) parts.push(...window.GsaFirearms.statusParts());
+  if (window.GsaMilitias) parts.push(...window.GsaMilitias.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
 }

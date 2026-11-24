@@ -19,7 +19,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261124k" />
+  <link rel="stylesheet" href="/cesium.css?v=20261124l" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -135,6 +135,17 @@
         <p class="sw-note" data-firearms-note="gunsusa" hidden></p>
         <button type="button" class="layer" data-layer-toggle="gunsworld" aria-pressed="false"><span class="layer-name"><span class="swatch gunsworld"></span> WORLD GUN OWNERSHIP</span><span class="layer-meta"><em data-count="gunsworld">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-firearms-note="gunsworld" hidden></p>
+      </details>
+      <details class="layer-group" id="group-militias" data-layer-group="militias">
+        <summary class="layer-group-head"><span>MILITIAS</span><em class="layer-group-count"></em></summary>
+        <button type="button" class="layer" data-layer-toggle="militianational" aria-pressed="false"><span class="layer-name"><span class="swatch militianational"></span> NATIONAL GROUPS</span><span class="layer-meta"><em data-count="militianational">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-militias-note="militianational" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="militiastate" aria-pressed="false"><span class="layer-name"><span class="swatch militiastate"></span> STATEWIDE GROUPS</span><span class="layer-meta"><em data-count="militiastate">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-militias-note="militiastate" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="militialocal" aria-pressed="false"><span class="layer-name"><span class="swatch militialocal"></span> LOCAL GROUPS</span><span class="layer-meta"><em data-count="militialocal">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-militias-note="militialocal" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="militiainactive" aria-pressed="false"><span class="layer-name"><span class="swatch militiainactive"></span> INACTIVE GROUPS</span><span class="layer-meta"><em data-count="militiainactive">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-militias-note="militiainactive" hidden></p>
       </details>
       <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
     </div>
@@ -460,8 +471,9 @@
   <script src="/spaceweather.js?v=20261124i"></script>
   <script src="/infra.js?v=20261124i"></script>
   <script src="/firearms.js?v=20261124k"></script>
+  <script src="/militias.js?v=20261124l"></script>
   <script src="/geocoder.js?v=20261124i"></script>
-  <script src="/nearby.js?v=20261124i"></script>
-  <script src="/cesium.js?v=20261124k"></script>
+  <script src="/nearby.js?v=20261124l"></script>
+  <script src="/cesium.js?v=20261124l"></script>
 </body>
 </html>
