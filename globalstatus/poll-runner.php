@@ -5,7 +5,7 @@
 //   /usr/local/bin/php -q /home/<user>/public_html/globalstatus.app/poll-runner.php aircraft
 //   php poll-runner.php status
 //   php poll-runner.php jamming [--force-jam]
-//   php poll-runner.php space [--force-space] [--only=nws,hurricanes,wildfires]
+//   php poll-runner.php space [--force-space] [--only=nws,hurricanes,wildfires,tsunami,rivers,coastal]
 //   php poll-runner.php grid --slice=40     (test: first 40 sites only, never published)
 //
 // World Grid: one full pass is saved to data/scan-cache.json. Visitors'
@@ -15,7 +15,9 @@
 // Jamming: the same */5 aircraft cron also refreshes GPSInterference.com
 // when the last pull is at least 15 minutes old. No third cron is needed.
 // Space & Weather: the same */5 aircraft cron also refreshes NWS alerts
-// (every run), NHC storms (15 min) and NASA FIRMS fires (3 h). Each feed is
+// (every run), NHC storms (15 min), NASA FIRMS fires (3 h), tsunami.gov
+// alerts (every run), NWPS river gauges (15 min) and CO-OPS coastal water
+// levels (15 min). Each feed is
 // time-gated in poll-lib.php (gsa_space_refresh). Still no new cron.
 
 if (PHP_SAPI !== 'cli') {
@@ -63,6 +65,10 @@ foreach ($argv as $arg) {
         $GLOBALS['GSA_SPACE_MOCK_FAIL'] = true;
     } elseif (strpos($arg, '--mock-nhc=') === 0) {
         $GLOBALS['GSA_SPACE_MOCK_NHC'] = substr($arg, 11);
+    } elseif (strpos($arg, '--mock-tsunami=') === 0) {
+        $GLOBALS['GSA_SPACE_MOCK_TSUNAMI'] = substr($arg, 15);
+    } elseif (strpos($arg, '--mock-coops=') === 0) {
+        $GLOBALS['GSA_SPACE_MOCK_COOPS'] = substr($arg, 13);
     } elseif ($arg === '--skip-aircraft') {
         $skipAircraft = true;
     } elseif (strpos($arg, '--mock=') === 0) {

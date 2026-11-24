@@ -1298,6 +1298,10 @@ button:hover { border-color: #9fd4e2; }
 .swatch.sw-aurora { background: linear-gradient(90deg, #28ff78, #ffe63c); }
 .swatch.sw-hurricanes { background: #7fe7ff; border-radius: 50%; }
 .swatch.sw-wildfires { background: #ff6a1a; }
+.swatch.sw-rivers { background: linear-gradient(90deg, #f6e27a 25%, #f08a24 25% 50%, #e0262a 50% 75%, #b04ae0 75%); }
+.swatch.sw-coastal { background: linear-gradient(90deg, #3aa6ff 50%, #f08a24 50%); }
+.swatch.sw-tsunami { background: #e0262a; box-shadow: 0 0 0 2px #f6e27a inset; }
+.sw-note i { color: var(--dim); font-style: italic; }
 .sw-credit {
   position: absolute;
   left: 8px;

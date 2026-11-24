@@ -48,6 +48,9 @@ const state = {
     aurora: { source: null, points: [] },
     hurricanes: { source: null, points: [] },
     wildfires: { source: null, points: [] },
+    rivers: { source: null, points: [] },
+    coastal: { source: null, points: [] },
+    tsunami: { source: null, points: [] },
   },
   layers: {
     outages: false,
@@ -73,6 +76,9 @@ const state = {
     aurora: false,
     hurricanes: false,
     wildfires: false,
+    rivers: false,
+    coastal: false,
+    tsunami: false,
   },
   openKind: "",
   openId: "",
@@ -94,7 +100,7 @@ const state = {
 };
 
 // SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
-const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "aurora", "hurricanes", "wildfires"];
+const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
 
 const COLORS = {
   up: Cesium.Color.fromCssColorString("#3dff9a"),
@@ -1390,6 +1396,9 @@ const LAYER_LABEL = {
   aurora: "AURORA / SPACE WEATHER",
   hurricanes: "HURRICANES",
   wildfires: "WILDFIRES",
+  rivers: "RIVER GAUGES IN FLOOD (US)",
+  coastal: "COASTAL WATER LEVELS (US)",
+  tsunami: "TSUNAMI ALERTS",
 };
 
 function setupLegendScroll() {
@@ -1410,7 +1419,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "aurora", "hurricanes", "wildfires"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
@@ -2928,6 +2937,9 @@ function cullAircraftHorizon() {
     state.live.nwsalerts.source,
     state.live.hurricanes.source,
     state.live.wildfires.source,
+    state.live.rivers.source,
+    state.live.coastal.source,
+    state.live.tsunami.source,
     state.outageSource,
     state.hungerSource,
   ];

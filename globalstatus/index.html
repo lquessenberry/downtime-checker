@@ -19,7 +19,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261123m" />
+  <link rel="stylesheet" href="/cesium.css?v=20261123f" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -89,8 +89,14 @@
         <p class="sw-note" data-sw-note="radar" hidden></p>
         <button type="button" class="layer" data-layer-toggle="nwsalerts" aria-pressed="false"><span class="layer-name"><span class="swatch sw-nwsalerts"></span> US WEATHER ALERTS</span><span class="layer-meta"><em data-count="nwsalerts">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-sw-note="nwsalerts" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="rivers" aria-pressed="false"><span class="layer-name"><span class="swatch sw-rivers"></span> RIVER GAUGES IN FLOOD (US)</span><span class="layer-meta"><em data-count="rivers">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="rivers" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="coastal" aria-pressed="false"><span class="layer-name"><span class="swatch sw-coastal"></span> COASTAL WATER LEVELS (US)</span><span class="layer-meta"><em data-count="coastal">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="coastal" hidden></p>
         <button type="button" class="layer" data-layer-toggle="aurora" aria-pressed="false"><span class="layer-name"><span class="swatch sw-aurora"></span> AURORA / SPACE WEATHER</span><span class="layer-meta"><em data-count="aurora">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-sw-note="aurora" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="tsunami" aria-pressed="false"><span class="layer-name"><span class="swatch sw-tsunami"></span> TSUNAMI ALERTS</span><span class="layer-meta"><em data-count="tsunami">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="tsunami" hidden></p>
         <button type="button" class="layer" data-layer-toggle="hurricanes" aria-pressed="false"><span class="layer-name"><span class="swatch sw-hurricanes"></span> HURRICANES</span><span class="layer-meta"><em data-count="hurricanes">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-sw-note="hurricanes" hidden></p>
         <button type="button" class="layer" data-layer-toggle="wildfires" aria-pressed="false"><span class="layer-name"><span class="swatch sw-wildfires"></span> WILDFIRES</span><span class="layer-meta"><em data-count="wildfires">—</em><span class="switch" aria-hidden="true"></span></span></button>
@@ -418,7 +424,7 @@
   <script src="/effects-radius.js"></script>
   <script src="/quakes.js"></script>
   <script src="/sats.js"></script>
-  <script src="/spaceweather.js?v=20261123s"></script>
-  <script src="/cesium.js?v=20261123s"></script>
+  <script src="/spaceweather.js?v=20261123f"></script>
+  <script src="/cesium.js?v=20261123f"></script>
 </body>
 </html>
