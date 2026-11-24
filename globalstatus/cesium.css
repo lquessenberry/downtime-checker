@@ -138,7 +138,6 @@ body {
   width: 100%;
   height: 100%;
 }
-.cesium-viewer-toolbar,
 .cesium-viewer-animationContainer,
 .cesium-viewer-timelineContainer { display: none; }
 
@@ -1405,4 +1404,166 @@ button:hover { border-color: #9fd4e2; }
   .hud-bot .legend.fade-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
   .hud-bot .legend.fade-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px); mask-image: linear-gradient(90deg, transparent, #000 28px); }
   .hud-bot .legend.fade-l.fade-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+}
+
+/* ADDRESS SEARCH: Cesium's built-in Geocoder widget (geocoder.js), themed to the HUD.
+   The toolbar holds only the geocoder; every other toolbar button is off. */
+.cesium-viewer-toolbar {
+  top: 12px;
+  left: 12px;
+  right: auto;
+  z-index: 4;
+}
+/* Desktop: the heading and traffic filters sit under the search box. */
+@media (min-width: 801px) {
+  .stage-stack { top: 56px; }
+}
+.cesium-viewer-toolbar > :not(.cesium-viewer-geocoderContainer) { display: none; }
+.cesium-viewer-geocoderContainer { margin: 0; }
+.cesium-viewer-geocoderContainer .cesium-geocoder-input,
+.cesium-viewer-geocoderContainer:hover .cesium-geocoder-input,
+.cesium-viewer-geocoderContainer .cesium-geocoder-input:focus,
+.cesium-viewer-geocoderContainer .cesium-geocoder-input-wide {
+  width: min(260px, calc(100vw - 1020px));
+  min-width: 200px;
+  height: 36px;
+  padding: 0 40px 0 10px;
+  font: 14px var(--font);
+  letter-spacing: 0.02em;
+  color: var(--text);
+  background: rgba(8, 14, 20, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: none;
+}
+.cesium-viewer-geocoderContainer .cesium-geocoder-input::placeholder { color: var(--dim); }
+.cesium-viewer-geocoderContainer .cesium-geocoder-input:focus {
+  border-color: #9fd4e2;
+  outline: none;
+}
+.cesium-viewer-geocoderContainer .cesium-geocoder-input::-webkit-search-cancel-button { filter: invert(0.8); cursor: pointer; }
+.cesium-geocoder-searchButton {
+  top: 2px;
+  right: 2px;
+  width: 32px;
+  height: 32px;
+  border-radius: 3px;
+  background: transparent;
+  fill: #9fd4e2;
+}
+.cesium-geocoder-searchButton:hover { background: rgba(159, 212, 226, 0.15); }
+.cesium-viewer-geocoderContainer .search-results {
+  margin-top: 4px;
+  max-height: min(320px, 50dvh);
+  background: rgba(8, 14, 20, 0.97);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  opacity: 1;
+}
+.cesium-viewer-geocoderContainer .search-results ul li {
+  padding: 9px 10px;
+  font-size: 13px;
+  line-height: 1.3;
+  border-bottom: 1px solid rgba(120, 190, 210, 0.12);
+}
+.cesium-viewer-geocoderContainer .search-results ul li:last-child { border-bottom: 0; }
+.cesium-viewer-geocoderContainer .search-results ul li.active { background: rgba(159, 212, 226, 0.18); }
+
+@media (max-width: 800px) {
+  /* Phones: a search button at the top right of the map; tap to open a full-width box. */
+  .cesium-viewer-toolbar { top: 8px; right: 8px; left: auto; }
+  /* Keep the heading and traffic filters clear of the search button. */
+  .stage-stack { max-width: calc(100% - 64px); }
+  .cesium-viewer-geocoderContainer .cesium-geocoder-input,
+  .cesium-viewer-geocoderContainer:hover .cesium-geocoder-input {
+    width: 40px;
+    min-width: 0;
+    height: 40px;
+    padding: 0;
+    font-size: 16px; /* 16px stops iOS zooming the page on focus */
+    color: transparent;
+  }
+  .cesium-viewer-geocoderContainer .cesium-geocoder-input::placeholder { color: transparent; }
+  .cesium-viewer-geocoderContainer .cesium-geocoder-input:focus,
+  .cesium-viewer-geocoderContainer .cesium-geocoder-input-wide,
+  .cesium-viewer-geocoderContainer:hover .cesium-geocoder-input-wide {
+    width: calc(100vw - 16px);
+    padding: 0 44px 0 10px;
+    color: var(--text);
+  }
+  .cesium-viewer-geocoderContainer .cesium-geocoder-input:focus::placeholder,
+  .cesium-viewer-geocoderContainer .cesium-geocoder-input-wide::placeholder { color: var(--dim); }
+  .cesium-geocoder-searchButton { top: 4px; right: 4px; pointer-events: none; }
+  .cesium-viewer-geocoderContainer:focus-within .cesium-geocoder-searchButton,
+  .cesium-geocoder-input-wide + .cesium-geocoder-searchButton { pointer-events: auto; }
+  .cesium-viewer-geocoderContainer .search-results { max-height: min(260px, 40dvh); }
+  .cesium-viewer-geocoderContainer .search-results ul li { padding: 11px 10px; font-size: 14px; }
+}
+
+/* WHAT'S NEARBY card (nearby.js): opens after an address search pick. */
+.nearby-card {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 5;
+  width: min(280px, calc(100% - 24px));
+  max-height: calc(100% - 120px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(8, 14, 20, 0.94);
+  border: 1px solid #ffb020;
+  border-radius: 4px;
+  color: var(--text);
+}
+.nearby-card[hidden] { display: none; }
+.nearby-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.nearby-head strong { font-size: 12px; letter-spacing: 0.06em; line-height: 1.3; color: #ffcf73; overflow-wrap: anywhere; }
+.nearby-min { flex: none; min-height: 28px; padding: 2px 8px; font-size: 11px; }
+.nearby-radius { display: flex; align-items: center; gap: 4px; }
+.nearby-radius .chip { flex: 1 1 0; min-width: 0; min-height: 34px; padding: 4px 0; font-size: 13px; }
+.nearby-radius span { color: var(--dim); font-size: 11px; margin-left: 2px; }
+.nearby-status { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.35; }
+.nearby-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; }
+.nearby-list button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  padding: 5px 8px;
+  margin: 0 0 3px;
+  font-size: 12px;
+  text-align: left;
+  opacity: 0.6;
+}
+.nearby-list button.on { opacity: 1; border-color: #9fd4e2; }
+.nearby-list em { font-style: normal; color: #ffcf73; }
+.nearby-clear { min-height: 36px; font-size: 12px; }
+.nearby-card.is-min .nearby-radius,
+.nearby-card.is-min .nearby-status,
+.nearby-card.is-min .nearby-list,
+.nearby-card.is-min .nearby-clear { display: none; }
+/* The nuke simulator panel owns the top right on desktop; sit below the search box instead. */
+.stage:has(#effects-hud:not([hidden])) .nearby-card { right: auto; left: 12px; top: 56px; }
+/* Stop above the VIEW panel when it is open. */
+@media (min-width: 801px) {
+  .stage:has(.view-settings:not(.is-closed)) .nearby-card { max-height: calc(100% - 300px); min-height: 200px; }
+}
+@media (max-width: 800px) {
+  .nearby-card,
+  .stage:has(#effects-hud:not([hidden])) .nearby-card {
+    left: 8px;
+    right: 8px;
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: 42dvh;
+    z-index: 6;
+  }
+  .nearby-radius .chip { min-height: 40px; font-size: 14px; }
+  .nearby-list button { min-height: 40px; font-size: 13px; }
+  .nearby-min, .nearby-clear { min-height: 40px; }
 }
