@@ -2,6 +2,9 @@ name: Refresh static data
 
 # Cron only runs from the repository default branch.
 # github.event.schedule is the cron expression that fired.
+# The default branch is protected (GH013), so this workflow commits to
+# bot/refresh-static-<datasets> and opens or updates a pull request into
+# the branch it ran on, instead of pushing directly.
 on:
   schedule:
     - cron: "17 5,17 * * *"
@@ -20,12 +23,13 @@ on:
           - all
         default: overlays
       commit:
-        description: Commit changed JSON back to this branch
+        description: Open or update a PR if JSON packs changed
         type: boolean
         default: true
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: refresh-static-data
@@ -68,8 +72,13 @@ jobs:
           HPDB_CACHE: ${{ runner.temp }}/hpdb
         run: node scripts/refresh_static_data.mjs
 
-      - name: Commit if changed
+      - name: Guard shrunken or invalid packs
+        run: node scripts/static_data_guard.mjs
+
+      - name: Open or update PR if changed
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.commit }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -93,5 +102,35 @@ jobs:
             echo "No data changes"
             exit 0
           fi
-          git commit -m "Refresh static data (${{ steps.pick.outputs.datasets }})."
-          git push
+          ds="${{ steps.pick.outputs.datasets }}"
+          base="${{ github.ref_name }}"
+          bot="bot/refresh-static-${ds}"
+          title="Refresh static data (${ds})"
+          body="$(cat <<MD
+          Automated refresh of static JSON packs (\`${ds}\`).
+
+          The default branch is protected (GH013: changes must be made through a pull request), so this workflow commits to \`${bot}\` and opens or updates this PR into \`${base}\`.
+
+          ## Review
+
+          - A shrink guard skipped any pack that was invalid JSON, empty, or lost more than 50% of its records versus the current file on \`${base}\` (byte size is used only when there is no record count). See the workflow log for skipped files.
+          - This PR may include \`globalstatus/api/*.json\`. Merging it into \`feat/globalstatus-prod\` **will** trigger the production FTP deploy. Please review the data diff before merging.
+          - Pull requests created with \`GITHUB_TOKEN\` do not trigger other workflows (including PR CI). Close and reopen this PR, or switch the refresh workflow to a PAT or GitHub App token, if you want CI to run on it.
+          - Later refreshes of the \`${ds}\` pack update this same PR (the latest snapshot wins).
+          MD
+          )"
+          git checkout -B "$bot"
+          git commit -m "Refresh static data (${ds})."
+          git fetch origin "refs/heads/${bot}:refs/remotes/origin/${bot}" || true
+          if git rev-parse --verify --quiet "origin/${bot}"; then
+            git push --force-with-lease="refs/heads/${bot}:refs/remotes/origin/${bot}" origin "HEAD:refs/heads/${bot}"
+          else
+            git push origin "HEAD:refs/heads/${bot}"
+          fi
+          pr="$(gh pr list --repo "${GITHUB_REPOSITORY}" --head "${bot}" --base "${base}" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "${pr}" ]; then
+            gh pr edit "${pr}" --title "${title}" --body "${body}"
+            echo "Updated PR #${pr}"
+          else
+            gh pr create --base "${base}" --head "${bot}" --title "${title}" --body "${body}"
+          fi
