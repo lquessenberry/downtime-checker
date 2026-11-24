@@ -8,7 +8,7 @@
 //   php poll-runner.php grid --slice=16
 //   php poll-runner.php aircraft [--force-mil|--skip-mil|--mock=PATH|--force-jam|--skip-jam|--skip-aircraft|--mock-jam=PATH]
 //   php poll-runner.php jamming [--force-jam|--mock-jam=PATH]
-//   php poll-runner.php space [--force-space|--only=nws,hurricanes,wildfires|--mock-nhc=PATH|--mock-space-fail]
+//   php poll-runner.php space [--force-space|--only=nws,hurricanes,wildfires,tsunami,rivers,coastal|--mock-nhc=PATH|--mock-space-fail]
 //
 // Aircraft on globalstatus.app (cPanel cron, every 5 minutes): one civilian
 // adsb.lol pull each run, plus /v2/mil only when the last mil pull is at least
@@ -18,7 +18,9 @@
 // old (96 requests/day worst case). No third cron is needed. Grid is ~10 minutes.
 // Space & Weather: the same aircraft cron also refreshes NWS alerts (every
 // run, <= 288/day), NHC storms (15 min, <= 96/day) and NASA FIRMS fires
-// (3 h, <= 8/day). Each feed is time-gated in gsa_space_refresh (poll-lib.php).
+// (3 h, <= 8/day), tsunami.gov alerts (every run, 2 feeds), NWPS river gauges
+// (15 min) and CO-OPS coastal water levels (15 min). Each feed is time-gated
+// in gsa_space_refresh (poll-lib.php).
 //
 // Live cPanel crons:
 //   /usr/local/bin/php -q /home/<user>/public_html/globalstatus.app/poll-runner.php grid
@@ -70,6 +72,10 @@ foreach ($argv as $arg) {
         $GLOBALS['GSA_SPACE_MOCK_FAIL'] = true;
     } elseif (strpos($arg, '--mock-nhc=') === 0) {
         $GLOBALS['GSA_SPACE_MOCK_NHC'] = substr($arg, 11);
+    } elseif (strpos($arg, '--mock-tsunami=') === 0) {
+        $GLOBALS['GSA_SPACE_MOCK_TSUNAMI'] = substr($arg, 15);
+    } elseif (strpos($arg, '--mock-coops=') === 0) {
+        $GLOBALS['GSA_SPACE_MOCK_COOPS'] = substr($arg, 13);
     } elseif ($arg === '--skip-aircraft') {
         $skipAircraft = true;
     } elseif (strpos($arg, '--mock=') === 0) {

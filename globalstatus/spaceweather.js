@@ -10,11 +10,14 @@
  *   NWS ALERTS   /api/space/nws        (cron pulls api.weather.gov every 5 min)
  *   HURRICANES   /api/space/hurricanes (cron pulls NHC every 15 min)
  *   WILDFIRES    /api/space/wildfires  (cron pulls NASA FIRMS every 3 h)
+ *   RIVERS       /api/space/rivers     (cron pulls NOAA NWPS river gauges every 15 min)
+ *   COASTAL      /api/space/coastal    (cron pulls NOAA CO-OPS water levels every 15 min)
+ *   TSUNAMI      /api/space/tsunami    (cron pulls tsunami.gov NTWC + PTWC every 5 min)
  * Nothing is fetched until a layer is switched on, and timers stop when it is
  * switched off or the tab is hidden.
  */
 (function (root) {
-  const KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "aurora", "hurricanes", "wildfires"];
+  const KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
 
   const META = {
     iss: {
@@ -52,6 +55,23 @@
       poll: 5 * 60 * 1000,
       credit: 'Storms: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noreferrer">NOAA National Hurricane Center</a>',
     },
+    rivers: {
+      label: "RIVER GAUGES IN FLOOD (US)",
+      poll: 5 * 60 * 1000,
+      credit: 'River gauges: <a href="https://water.noaa.gov/" target="_blank" rel="noreferrer">NOAA/NWS National Water Prediction Service</a>',
+      caption: "US NWS forecast gauges only. No dot does not mean no flooding. Official warnings are in US weather alerts.",
+    },
+    coastal: {
+      label: "COASTAL WATER LEVELS (US)",
+      poll: 5 * 60 * 1000,
+      credit: 'Water levels: <a href="https://tidesandcurrents.noaa.gov/" target="_blank" rel="noreferrer">NOAA CO-OPS</a> Tides and Currents',
+      caption: "~290 US coastal, Great Lakes and island stations. Not a global tide map.",
+    },
+    tsunami: {
+      label: "TSUNAMI ALERTS",
+      poll: 2 * 60 * 1000,
+      credit: 'Tsunami alerts: <a href="https://www.tsunami.gov/" target="_blank" rel="noreferrer">NOAA/NWS Tsunami Warning Centers</a> (NTWC and PTWC)',
+    },
     wildfires: {
       label: "WILDFIRES",
       poll: 15 * 60 * 1000,
@@ -71,6 +91,9 @@
     nwsalerts: "/api/space/nws",
     hurricanes: "/api/space/hurricanes",
     wildfires: "/api/space/wildfires",
+    rivers: "/api/space/rivers",
+    coastal: "/api/space/coastal",
+    tsunami: "/api/space/tsunami",
   };
 
   const OUTLINE = "#2A2E3C";
@@ -150,6 +173,7 @@
       note.hidden = !s.on;
       if (s.on) {
         const bits = [META[key].credit];
+        if (META[key].caption) bits.push(`<i>${esc(META[key].caption)}</i>`);
         if (s.updated) bits.push(`Updated ${esc(fmtTime(s.updated))} (${esc(ageText(s.updated))})`);
         else if (!s.error) bits.push("Loading…");
         if (s.extra) bits.push(s.extra);
@@ -663,6 +687,174 @@
     });
   }
 
+  // ---------- river gauges in flood (server cache, NOAA NWPS) ----------
+  const RIVER_COLOR = { action: "#f6e27a", minor: "#f08a24", moderate: "#e0262a", major: "#b04ae0" };
+  const RIVER_LABEL = { action: "At action stage", minor: "Minor flooding", moderate: "Moderate flooding", major: "Major flooding" };
+
+  function ft(v, unit) {
+    return v == null || v === "" ? "" : `${Number(v).toFixed(2).replace(/\.?0+$/, "")} ${unit || "ft"}`;
+  }
+
+  async function loadRivers() {
+    const token = st.rivers.token;
+    const body = await getJson(URLS.rivers);
+    if (token !== st.rivers.token) return;
+    const src = source("rivers");
+    src.entities.removeAll();
+    const pts = Array.isArray(body.points) ? body.points : [];
+    for (const g of pts) {
+      const u = g.u || "ft";
+      const thr = [
+        g.a != null ? `action ${ft(g.a, u)}` : "",
+        g.mi != null ? `minor ${ft(g.mi, u)}` : "",
+        g.mo != null ? `moderate ${ft(g.mo, u)}` : "",
+        g.ma != null ? `major ${ft(g.ma, u)}` : "",
+      ].filter(Boolean).join(", ");
+      addPin("rivers", {
+        name: `${g.n || g.id}${g.st ? `, ${g.st}` : ""}`,
+        kind: "RIVER GAUGE",
+        lat: Number(g.lat),
+        lon: Number(g.lon),
+        color: RIVER_COLOR[g.s] || "#9aa6ad",
+        size: g.s === "major" || g.s === "moderate" ? 12 : g.s === "minor" ? 10 : 8,
+        lines: [
+          `${RIVER_LABEL[g.s] || g.s}${g.w ? ` · ${g.w}` : ""}`,
+          g.obs != null ? `Observed ${ft(g.obs, u)}${g.t ? ` at ${fmtTime(g.t)}` : ""}` : "",
+          thr ? `Flood stages: ${thr}` : "",
+        ],
+        link: { url: `https://water.noaa.gov/gauges/${encodeURIComponent(g.id || "")}`, label: "NWS gauge page" },
+      });
+    }
+    const awaiting = body.error === "Awaiting poller";
+    const by = body.byStatus || {};
+    settle("rivers", {
+      updated: body.updated || null,
+      count: pts.length,
+      extra: pts.length ? ["major", "moderate", "minor", "action"].filter((k) => by[k]).map((k) => `${by[k]} ${k}`).join(", ") : "",
+      empty: pts.length ? "" : awaiting ? "Waiting for the first server pull" : "No NWS forecast gauges at or above action stage",
+      error: body.stale && !awaiting && body.error ? `Last pull failed (${body.error}); showing saved gauges` : "",
+    });
+  }
+
+  // ---------- coastal water levels (server cache, NOAA CO-OPS) ----------
+  const COAST_COLOR = { normal: "#3aa6ff", near: "#f6e27a", minor: "#f08a24", moderate: "#e0262a", major: "#b04ae0", none: "#8a949b", stale: "#5e676d" };
+  const COAST_LABEL = { normal: "Below flood thresholds", near: "Approaching minor flood (within 0.5 ft or at action)", minor: "Minor coastal flooding", moderate: "Moderate coastal flooding", major: "Major coastal flooding", none: "No flood threshold for this station", stale: "No reading in the last hour" };
+
+  function signedFt(v) {
+    if (v == null) return "";
+    const n = Number(v);
+    return `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(2)} ft`;
+  }
+
+  async function loadCoastal() {
+    const token = st.coastal.token;
+    const body = await getJson(URLS.coastal);
+    if (token !== st.coastal.token) return;
+    const src = source("coastal");
+    src.entities.removeAll();
+    const pts = Array.isArray(body.points) ? body.points : [];
+    for (const p of pts) {
+      const dat = p.dat === "IGLD" ? "IGLD 1985" : p.dat;
+      const thr = p.thr ? [
+        p.thr.a != null ? `action ${p.thr.a.toFixed(2)}` : "",
+        p.thr.mi != null ? `minor ${p.thr.mi.toFixed(2)}` : "",
+        p.thr.mo != null ? `moderate ${p.thr.mo.toFixed(2)}` : "",
+        p.thr.ma != null ? `major ${p.thr.ma.toFixed(2)}` : "",
+      ].filter(Boolean).join(", ") : "";
+      const hot = p.c === "minor" || p.c === "moderate" || p.c === "major";
+      addPin("coastal", {
+        name: `${p.n}${p.st ? `, ${p.st}` : ""}`,
+        kind: "WATER LEVEL",
+        lat: Number(p.lat),
+        lon: Number(p.lon),
+        color: COAST_COLOR[p.c] || COAST_COLOR.none,
+        size: hot ? 12 : p.c === "near" ? 10 : 7,
+        lines: [
+          COAST_LABEL[p.c] || "",
+          `Latest ${Number(p.lvl).toFixed(2)} ft ${dat}${p.t ? ` at ${fmtTime(p.t)}` : ""}`,
+          p.mhhw != null ? `${signedFt(p.mhhw)} vs. mean higher high water (MHHW)` : "",
+          p.lwd != null ? `${signedFt(p.lwd)} vs. low water datum` : "",
+          thr ? `${p.thr.src} flood thresholds (ft ${dat}): ${thr}` : "",
+        ],
+        link: { url: `https://tidesandcurrents.noaa.gov/stationhome.html?id=${encodeURIComponent(p.id)}`, label: "CO-OPS station page" },
+      });
+    }
+    const awaiting = body.error === "Awaiting poller";
+    const by = body.byLevel || {};
+    const flooding = (by.minor || 0) + (by.moderate || 0) + (by.major || 0);
+    settle("coastal", {
+      updated: body.updated || null,
+      count: pts.length,
+      extra: pts.length ? `${flooding} at or above minor flood, ${by.near || 0} approaching` : "",
+      empty: pts.length ? "" : awaiting ? "Waiting for the first server pull" : "No CO-OPS water levels in the last pull",
+      error: body.stale && !awaiting && body.error ? `Last pull failed (${body.error}); showing saved levels` : "",
+    });
+  }
+
+  // ---------- tsunami alerts (server cache, NOAA NTWC + PTWC) ----------
+  const TSU_COLOR = { Warning: "#e0262a", Advisory: "#f08a24", Threat: "#f08a24", Watch: "#f6e27a" };
+  const TSU_LABEL = { Warning: "Tsunami Warning", Advisory: "Tsunami Advisory", Watch: "Tsunami Watch", Threat: "Tsunami Threat Message" };
+
+  async function loadTsunami() {
+    const token = st.tsunami.token;
+    const body = await getJson(URLS.tsunami);
+    if (token !== st.tsunami.token) return;
+    const Cesium = C();
+    const src = source("tsunami");
+    src.entities.removeAll();
+    const pts = Array.isArray(body.points) ? body.points : [];
+    for (const a of pts) {
+      const color = TSU_COLOR[a.cat] || "#f08a24";
+      const lines = [
+        `${a.center === "PTWC" ? "Pacific Tsunami Warning Center" : "National Tsunami Warning Center"}${a.mag ? ` · magnitude ${a.mag}` : ""}`,
+        a.head || "",
+        a.areas && a.areas.length ? `Areas: ${a.areas.join("; ")}` : "",
+        a.t ? `Issued ${fmtTime(a.t)}` : "",
+        a.exp ? `Expires ${fmtTime(a.exp)}` : "",
+      ];
+      const link = { url: a.url || "https://www.tsunami.gov/", label: "Bulletin at tsunami.gov" };
+      for (const ring of a.polys || []) {
+        if (!Array.isArray(ring) || ring.length < 3) continue;
+        const flat = [];
+        for (const pt of ring) flat.push(pt[1], pt[0]);
+        const lat = ring.reduce((s, p) => s + p[0], 0) / ring.length;
+        const lon = ring.reduce((s, p) => s + p[1], 0) / ring.length;
+        const c = Cesium.Color.fromCssColorString(color);
+        const entity = src.entities.add({
+          name: TSU_LABEL[a.cat] || a.cat,
+          position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+          polygon: { hierarchy: Cesium.Cartesian3.fromDegreesArray(flat), material: c.withAlpha(0.3), outline: true, outlineColor: c, height: 0 },
+        });
+        entity._live = { layer: "tsunami", sw: true, kind: "TSUNAMI", name: `${TSU_LABEL[a.cat] || a.cat} · ${a.region}`, lat, lon, lines, link };
+      }
+      if (a.lat != null && a.lon != null) {
+        addPin("tsunami", {
+          name: `${TSU_LABEL[a.cat] || a.cat} · ${a.region}`,
+          kind: "TSUNAMI",
+          lat: Number(a.lat),
+          lon: Number(a.lon),
+          color,
+          size: a.cat === "Warning" ? 20 : 16,
+          lines: ["Earthquake epicenter", ...lines],
+          link,
+        });
+      }
+    }
+    const notes = Array.isArray(body.notes) ? body.notes : [];
+    const awaiting = body.error === "Awaiting poller";
+    settle("tsunami", {
+      updated: body.updated || null,
+      count: pts.length,
+      extra: [
+        pts.length ? pts.map((a) => `<b>${esc(TSU_LABEL[a.cat] || a.cat)}</b>: ${esc(a.region)}`).join("; ") : "",
+        notes.length ? `Information only (no danger): ${notes.map((n) => `<a href="${esc(n.url)}" target="_blank" rel="noreferrer">${esc(n.region)}${n.mag ? ` M${esc(String(n.mag).replace(/\(.*$/, ""))}` : ""}</a>`).join("; ")}` : "",
+        body.partial ? `<span class="sw-err">${esc(body.partial)}</span>` : "",
+      ].filter(Boolean).join(" · "),
+      empty: pts.length ? "" : awaiting ? "Waiting for the first server pull" : "No tsunami warnings, advisories or watches (NOAA NTWC/PTWC)",
+      error: body.stale && !awaiting && body.error ? `Last pull failed (${body.error}); showing saved alerts` : "",
+    });
+  }
+
   const LOADERS = {
     iss: loadIss,
     volcanoes: loadVolcanoes,
@@ -672,6 +864,9 @@
     aurora: loadAurora,
     hurricanes: loadHurricanes,
     wildfires: loadWildfires,
+    rivers: loadRivers,
+    coastal: loadCoastal,
+    tsunami: loadTsunami,
   };
 
   function refreshSelected(key) {

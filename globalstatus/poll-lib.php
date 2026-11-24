@@ -1254,6 +1254,9 @@ function gsa_jamming_refresh_locked($opts)
 //   nws         api.weather.gov/alerts/active   every run   (<= 288/day)
 //   hurricanes  nhc.noaa.gov/CurrentStorms.json every 15 min (<= 96/day)
 //   wildfires   NASA FIRMS VIIRS NOAA-20 24h    every 3 h   (<= 8/day)
+//   tsunami     tsunami.gov NTWC + PTWC Atom    every run   (2 x 288/day, + 1 CAP per new bulletin)
+//   rivers      NWPS river gauges >= action     every 15 min (<= 96/day)
+//   coastal     CO-OPS SOS latest water level   every 15 min (<= 96/day, + 2/day station list and MHHW)
 //
 // A failed pull keeps the last good cache and marks it stale.
 // The browser-only layers (ISS, volcanoes, disasters, radar, aurora) are in
@@ -1284,6 +1287,27 @@ function gsa_space_feeds()
             'source' => 'NASA FIRMS',
             'sourceUrl' => 'https://firms.modaps.eosdis.nasa.gov/',
             'attribution' => "Fires: NASA FIRMS (VIIRS NOAA-20, 24 h), part of NASA's EOSDIS",
+        ),
+        'tsunami' => array(
+            'every' => 5 * 60,
+            'staleSec' => 30 * 60,
+            'source' => 'NOAA Tsunami Warning Centers',
+            'sourceUrl' => 'https://www.tsunami.gov/',
+            'attribution' => 'Tsunami alerts: NOAA/NWS National and Pacific Tsunami Warning Centers (tsunami.gov)',
+        ),
+        'rivers' => array(
+            'every' => 15 * 60,
+            'staleSec' => 2 * 60 * 60,
+            'source' => 'NOAA National Water Prediction Service',
+            'sourceUrl' => 'https://water.noaa.gov/',
+            'attribution' => 'River gauges: NOAA/NWS National Water Prediction Service',
+        ),
+        'coastal' => array(
+            'every' => 15 * 60,
+            'staleSec' => 60 * 60,
+            'source' => 'NOAA CO-OPS',
+            'sourceUrl' => 'https://tidesandcurrents.noaa.gov/',
+            'attribution' => 'Water levels: NOAA CO-OPS Tides and Currents',
         ),
     );
 }
@@ -1790,6 +1814,509 @@ function gsa_space_fetch_wildfires()
     }
     $last['calls'] = $calls;
     return $last;
+}
+
+// ---- NWS river gauges at or above action stage (NWPS ArcGIS) -----------------
+// One small query (~40 KB, ~60 gauges) every 15 min. Only gauges the NWS
+// forecasts; no dot does not mean no flooding.
+
+function gsa_space_rivers_url()
+{
+    return 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/water/riv_gauges/MapServer/0/query?'
+        . http_build_query(array(
+            'f' => 'geojson',
+            'where' => "status IN ('action','minor','moderate','major')",
+            'outFields' => 'gaugelid,status,location,waterbody,state,obstime,url,action,flood,moderate,major,observed,units',
+            'returnGeometry' => 'true',
+            'outSR' => '4326',
+        ), '', '&', PHP_QUERY_RFC3986);
+}
+
+function gsa_space_num($v)
+{
+    return (is_numeric($v) && trim((string) $v) !== '') ? round((float) $v, 2) : null;
+}
+
+function gsa_space_rivers_build($raw)
+{
+    $rank = array('major' => 4, 'moderate' => 3, 'minor' => 2, 'action' => 1);
+    $pts = array();
+    $by = array('action' => 0, 'minor' => 0, 'moderate' => 0, 'major' => 0);
+    foreach (($raw['features'] ?? array()) as $f) {
+        $p = $f['properties'] ?? array();
+        $c = $f['geometry']['coordinates'] ?? null;
+        $status = strtolower((string) ($p['status'] ?? ''));
+        if (!isset($rank[$status]) || !is_array($c) || !is_numeric($c[0] ?? null) || !is_numeric($c[1] ?? null)) {
+            continue;
+        }
+        $by[$status]++;
+        $lid = strtolower((string) ($p['gaugelid'] ?? ''));
+        $t = (string) ($p['obstime'] ?? '');
+        $pts[] = array(
+            'id' => $lid,
+            's' => $status,
+            'n' => gsa_space_clip($p['location'] ?? '', 80),
+            'w' => gsa_space_clip($p['waterbody'] ?? '', 80),
+            'st' => (string) ($p['state'] ?? ''),
+            'lat' => round((float) $c[1], 4),
+            'lon' => round((float) $c[0], 4),
+            'obs' => gsa_space_num($p['observed'] ?? null),
+            'u' => (string) ($p['units'] ?? 'ft'),
+            // NWPS obstime is UTC without a zone.
+            't' => preg_match('/^\d{4}-\d\d-\d\d \d\d:\d\d/', $t) ? str_replace(' ', 'T', substr($t, 0, 16)) . ':00Z' : '',
+            'a' => gsa_space_num($p['action'] ?? null),
+            'mi' => gsa_space_num($p['flood'] ?? null),
+            'mo' => gsa_space_num($p['moderate'] ?? null),
+            'ma' => gsa_space_num($p['major'] ?? null),
+        );
+    }
+    usort($pts, function ($a, $b) use ($rank) {
+        return $rank[$b['s']] <=> $rank[$a['s']];
+    });
+    return array(
+        'points' => $pts,
+        'count' => count($pts),
+        'byStatus' => $by,
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'note' => count($pts) ? null : 'No NWS forecast gauges at or above action stage',
+    );
+}
+
+function gsa_space_fetch_rivers()
+{
+    $got = gsa_space_get(gsa_space_rivers_url(), 'application/geo+json, application/json', null, 30);
+    if (empty($got['ok'])) {
+        return $got;
+    }
+    $raw = json_decode($got['body'], true);
+    if (!is_array($raw) || !isset($raw['features']) || !is_array($raw['features'])) {
+        return array('ok' => false, 'code' => $got['code'], 'error' => 'NWPS answer was not GeoJSON', 'retryAfter' => 0);
+    }
+    $got['layer'] = gsa_space_rivers_build($raw);
+    unset($got['body']);
+    return $got;
+}
+
+// ---- NOAA CO-OPS coastal water levels ----------------------------------------
+// Every 15 min: one CO-OPS SOS "latest water level" CSV for all active stations
+// (~50 KB, ~290 rows). Once a day: the station list with flood thresholds
+// (mdapi stations.json?expand=floodlevels) plus one SOS call in the MHHW datum.
+// Each SOS row carries the height of its datum above station datum (STND) in
+// "vertical_position", so a MLLW reading converts to STND exactly (thresholds
+// are published in feet above STND) and the MHHW call gives MHHW above STND.
+// Great Lakes rows are IGLD 1985 and their thresholds are IGLD feet already.
+
+defined('GSA_COOPS_APP') || define('GSA_COOPS_APP', 'globalstatus.app');
+defined('GSA_M2FT') || define('GSA_M2FT', 3.280839895);
+
+function gsa_space_coops_sos_url($datum = '')
+{
+    $q = 'service=SOS&request=GetObservation&version=1.0.0'
+        . '&observedProperty=water_surface_height_above_reference_datum'
+        . '&offering=urn:ioos:network:NOAA.NOS.CO-OPS:WaterLevelActive'
+        . '&responseFormat=text/csv&application=' . rawurlencode(GSA_COOPS_APP);
+    if ($datum !== '') {
+        $q .= '&result=VerticalDatum%3D%3Durn:ioos:def:datum:noaa::' . $datum;
+    }
+    return 'https://opendap.co-ops.nos.noaa.gov/ioos-dif-sos/SOS?' . $q;
+}
+
+function gsa_space_coops_parse_csv($text)
+{
+    $rows = array();
+    $lines = preg_split('/\r?\n/', trim((string) $text));
+    if (!$lines || strpos($lines[0], 'station_id') !== 0) {
+        return null;
+    }
+    $head = str_getcsv(array_shift($lines), ',', '"', '\\');
+    $ix = array_flip($head);
+    $need = array('station_id', 'date_time', 'water_surface_height_above_reference_datum (m)', 'datum_id', 'vertical_position (m)');
+    foreach ($need as $k) {
+        if (!isset($ix[$k])) {
+            return null;
+        }
+    }
+    foreach ($lines as $line) {
+        if ($line === '') {
+            continue;
+        }
+        $c = str_getcsv($line, ',', '"', '\\');
+        $sid = substr(strrchr((string) ($c[$ix['station_id']] ?? ''), ':'), 1);
+        $v = $c[$ix['water_surface_height_above_reference_datum (m)']] ?? '';
+        if ($sid === '' || !is_numeric($v)) {
+            continue;
+        }
+        $dat = (string) ($c[$ix['datum_id']] ?? '');
+        $dat = strpos($dat, '::') !== false ? substr($dat, strrpos($dat, '::') + 2) : $dat;
+        $vp = $c[$ix['vertical_position (m)']] ?? '';
+        $rows[$sid] = array(
+            'lat' => is_numeric($c[$ix['latitude (degree)']] ?? null) ? (float) $c[$ix['latitude (degree)']] : null,
+            'lon' => is_numeric($c[$ix['longitude (degree)']] ?? null) ? (float) $c[$ix['longitude (degree)']] : null,
+            't' => (string) ($c[$ix['date_time']] ?? ''),
+            'v' => (float) $v,
+            'dat' => $dat,
+            'vp' => is_numeric($vp) ? (float) $vp : null,
+        );
+    }
+    return $rows;
+}
+
+function gsa_space_coastal_meta_file()
+{
+    global $dataDir;
+    return $dataDir . '/space-coastal-meta.json';
+}
+
+// Daily: names, states and flood thresholds, plus MHHW above STND.
+function gsa_space_coastal_meta(&$calls)
+{
+    $file = gsa_space_coastal_meta_file();
+    $meta = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+    $fresh = is_array($meta) && (time() - (int) ($meta['fetchedAt'] ?? 0)) < 24 * 3600;
+    $mock = (string) ($GLOBALS['GSA_SPACE_MOCK_COOPS'] ?? '');
+    if ($fresh && $mock === '') {
+        return $meta;
+    }
+    if ($mock !== '') {
+        $stBody = @file_get_contents($mock . '/stations.json');
+        $mhBody = @file_get_contents($mock . '/sos-mhhw.csv');
+    } else {
+        $calls++;
+        $st = gsa_space_get('https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels&expand=floodlevels', 'application/json', null, 60);
+        $stBody = !empty($st['ok']) ? $st['body'] : false;
+        $calls++;
+        $mh = gsa_space_get(gsa_space_coops_sos_url('MHHW'), 'text/csv', null, 60);
+        $mhBody = !empty($mh['ok']) ? $mh['body'] : false;
+    }
+    $list = $stBody ? json_decode($stBody, true) : null;
+    if (!is_array($list) || !isset($list['stations'])) {
+        return is_array($meta) ? $meta : null; // keep yesterday's list
+    }
+    $mhhw = $mhBody ? gsa_space_coops_parse_csv($mhBody) : null;
+    $old = is_array($meta) ? ($meta['stations'] ?? array()) : array();
+    $out = array();
+    foreach ($list['stations'] as $s) {
+        $id = (string) ($s['id'] ?? '');
+        if ($id === '') {
+            continue;
+        }
+        $fl = is_array($s['floodlevels'] ?? null) ? $s['floodlevels'] : array();
+        $thr = null;
+        if (is_numeric($fl['nws_minor'] ?? null)) {
+            $thr = array('src' => 'NWS', 'a' => gsa_space_num($fl['action'] ?? null), 'mi' => gsa_space_num($fl['nws_minor']), 'mo' => gsa_space_num($fl['nws_moderate'] ?? null), 'ma' => gsa_space_num($fl['nws_major'] ?? null));
+        } elseif (is_numeric($fl['nos_minor'] ?? null)) {
+            $thr = array('src' => 'NOS', 'a' => null, 'mi' => gsa_space_num($fl['nos_minor']), 'mo' => gsa_space_num($fl['nos_moderate'] ?? null), 'ma' => gsa_space_num($fl['nos_major'] ?? null));
+        }
+        $m = null;
+        if (is_array($mhhw) && isset($mhhw[$id]) && $mhhw[$id]['vp'] !== null && $mhhw[$id]['dat'] === 'MHHW') {
+            $m = round($mhhw[$id]['vp'], 3);
+        } elseif (isset($old[$id]['mhhw'])) {
+            $m = $old[$id]['mhhw'];
+        }
+        $out[$id] = array(
+            'n' => (string) ($s['name'] ?? $id),
+            'st' => (string) ($s['state'] ?? ''),
+            'gl' => !empty($s['greatlakes']),
+            'thr' => $thr,
+            'mhhw' => $m,
+        );
+    }
+    $meta = array('fetchedAt' => time(), 'stations' => $out);
+    gsa_atomic_write($file, json_encode($meta));
+    return $meta;
+}
+
+function gsa_space_coastal_build($obs, $meta)
+{
+    $now = time();
+    $stations = $meta['stations'] ?? array();
+    $pts = array();
+    $by = array();
+    foreach ($obs as $id => $o) {
+        if ($o['lat'] === null || $o['lon'] === null) {
+            continue;
+        }
+        $m = $stations[$id] ?? array('n' => $id, 'st' => '', 'gl' => false, 'thr' => null, 'mhhw' => null);
+        $ts = strtotime($o['t']);
+        $stale = !$ts || ($now - $ts) > 3600;
+        $lvlFt = round($o['v'] * GSA_M2FT, 2);
+        // Compare in the threshold's datum: STND feet for tidal, IGLD feet for Great Lakes.
+        $cmp = null;
+        $shift = null; // feet to add to a threshold to put it in the reading's datum
+        if ($o['dat'] === 'IGLD') {
+            $cmp = $lvlFt;
+            $shift = 0.0;
+        } elseif (in_array($o['dat'], array('MLLW', 'STND', 'MSL', 'MLW', 'MHW', 'NAVD'), true) && $o['vp'] !== null) {
+            $cmp = ($o['v'] + $o['vp']) * GSA_M2FT;
+            $shift = -$o['vp'] * GSA_M2FT;
+        }
+        $vsMhhw = null;
+        if ($o['dat'] !== 'IGLD' && $o['vp'] !== null && $m['mhhw'] !== null && $cmp !== null) {
+            $vsMhhw = round(($o['v'] + $o['vp'] - $m['mhhw']) * GSA_M2FT, 2);
+        }
+        $vsLwd = ($o['dat'] === 'IGLD' && $o['vp'] !== null) ? round(($o['v'] - $o['vp']) * GSA_M2FT, 2) : null;
+        $thr = $m['thr'];
+        $c = 'none';
+        $thrOut = null;
+        if ($thr && $cmp !== null && $shift !== null) {
+            $thrOut = array('src' => $thr['src']);
+            foreach (array('a', 'mi', 'mo', 'ma') as $k) {
+                $thrOut[$k] = $thr[$k] !== null ? round($thr[$k] + $shift, 2) : null;
+            }
+            if ($thr['ma'] !== null && $cmp >= $thr['ma']) {
+                $c = 'major';
+            } elseif ($thr['mo'] !== null && $cmp >= $thr['mo']) {
+                $c = 'moderate';
+            } elseif ($cmp >= $thr['mi']) {
+                $c = 'minor';
+            } elseif ($cmp >= $thr['mi'] - 0.5 || ($thr['a'] !== null && $cmp >= $thr['a'])) {
+                $c = 'near';
+            } else {
+                $c = 'normal';
+            }
+        }
+        if ($stale) {
+            $c = 'stale';
+        }
+        $by[$c] = ($by[$c] ?? 0) + 1;
+        $pts[] = array(
+            'id' => (string) $id,
+            'n' => $m['n'],
+            'st' => $m['st'],
+            'lat' => round($o['lat'], 4),
+            'lon' => round($o['lon'], 4),
+            't' => $o['t'],
+            'lvl' => $lvlFt,
+            'dat' => $o['dat'],
+            'mhhw' => $vsMhhw,
+            'lwd' => $vsLwd,
+            'c' => $c,
+            'thr' => $thrOut,
+        );
+    }
+    $order = array('major' => 6, 'moderate' => 5, 'minor' => 4, 'near' => 3, 'normal' => 2, 'none' => 1, 'stale' => 0);
+    usort($pts, function ($a, $b) use ($order) {
+        return $order[$b['c']] <=> $order[$a['c']];
+    });
+    return array(
+        'points' => $pts,
+        'count' => count($pts),
+        'byLevel' => $by,
+        'metaAt' => isset($meta['fetchedAt']) ? gmdate('Y-m-d\TH:i:s\Z', (int) $meta['fetchedAt']) : null,
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'note' => count($pts) ? null : 'No CO-OPS water levels in the last pull',
+    );
+}
+
+function gsa_space_fetch_coastal()
+{
+    $calls = 0;
+    $meta = gsa_space_coastal_meta($calls);
+    $mock = (string) ($GLOBALS['GSA_SPACE_MOCK_COOPS'] ?? '');
+    if ($mock !== '') {
+        $body = @file_get_contents($mock . '/sos.csv');
+        $got = array('ok' => $body !== false, 'code' => 200, 'body' => $body, 'error' => $body === false ? 'mock missing' : null, 'retryAfter' => 0, 'mocked' => true);
+    } else {
+        $calls++;
+        $got = gsa_space_get(gsa_space_coops_sos_url(), 'text/csv', null, 45);
+    }
+    $got['calls'] = $calls;
+    if (empty($got['ok'])) {
+        return $got;
+    }
+    $obs = gsa_space_coops_parse_csv($got['body']);
+    if (!is_array($obs) || !$obs) {
+        return array('ok' => false, 'code' => $got['code'], 'calls' => $calls, 'error' => 'CO-OPS answer was not the water level CSV', 'retryAfter' => 0);
+    }
+    $got['layer'] = gsa_space_coastal_build($obs, is_array($meta) ? $meta : array());
+    unset($got['body']);
+    return $got;
+}
+
+// ---- Tsunami alerts (NTWC Palmer AK + PTWC Honolulu Atom feeds) --------------
+// Two ~3 KB Atom feeds every 5 min. A bulletin's CAP file is read once (cached
+// by URL) for its expiry, headline and areas. Warnings, advisories, watches and
+// PTWC threat messages are drawn; information statements are a note only.
+
+function gsa_space_tsunami_feeds()
+{
+    return array(
+        'NTWC' => 'https://www.tsunami.gov/events/xml/PAAQAtom.xml',
+        'PTWC' => 'https://www.tsunami.gov/events/xml/PHEBAtom.xml',
+    );
+}
+
+function gsa_space_tsunami_get($url, &$calls)
+{
+    $mock = (string) ($GLOBALS['GSA_SPACE_MOCK_TSUNAMI'] ?? '');
+    if ($mock !== '') {
+        $body = @file_get_contents($mock . '/' . basename(parse_url($url, PHP_URL_PATH)));
+        return array('ok' => $body !== false, 'code' => $body !== false ? 200 : 404, 'body' => $body !== false ? $body : null, 'error' => $body === false ? 'mock missing' : null, 'retryAfter' => 0);
+    }
+    $calls++;
+    return gsa_space_get($url, 'application/atom+xml, application/xml, text/xml', null, 20);
+}
+
+function gsa_space_xml_text($s)
+{
+    return trim(preg_replace('/\s+/', ' ', html_entity_decode(strip_tags((string) $s), ENT_QUOTES | ENT_XML1, 'UTF-8')));
+}
+
+function gsa_space_tsunami_cap($xml)
+{
+    $out = array('expires' => null, 'event' => null, 'headline' => null, 'areas' => array(), 'polys' => array(), 'msgType' => null);
+    if (preg_match('#<msgType>([^<]*)</msgType>#', $xml, $m)) {
+        $out['msgType'] = trim($m[1]);
+    }
+    if (preg_match('#<expires>([^<]*)</expires>#', $xml, $m)) {
+        $out['expires'] = trim($m[1]);
+    }
+    if (preg_match('#<event>([^<]*)</event>#', $xml, $m)) {
+        $out['event'] = gsa_space_xml_text($m[1]);
+    }
+    if (preg_match('#<headline>(.*?)</headline>#s', $xml, $m)) {
+        $out['headline'] = gsa_space_clip(gsa_space_xml_text($m[1]), 240);
+    }
+    if (preg_match_all('#<areaDesc>(.*?)</areaDesc>#s', $xml, $mm)) {
+        foreach ($mm[1] as $a) {
+            $out['areas'][] = gsa_space_clip(gsa_space_xml_text($a), 160);
+        }
+    }
+    if (preg_match_all('#<polygon>(.*?)</polygon>#s', $xml, $mm)) {
+        foreach ($mm[1] as $p) {
+            $ring = array();
+            foreach (preg_split('/\s+/', trim($p)) as $pair) {
+                $xy = explode(',', $pair);
+                if (count($xy) === 2 && is_numeric($xy[0]) && is_numeric($xy[1])) {
+                    $ring[] = array(round((float) $xy[0], 3), round((float) $xy[1], 3));
+                }
+            }
+            if (count($ring) >= 3) {
+                $out['polys'][] = $ring;
+            }
+        }
+    }
+    $out['areas'] = array_slice(array_values(array_unique($out['areas'])), 0, 12);
+    return $out;
+}
+
+function gsa_space_tsunami_build($entries)
+{
+    $danger = array('Warning' => 3, 'Advisory' => 2, 'Watch' => 1, 'Threat' => 2);
+    $points = array();
+    $notes = array();
+    foreach ($entries as $e) {
+        if (!empty($e['expired'])) {
+            continue;
+        }
+        if (isset($danger[$e['cat']])) {
+            $points[] = $e;
+        } else {
+            $notes[] = array('center' => $e['center'], 'cat' => $e['cat'], 'region' => $e['region'], 'mag' => $e['mag'], 't' => $e['t'], 'url' => $e['url']);
+        }
+    }
+    usort($points, function ($a, $b) use ($danger) {
+        return $danger[$b['cat']] <=> $danger[$a['cat']];
+    });
+    return array(
+        'points' => $points,
+        'count' => count($points),
+        'notes' => $notes,
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'note' => count($points) ? null : 'No tsunami warnings, advisories or watches (NOAA NTWC/PTWC)',
+    );
+}
+
+function gsa_space_fetch_tsunami()
+{
+    global $dataDir;
+    $calls = 0;
+    $capFile = $dataDir . '/space-tsunami-cap.json';
+    $capCache = is_file($capFile) ? json_decode((string) file_get_contents($capFile), true) : array();
+    if (!is_array($capCache)) {
+        $capCache = array();
+    }
+    $entries = array();
+    $okFeeds = 0;
+    $lastErr = null;
+    $now = time();
+    foreach (gsa_space_tsunami_feeds() as $center => $url) {
+        $got = gsa_space_tsunami_get($url, $calls);
+        if (empty($got['ok'])) {
+            $lastErr = $center . ': ' . ($got['error'] ?? 'fetch failed');
+            continue;
+        }
+        if (strpos((string) $got['body'], '<feed') === false) {
+            $lastErr = $center . ': not an Atom feed';
+            continue;
+        }
+        $okFeeds++;
+        preg_match_all('#<entry>(.*?)</entry>#s', $got['body'], $mm);
+        foreach ($mm[1] as $x) {
+            $cat = preg_match('#Category:\s*</strong>\s*([A-Za-z]+)#', $x, $m) ? ucfirst(strtolower($m[1])) : 'Information';
+            $lat = preg_match('#<geo:lat>([-0-9.]+)</geo:lat>#', $x, $m) ? (float) $m[1] : null;
+            $lon = preg_match('#<geo:long>([-0-9.]+)</geo:long>#', $x, $m) ? (float) $m[1] : null;
+            $upd = preg_match('#<updated>([^<]+)</updated>#', $x, $m) ? trim($m[1]) : '';
+            $title = preg_match('#<title>(.*?)</title>#s', $x, $m) ? gsa_space_xml_text($m[1]) : '';
+            $mag = preg_match('#Magnitude:\s*</strong>\s*([0-9.]+\s*\(?[A-Za-z]*\)?)#', $x, $m) ? trim($m[1]) : '';
+            $cap = preg_match('#href="([^"]+CAP\.xml)"#i', $x, $m) ? $m[1] : '';
+            $bull = preg_match('#rel="alternate"[^>]*href="([^"]+)"#', $x, $m) ? $m[1] : 'https://www.tsunami.gov/';
+            $info = null;
+            if ($cap !== '') {
+                if (isset($capCache[$cap])) {
+                    $info = $capCache[$cap];
+                } else {
+                    $cg = gsa_space_tsunami_get($cap, $calls);
+                    if (!empty($cg['ok'])) {
+                        $info = gsa_space_tsunami_cap((string) $cg['body']);
+                        $info['seen'] = $now;
+                        $capCache[$cap] = $info;
+                    }
+                }
+            }
+            $updTs = strtotime($upd) ?: $now;
+            $exp = $info && $info['expires'] ? strtotime($info['expires']) : false;
+            // No CAP expiry: warnings fall off after 12 h, statements after 6 h.
+            $expired = $exp ? $exp < $now : ($now - $updTs) > (isset(array('Warning' => 1, 'Advisory' => 1, 'Watch' => 1, 'Threat' => 1)[$cat]) ? 12 : 6) * 3600;
+            if ($info && in_array(strtolower((string) $info['msgType']), array('cancel'), true)) {
+                $expired = true;
+            }
+            if ($cat === 'Cancellation') {
+                $expired = $expired || ($now - $updTs) > 3600;
+            }
+            $entries[] = array(
+                'center' => $center,
+                'cat' => $cat,
+                'region' => gsa_space_clip($title, 120),
+                'lat' => $lat !== null ? round($lat, 3) : null,
+                'lon' => $lon !== null ? round($lon, 3) : null,
+                'mag' => $mag,
+                't' => $upd,
+                'exp' => $info['expires'] ?? null,
+                'head' => $info['headline'] ?? null,
+                'areas' => $info['areas'] ?? array(),
+                'polys' => array_slice($info['polys'] ?? array(), 0, 20),
+                'url' => $bull,
+                'expired' => $expired,
+            );
+        }
+    }
+    // Forget CAP files older than 3 days.
+    foreach ($capCache as $k => $v) {
+        if ($now - (int) ($v['seen'] ?? 0) > 3 * 86400) {
+            unset($capCache[$k]);
+        }
+    }
+    gsa_atomic_write($capFile, json_encode($capCache));
+    if ($okFeeds === 0) {
+        return array('ok' => false, 'code' => 0, 'calls' => $calls, 'error' => $lastErr ?? 'No tsunami feed answered', 'retryAfter' => 0);
+    }
+    $layer = gsa_space_tsunami_build($entries);
+    if ($lastErr) {
+        $layer['partial'] = $lastErr;
+    }
+    return array('ok' => true, 'code' => 200, 'calls' => $calls, 'error' => null, 'retryAfter' => 0, 'layer' => $layer,
+        'mocked' => (string) ($GLOBALS['GSA_SPACE_MOCK_TSUNAMI'] ?? '') !== '');
 }
 
 // ---- generic gate / publish ---------------------------------------------------
