@@ -13,6 +13,11 @@ fi
 
 cd /app/public
 mkdir -p data
+# Host catalog is baked into the image. The volume hides /app/public/data,
+# so seed targets.json onto the volume once if it is not already there.
+if [ ! -s /app/public/data/targets.json ] && [ -s /app/share/targets.json ]; then
+  cp /app/share/targets.json /app/public/data/targets.json
+fi
 (
   while true; do
     php poll-runner.php loop || true

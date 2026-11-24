@@ -11,6 +11,7 @@ RUN apk add --no-cache zstd brotli iputils su-exec \
 COPY deploy/frankenphp/php.ini $PHP_INI_DIR/conf.d/zz-globalstatus.ini
 COPY deploy/frankenphp/Caddyfile /etc/frankenphp/Caddyfile
 COPY deploy/frankenphp/start.sh /usr/local/bin/gsa-start
+COPY deploy/frankenphp/targets.json /app/share/targets.json
 COPY globalstatus/ /app/public/
 
 # Precompress the big static files once, so requests never compress them live.
@@ -24,7 +25,7 @@ RUN rm -f /app/public/vendor/cesium/index.js /app/public/vendor/cesium/index.cjs
  && chmod +x /usr/local/bin/gsa-start \
  && adduser -D -H -u 10001 app \
  && mkdir -p /app/public/data /data/caddy /config/caddy \
- && chown -R app:app /app/public /data/caddy /config/caddy
+ && chown -R app:app /app/public /app/share /data/caddy /config/caddy
 
 ENV PORT=8080 XDG_DATA_HOME=/data XDG_CONFIG_HOME=/config
 EXPOSE 8080

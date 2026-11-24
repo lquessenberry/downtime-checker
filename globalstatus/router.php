@@ -224,8 +224,20 @@ function catalog_label($id)
 function load_targets()
 {
     global $dataDir;
-    $rows = json_decode((string) file_get_contents($dataDir . '/targets.json'), true);
-    return is_array($rows) ? $rows : array();
+    $candidates = array(
+        $dataDir . '/targets.json',
+        '/app/share/targets.json',
+    );
+    foreach ($candidates as $file) {
+        if (!is_file($file)) {
+            continue;
+        }
+        $rows = json_decode((string) file_get_contents($file), true);
+        if (is_array($rows) && $rows) {
+            return $rows;
+        }
+    }
+    return array();
 }
 
 function has_kind($row, $kind)
