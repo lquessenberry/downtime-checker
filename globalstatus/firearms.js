@@ -152,6 +152,9 @@
       const entity = source.entities.add({
         name: point.name,
         position: Cesium.Cartesian3.fromDegrees(Number(point.lon), Number(point.lat), 0),
+        // Depth test is off so pins stay visible at globe distance; cesium.js
+        // cullAircraftHorizon hides the ones the earth itself is covering, or
+        // they would show through and look stuck on the screen when the globe turns.
         point: {
           pixelSize: SIZE,
           color: Cesium.Color.fromCssColorString(color),
