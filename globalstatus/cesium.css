@@ -1380,6 +1380,7 @@ button:hover { border-color: #9fd4e2; }
 /* INFRASTRUCTURE group (infra.js): airports and military bases. */
 .swatch.infra-airports { background: #ffffff; box-shadow: 0 0 0 2px #8fa6bf inset; border-radius: 50%; }
 .swatch.infra-bases { background: #c58cff; border-radius: 50%; }
+.swatch.infra-celltowers { background: #3fd0c9; box-shadow: 0 0 0 2px #ffcf5a inset; border-radius: 50%; }
 .swatch.gunsusa { background: #d4a84b; }
 .swatch.gunsworld { background: #c45a2e; }
 .swatch.militianational { background: #e07040; }

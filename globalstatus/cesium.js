@@ -82,6 +82,8 @@ const state = {
     // INFRASTRUCTURE (infra.js): static point layers.
     airports: false,
     bases: false,
+    // USA CELL TOWERS (infra.js): FCC tower records, point primitives in tiles.
+    celltowers: false,
     // FIREARMS (firearms.js): saved static pin layers, not a live feed.
     gunsusa: false,
     gunsworld: false,
@@ -113,7 +115,7 @@ const state = {
 // SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
 const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
 // INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
-const INFRA_KEYS = ["airports", "bases"];
+const INFRA_KEYS = ["airports", "bases", "celltowers"];
 const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
 const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "militiainactive"];
 
@@ -1496,6 +1498,7 @@ const LAYER_LABEL = {
   tsunami: "TSUNAMI ALERTS",
   airports: "AIRPORTS",
   bases: "MILITARY BASES",
+  celltowers: "USA CELL TOWERS",
   gunsusa: "USA GUN OWNERSHIP",
   gunsworld: "WORLD GUN OWNERSHIP",
   militianational: "NATIONAL GROUPS",
@@ -1522,7 +1525,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
