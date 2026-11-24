@@ -81,13 +81,9 @@
 
   function creditHtml(key) {
     const meta = st[key].meta || {};
-    const href = meta.sourceUrl || "";
     const source = meta.source || "World Population Review";
     const credit = meta.credit || META[key].caption;
-    const link = href
-      ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(source)}</a>`
-      : esc(source);
-    return `${link}. ${esc(credit)}`;
+    return esc(credit || (source + "."));
   }
 
   function render(key) {
@@ -202,15 +198,10 @@
       if (item.lawEnforcement != null) lines.push(`${fmt(item.lawEnforcement)} law enforcement firearms (${item.year || 2017})`);
     }
     const meta = (st[item.layer] && st[item.layer].meta) || {};
-    const href = meta.sourceUrl || (item.layer === "gunsusa"
-      ? "https://worldpopulationreview.com/state-rankings/gun-ownership-by-state"
-      : "https://worldpopulationreview.com/country-rankings/gun-ownership-by-country");
+    const source = meta.source || "World Population Review";
+    const credit = meta.credit || META[item.layer].caption;
     let html = lines.map((line) => `<br>${esc(line)}`).join("");
-    html += `<br><a href="${esc(href)}" target="_blank" rel="noopener noreferrer">World Population Review table</a>`;
-    if (meta.originalSourceUrl) {
-      html += `<br><a href="${esc(meta.originalSourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(meta.originalSource || "Original source")}</a>`;
-    }
-    html += `<br><i class="infra-caption">${esc(meta.credit || META[item.layer].caption)}</i>`;
+    html += `<br><i class="infra-caption">${esc(credit || source)}</i>`;
     return html;
   }
 

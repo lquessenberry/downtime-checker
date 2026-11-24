@@ -667,13 +667,17 @@ function hookUi() {
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      closePin();
-      closeAircraft();
-      closeConflict();
-      hideHungerCard();
+      closeMapPopups();
       setPanel("");
     }
   });
+  document.getElementById("selected-close").addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeMapPopups();
+    if (state.viewer && state.viewer.selectedEntity) state.viewer.selectedEntity = undefined;
+  });
+  document.getElementById("effects-hud-close").addEventListener("click", () => setLayer("effects", false));
   document.getElementById("ac-close").addEventListener("click", closeAircraft);
   document.getElementById("mode-3d").addEventListener("click", () => setSceneMode("3d"));
   document.getElementById("mode-2d").addEventListener("click", () => setSceneMode("2d"));
@@ -1110,11 +1114,18 @@ function focusResult(result) {
   state.viewer.flyTo(entity, { duration: 0.8 });
 }
 
+function fillSelected(html) {
+  const box = document.getElementById("selected");
+  const body = document.getElementById("selected-body");
+  if (!box) return;
+  box.hidden = false;
+  if (body) body.innerHTML = html;
+  else box.innerHTML = html;
+}
+
 function showSelected(result) {
   state.selected = result;
-  const box = document.getElementById("selected");
-  box.hidden = false;
-  box.innerHTML = `<b>${esc(result.status.toUpperCase())}</b> ${esc(result.name)}<br>${esc(result.address)}${result.ip ? " · " + esc(result.ip) : ""}<br>${esc(result.location || result.country || "location pending")}<br>${result.ms || 0}ms · ${esc(result.method || "—")}`;
+  fillSelected(`<b>${esc(result.status.toUpperCase())}</b> ${esc(result.name)}<br>${esc(result.address)}${result.ip ? " · " + esc(result.ip) : ""}<br>${esc(result.location || result.country || "location pending")}<br>${result.ms || 0}ms · ${esc(result.method || "—")}`);
 }
 
 function updateHud() {
@@ -2198,12 +2209,10 @@ function openStream(site, options = {}) {
   if (state.openKind === "conflict") closeConflict();
   state.streamOpenId = site.id;
   setFeedMode("stream");
-  const box = document.getElementById("selected");
-  box.hidden = false;
   const coords = Number.isFinite(Number(site.lat)) && Number.isFinite(Number(site.lon))
     ? `${Number(site.lat).toFixed(4)}, ${Number(site.lon).toFixed(4)}`
     : "";
-  box.innerHTML = `<b>SCANNER</b> ${esc(site.name)}<br>${streamHtml(site)}`;
+  fillSelected(`<b>SCANNER</b> ${esc(site.name)}<br>${streamHtml(site)}`);
   renderStreamList();
   const entity = findStreamEntity(site.id);
   if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
@@ -3205,6 +3214,7 @@ function closeMapPopups() {
   closeAircraft();
   closeConflict();
   hideOutageCard();
+  hideHungerCard();
   closePin();
   state.selected = null;
   const box = document.getElementById("selected");
@@ -3217,9 +3227,9 @@ function showLive(item) {
     openAircraft(item);
     return;
   }
-  const box = document.getElementById("selected");
-  box.hidden = false;
-  box.innerHTML = liveHtml(item);
+  // Write into #selected-body so the shared close button and scroll box stay in place
+  // for every current and future layer that uses this card.
+  fillSelected(liveHtml(item));
 }
 
 // The text of a live pin's info box. opts.list: for the nearby card's pin list (no

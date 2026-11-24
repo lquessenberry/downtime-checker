@@ -131,7 +131,8 @@ body {
 
 .rail { grid-area: rail; border-width: 0 1px 0 0; display: flex; flex-direction: column; min-height: 0; }
 .feed-col { grid-area: feed; border-width: 0 0 0 1px; display: flex; flex-direction: column; min-height: 0; }
-.stage { grid-area: stage; position: relative; min-width: 0; min-height: 0; }
+.hud-top, .hud-bot { position: relative; z-index: 10; }
+.stage { grid-area: stage; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
 
 #cesium { position: absolute; inset: 0; }
 .cesium-viewer, .cesium-viewer-cesiumWidgetContainer, .cesium-widget, .cesium-widget canvas {
@@ -343,6 +344,8 @@ button:hover { border-color: #9fd4e2; }
   align-items: flex-start;
   gap: 8px;
   max-width: min(560px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow: hidden;
   pointer-events: none;
 }
 .stage-meta {
@@ -419,6 +422,10 @@ button:hover { border-color: #9fd4e2; }
   position: relative;
   z-index: 5;
   width: min(268px, 100%);
+  max-height: min(380px, calc(100dvh - 210px));
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   pointer-events: auto;
   background: rgba(7, 11, 16, 0.92);
   color: var(--text);
@@ -430,17 +437,22 @@ button:hover { border-color: #9fd4e2; }
 .outage-card h2 { margin: 0; font-size: 14px; line-height: 1.25; letter-spacing: 0; }
 .outage-card p { margin: 4px 0 0; font-size: 12px; line-height: 1.35; color: #d7e6ea; }
 #outage-close,
-#hunger-close {
+#hunger-close,
+#selected-close,
+#effects-hud-close,
+.pin-card-close {
   position: absolute;
   top: 2px;
   right: 4px;
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   background: transparent;
+  border: 0;
   color: var(--text);
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
+  cursor: pointer;
 }
 .conflict-card {
   position: relative;
@@ -448,6 +460,8 @@ button:hover { border-color: #9fd4e2; }
   width: min(268px, 100%);
   max-height: min(380px, calc(100dvh - 210px));
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   pointer-events: auto;
   background: #f7f4ef;
   color: #1c1c1c;
@@ -537,19 +551,24 @@ button:hover { border-color: #9fd4e2; }
 }
 .cc-more:hover { background: #fff; }
 .aircraft-card {
-  position: absolute;
-  left: 12px;
-  top: 196px;
-  bottom: 28px;
+  position: relative;
+  left: auto;
+  top: auto;
+  bottom: auto;
   z-index: 4;
   width: 280px;
+  max-height: min(420px, calc(100dvh - 220px));
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  pointer-events: auto;
   padding: 10px 12px 16px;
   background: rgba(8, 22, 40, 0.94);
   border: 1px solid var(--line);
   border-radius: 4px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
 }
+.aircraft-card #ac-close { position: relative; top: auto; right: auto; flex: none; }
 .ac-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
 .ac-top strong { display: block; font-size: 22px; letter-spacing: 0.04em; }
 .ac-hex { color: var(--dim); font-size: 12px; }
@@ -574,11 +593,25 @@ button:hover { border-color: #9fd4e2; }
   position: absolute;
   left: 12px;
   bottom: 28px;
-  z-index: 2;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
   max-width: 360px;
+  max-height: min(70vh, calc(100% - 120px));
+  overflow: hidden;
+  padding: 0;
   background: rgba(7, 11, 16, 0.88);
   border: 1px solid var(--line);
   line-height: 1.45;
+}
+.selected[hidden] { display: none; }
+.selected-body {
+  min-height: 0;
+  flex: 0 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 10px 40px 10px 12px;
 }
 
 .progress-wrap {
@@ -690,6 +723,15 @@ button:hover { border-color: #9fd4e2; }
   padding: 12px 14px;
   -webkit-overflow-scrolling: touch;
 }
+.effects-hud-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+.effects-hud-head h2 { margin: 0; padding-right: 36px; }
+#effects-hud-close { position: absolute; top: 6px; right: 6px; }
 .effects-hud h2,
 .effects-results h2 {
   margin: 0 0 6px;
@@ -909,14 +951,14 @@ button:hover { border-color: #9fd4e2; }
   .feed-col { right: 0; }
   .rail.is-open, .feed-col.is-open { display: flex; background: rgba(8, 14, 20, 0.97); }
   .drawer-close { display: block; margin: 10px 12px 0; min-height: 44px; font-size: 16px; }
-  .stage-stack { max-width: calc(100% - 16px); left: 8px; top: 8px; }
+  .stage-stack { max-width: calc(100% - 16px); left: 8px; top: 8px; max-height: calc(100% - 16px); }
   .stage-meta { font-size: 11px; padding: 2px 6px; }
   #heading { font-size: 11px; }
   #hint { font-size: 9px; }
-  .outage-card { width: min(250px, calc(100vw - 20px)); }
+  .outage-card { width: min(250px, calc(100vw - 20px)); max-height: calc(100dvh - 170px); }
   .conflict-card {
     width: min(250px, calc(100vw - 20px));
-    max-height: min(280px, calc(100dvh - 250px));
+    max-height: calc(100dvh - 170px);
   }
   .cc-photo-wrap img { height: 64px; }
   #cc-title { font-size: 15px; }
@@ -935,7 +977,36 @@ button:hover { border-color: #9fd4e2; }
     right: min(252px, 68%);
     bottom: calc(8px + env(safe-area-inset-bottom));
   }
-  .aircraft-card { top: 248px; width: min(340px, calc(100vw - 16px)); }
+  .aircraft-card { width: min(340px, calc(100vw - 16px)); max-height: calc(100dvh - 170px); }
+  .selected {
+    left: 8px;
+    right: 56px;
+    width: auto;
+    max-width: none;
+    bottom: 8px;
+    max-height: calc(100% - 64px);
+  }
+  /* Hide the HUD and VIEW panel while a pin card is open so they cannot sit on top of the card or the button row. */
+  .stage:has(#selected:not([hidden])) .stage-meta,
+  .stage:has(#outage-card:not([hidden])) .stage-meta,
+  .stage:has(#hunger-card:not([hidden])) .stage-meta,
+  .stage:has(#conflict-card:not([hidden])) .stage-meta,
+  .stage:has(#aircraft-card:not([hidden])) .stage-meta,
+  .stage:has(#selected:not([hidden])) .view-settings,
+  .stage:has(#outage-card:not([hidden])) .view-settings,
+  .stage:has(#hunger-card:not([hidden])) .view-settings,
+  .stage:has(#conflict-card:not([hidden])) .view-settings,
+  .stage:has(#aircraft-card:not([hidden])) .view-settings,
+  .stage:has(#selected:not([hidden])) .view-reopen,
+  .stage:has(#outage-card:not([hidden])) .view-reopen,
+  .stage:has(#hunger-card:not([hidden])) .view-reopen,
+  .stage:has(#conflict-card:not([hidden])) .view-reopen,
+  .stage:has(#aircraft-card:not([hidden])) .view-reopen { display: none; }
+  #outage-close, #hunger-close, #selected-close, #effects-hud-close, .pin-card-close {
+    width: 44px;
+    height: 44px;
+    font-size: 24px;
+  }
   .hud-bot {
     display: flex;
     flex-direction: column;
@@ -988,7 +1059,7 @@ button:hover { border-color: #9fd4e2; }
     top: auto;
     bottom: calc(8px + env(safe-area-inset-bottom));
     width: auto;
-    max-height: 46vh;
+    max-height: min(46vh, calc(100% - 16px));
   }
   .effects-results.mobile-sheet {
     left: 8px !important;
@@ -1000,7 +1071,7 @@ button:hover { border-color: #9fd4e2; }
     transform: none !important;
     z-index: 9;
   }
-  #sdr-listen { top: 0; bottom: 0; z-index: 40; }
+  #sdr-listen { z-index: 40; }
   .sdr-bar { flex-wrap: wrap; }
   #btn-reset { display: none; }
   .view-settings { right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); }
@@ -1098,14 +1169,13 @@ button:hover { border-color: #9fd4e2; }
 .stream-row:hover, .stream-row.on { background: rgba(192, 132, 252, 0.14); }
 
 #sdr-listen {
-  position: fixed;
-  z-index: 30;
-  left: 0;
-  right: 0;
-  top: 64px;
-  bottom: 36px;
+  grid-area: stage;
+  position: relative;
+  z-index: 40;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   background: #070b10;
 }
 #sdr-listen[hidden] { display: none; }
@@ -1389,7 +1459,10 @@ button:hover { border-color: #9fd4e2; }
 /* Desktop: the heading and traffic filters sit under the search box and its
    MY AREA / EXACT row. */
 @media (min-width: 801px) {
-  .stage-stack { top: 96px; }
+  .stage-stack { top: 96px; max-height: calc(100% - 108px); }
+  .stage-meta { max-width: min(280px, 46%); }
+  .stage:has(#effects-hud:not([hidden])) .stage-meta,
+  .stage:has(#effects-results:not([hidden])) .stage-meta { max-width: min(260px, calc(100% - 384px)); }
 }
 .cesium-viewer-toolbar > :not(.cesium-viewer-geocoderContainer):not(.gsa-locate) { display: none; }
 /* MY AREA (approx.) and EXACT location buttons (geocoder.js): a row under the search box. */
@@ -1474,6 +1547,9 @@ button:hover { border-color: #9fd4e2; }
 .cesium-viewer-geocoderContainer .search-results {
   margin-top: 4px;
   max-height: min(320px, 50dvh);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   background: rgba(8, 14, 20, 0.97);
   color: var(--text);
   border: 1px solid var(--line);
@@ -1650,3 +1726,6 @@ button:hover { border-color: #9fd4e2; }
   .nearby-card:not(.is-min) .nearby-list { flex: 1 1 auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   .nearby-card:not(.is-min) .nearby-min { min-width: 92px; border-color: #9fd4e2; }
 }
+
+/* The listen panel fills the stage; hide the heading so it does not show through. */
+body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
