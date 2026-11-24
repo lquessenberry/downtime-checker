@@ -1,0 +1,1 @@
+{"source":"OurAirports","license":"Public domain","url":"https://ourairports.com/data/","built":"2026-11-24","fields":["ident","name","type","lat","lon","elev_ft","city","cc","iata"],"tile":"0_23","rows":[["NZFX","Phoenix Airfield","S",-77.9564,166.7667,18,"McMurdo Station","AQ",""]]}

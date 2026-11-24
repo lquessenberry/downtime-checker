@@ -79,6 +79,12 @@ const state = {
     rivers: false,
     coastal: false,
     tsunami: false,
+    // INFRASTRUCTURE (infra.js): static point layers.
+    airports: false,
+    bases: false,
+    // FIREARMS (firearms.js): saved static pin layers, not a live feed.
+    gunsusa: false,
+    gunsworld: false,
   },
   openKind: "",
   openId: "",
@@ -144,6 +150,9 @@ async function fetchLayer(name, url) {
 
 // SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
 const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
+// INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
+const INFRA_KEYS = ["airports", "bases"];
+const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
 
 const COLORS = {
   up: Cesium.Color.fromCssColorString("#3dff9a"),
@@ -393,7 +402,8 @@ async function startGlobe() {
     animation: false,
     timeline: false,
     baseLayerPicker: false,
-    geocoder: false,
+    // Address search: Cesium's own Geocoder widget with a Mapbox service (geocoder.js).
+    geocoder: window.GsaSearch ? window.GsaSearch.viewerOption() : false,
     homeButton: false,
     sceneModePicker: false,
     navigationHelpButton: false,
@@ -426,6 +436,7 @@ async function startGlobe() {
     viewer.scene.fog.screenSpaceErrorFactor = 4;
   }
   state.viewer = viewer;
+  if (window.GsaSearch) window.GsaSearch.attach(viewer);
   state.basemap = startupMap;
   tuneQuality(startupMap);
   const basemapSelect = document.getElementById("basemap");
@@ -489,6 +500,20 @@ async function startGlobe() {
       showLive,
     });
   }
+  if (window.GsaInfra) {
+    window.GsaInfra.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaFirearms) {
+    window.GsaFirearms.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
@@ -498,6 +523,13 @@ async function startGlobe() {
   // Cesium then inserts a temporary imagery entity; that is not a layer pin either.
   const popupClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   popupClicks.setInputAction((click) => {
+    const infraHit = window.GsaInfra && window.GsaInfra.pick(click.position);
+    if (infraHit) {
+      if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+      closeMapPopups();
+      showLive(infraHit);
+      return;
+    }
     if (pickedMapPin(click.position)) return;
     if (state.layers.effects && window.GsaEffectsRadius && window.GsaEffectsRadius.handleClick(click.position)) return;
     closeMapPopups();
@@ -658,7 +690,7 @@ function hookUi() {
   document.getElementById("open-view").addEventListener("click", () => setViewOpen(true));
   document.getElementById("open-grid-results").addEventListener("click", () => setGridResultsOpen(true));
   document.getElementById("close-grid-results").addEventListener("click", () => setGridResultsOpen(false));
-  hookInstall();
+  hookServiceWorker();
   document.getElementById("country").addEventListener("change", syncUsTests);
   document.getElementById("btn-country").addEventListener("click", () => {
     const country = document.getElementById("country").value;
@@ -723,10 +755,7 @@ function hookUi() {
     tuneQuality(state.basemap || "natural");
     if (!phoneLayout()) {
       setGridResultsOpen(false);
-      const help = document.getElementById("install-help");
-      if (help) help.hidden = true;
     } else syncGridResultsButton();
-    syncInstallButton();
   });
   setupLegendScroll();
   for (const button of document.querySelectorAll("[data-layer-toggle]")) {
@@ -1197,6 +1226,10 @@ function sourceFor(layer) {
   if (layer === "stream") return state.streamSource;
   if (layer === "scan") return state.scanSource;
   if (state.live[layer]?.source) return state.live[layer].source;
+  if (window.GsaFirearms && window.GsaFirearms.sourceFor) {
+    const firearmsSource = window.GsaFirearms.sourceFor(layer);
+    if (firearmsSource) return firearmsSource;
+  }
   return null;
 }
 
@@ -1250,6 +1283,7 @@ function resetMap() {
   hideOutageCard();
   hideHungerCard();
   closePin();
+  if (window.GsaSearch) window.GsaSearch.clear();
   state.trafficPane = "air";
   setAirFilter("all", false);
   setShipFilter("underway", false);
@@ -1304,53 +1338,35 @@ function syncGridResultsButton() {
   button.hidden = !(phoneLayout() && hasGridResults());
 }
 
-let installPrompt = null;
-
-function appIsInstalled() {
-  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-}
-
-function syncInstallButton() {
-  const button = document.getElementById("install-app");
-  if (!button) return;
-  button.hidden = !phoneLayout() || appIsInstalled();
-}
-
-function hookInstall() {
-  const button = document.getElementById("install-app");
-  const help = document.getElementById("install-help");
-  const close = document.getElementById("install-help-close");
-  if (!button) return;
-  window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault();
-    installPrompt = event;
-    syncInstallButton();
-  });
-  window.addEventListener("appinstalled", () => {
-    installPrompt = null;
-    button.hidden = true;
-    if (help) help.hidden = true;
-  });
-  button.addEventListener("click", async () => {
-    if (!phoneLayout()) return;
-    if (installPrompt) {
-      try {
-        installPrompt.prompt();
-        await installPrompt.userChoice;
-        installPrompt = null;
-        return;
-      } catch (error) {
-        installPrompt = null;
-      }
-    }
-    if (help) help.hidden = false;
-  });
-  if (close && help) close.addEventListener("click", () => { help.hidden = true; });
+// PWA: keep the service worker so the existing manifest still works offline
+// on phones. The INSTALL MOBILE APP button and its help dialog were removed
+// to give the map more vertical room.
+function hookServiceWorker() {
   if (phoneLayout() && "serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }
-  syncInstallButton();
 }
+
+// MENU categories (<details class="layer-group">): each header shows how many
+// of its own layers are switched on, e.g. "2 ON". Groups stay as the user
+// left them (all start collapsed); only the count changes.
+// nearby.js loads layers for an area check with nothing drawn and the switch still
+// showing OFF: their keys sit in probeHidden until the check decides.
+state.probeHidden = new Set();
+function layerShown(key) {
+  return Boolean(state.layers[key]) && !state.probeHidden.has(key);
+}
+window.gsProbeHidden = (key) => state.probeHidden.has(key);
+
+function syncLayerGroups() {
+  for (const group of document.querySelectorAll(".rail .layer-group")) {
+    const el = group.querySelector(".layer-group-count");
+    if (!el) continue;
+    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"]').length;
+    el.textContent = n ? `${n} ON` : "";
+  }
+}
+window.gsSyncLayerGroups = syncLayerGroups;
 
 function setLayer(layer, on) {
   if (!Object.prototype.hasOwnProperty.call(state.layers, layer)) return;
@@ -1361,12 +1377,13 @@ function setLayer(layer, on) {
   if (layer === "outages" && !state.layers.outages) hideOutageCard();
   if (layer === "hunger" && !state.layers.hunger) hideHungerCard();
   for (const button of document.querySelectorAll(`[data-layer-toggle="${layer}"]`)) {
-    button.classList.toggle("on", state.layers[layer]);
-    button.setAttribute("aria-pressed", state.layers[layer] ? "true" : "false");
+    button.classList.toggle("on", layerShown(layer));
+    button.setAttribute("aria-pressed", layerShown(layer) ? "true" : "false");
   }
+  syncLayerGroups();
   const host = document.getElementById("cesium");
   if (host) {
-    host.dataset.visibleLayers = Object.keys(state.layers).filter((key) => state.layers[key]).join(" ");
+    host.dataset.visibleLayers = Object.keys(state.layers).filter((key) => layerShown(key)).join(" ");
   }
   if (layer === "aircraft" || layer === "ships") {
     if (state.layers.aircraft && state.layers.ships && state.layers[layer]) {
@@ -1380,7 +1397,7 @@ function setLayer(layer, on) {
   }
   if (layer === "jamming") {
     const jamCreditLine = document.querySelector(".jam-credit");
-    if (jamCreditLine) jamCreditLine.hidden = !state.layers.jamming;
+    if (jamCreditLine) jamCreditLine.hidden = !layerShown("jamming");
     if (state.layers.jamming && !(state.live.jamming.points || []).length) {
       pollJamming().catch((error) => statusLive(error.message || String(error)));
     }
@@ -1413,6 +1430,12 @@ function setLayer(layer, on) {
   }
   if (SPACE_KEYS.includes(layer) && window.GsaSpaceWeather) {
     window.GsaSpaceWeather.setActive(layer, state.layers[layer]);
+  }
+  if (INFRA_KEYS.includes(layer) && window.GsaInfra) {
+    window.GsaInfra.setActive(layer, state.layers[layer]);
+  }
+  if (FIREARMS_KEYS.includes(layer) && window.GsaFirearms) {
+    window.GsaFirearms.setActive(layer, state.layers[layer]);
   }
   if ((layer === "quakes" || layer === "sats") && window.GsaSpaceWeather && window.GsaSpaceWeather.renderGroupCount) {
     window.GsaSpaceWeather.renderGroupCount();
@@ -1466,6 +1489,10 @@ const LAYER_LABEL = {
   rivers: "RIVER GAUGES IN FLOOD (US)",
   coastal: "COASTAL WATER LEVELS (US)",
   tsunami: "TSUNAMI ALERTS",
+  airports: "AIRPORTS",
+  bases: "MILITARY BASES",
+  gunsusa: "USA GUN OWNERSHIP",
+  gunsworld: "WORLD GUN OWNERSHIP",
 };
 
 function setupLegendScroll() {
@@ -1486,9 +1513,9 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
-  const on = order.filter((key) => state.layers[key]);
-  if (just && state.layers[just]) {
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "gunsusa", "gunsworld"];
+  const on = order.filter((key) => layerShown(key));
+  if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
     on.length = 0;
     on.push(just, ...rest);
@@ -1503,8 +1530,8 @@ function syncMobilePick(just) {
 }
 
 function syncTrafficBars() {
-  const airOn = Boolean(state.layers.aircraft);
-  const shipOn = Boolean(state.layers.ships);
+  const airOn = layerShown("aircraft");
+  const shipOn = layerShown("ships");
   const pane = state.trafficPane === "ships" ? "ships" : "air";
   const switcher = document.querySelector(".traffic-switch");
   if (switcher) switcher.hidden = !(airOn && shipOn);
@@ -1517,7 +1544,7 @@ function syncTrafficBars() {
   const airCreditLine = document.querySelector(".air-credit");
   if (airCreditLine) airCreditLine.hidden = !airOn;
   const jamCreditLine = document.querySelector(".jam-credit");
-  if (jamCreditLine) jamCreditLine.hidden = !state.layers.jamming;
+  if (jamCreditLine) jamCreditLine.hidden = !layerShown("jamming");
   for (const button of document.querySelectorAll("[data-traffic-pane]")) {
     const on = button.dataset.trafficPane === pane;
     button.classList.toggle("on", on);
@@ -1693,6 +1720,13 @@ function hideOutageCard() {
   }
 }
 
+// Outage card text (also listed in the nearby card's pin list).
+function outageText(point) {
+  const utils = (point.utilities || []).join(", ");
+  const sourceName = point.source || "DOE/ORNL ODIN";
+  return `${outageCustomers(point.customers)} customers out${utils ? " · " + utils : ""}${sourceName !== utils ? " · " + sourceName : ""}`;
+}
+
 function openOutage(point, options = {}) {
   if (!point) return;
   if (state.openKind === "conflict") closeConflict();
@@ -1709,10 +1743,8 @@ function openOutage(point, options = {}) {
   const title = document.getElementById("outage-title");
   const body = document.getElementById("outage-body");
   if (card && title && body) {
-    const utils = (point.utilities || []).join(", ");
-    const sourceName = point.source || "DOE/ORNL ODIN";
     title.textContent = outagePlace(point);
-    body.textContent = `${outageCustomers(point.customers)} customers out${utils ? " · " + utils : ""}${sourceName !== utils ? " · " + sourceName : ""}`;
+    body.textContent = outageText(point);
     card.hidden = false;
   }
   renderOutageList();
@@ -1828,6 +1860,12 @@ function hideHungerCard() {
   }
 }
 
+function hungerText(point) {
+  const fies = point.fies ? ` Moderate or severe food insecurity ${hungerRate(point.fies)}.` : "";
+  const region = point.region ? ` · ${point.region}` : "";
+  return `${hungerRate(point.pou)} of people undernourished${region}. The ${point.year || "latest"} figure is a 3-year average.${fies}`;
+}
+
 function openHunger(point, options = {}) {
   if (!point) return;
   if (state.openKind === "conflict") closeConflict();
@@ -1844,10 +1882,8 @@ function openHunger(point, options = {}) {
   const title = document.getElementById("hunger-title");
   const body = document.getElementById("hunger-body");
   if (card && title && body) {
-    const fies = point.fies ? ` Moderate or severe food insecurity ${hungerRate(point.fies)}.` : "";
-    const region = point.region ? ` · ${point.region}` : "";
     title.textContent = point.name;
-    body.textContent = `${hungerRate(point.pou)} of people undernourished${region}. The ${point.year || "latest"} figure is a 3-year average.${fies}`;
+    body.textContent = hungerText(point);
     card.hidden = false;
   }
   renderHungerList();
@@ -2227,6 +2263,14 @@ function findStreamEntity(id) {
   return null;
 }
 
+function streamHtml(site) {
+  const where = [site.city, site.county, site.state, site.source].filter((part, index, all) => part && all.indexOf(part) === index).join(" · ");
+  const coords = Number.isFinite(Number(site.lat)) && Number.isFinite(Number(site.lon))
+    ? `${Number(site.lat).toFixed(4)}, ${Number(site.lon).toFixed(4)}`
+    : "";
+  return `OpenMHz${where ? " · " + esc(where) : ""}${coords ? "<br>" + coords : ""}`;
+}
+
 function openStream(site, options = {}) {
   if (!site || !site.url) return;
   if (state.openKind === "conflict") closeConflict();
@@ -2234,11 +2278,10 @@ function openStream(site, options = {}) {
   setFeedMode("stream");
   const box = document.getElementById("selected");
   box.hidden = false;
-  const where = [site.city, site.county, site.state, site.source].filter((part, index, all) => part && all.indexOf(part) === index).join(" · ");
   const coords = Number.isFinite(Number(site.lat)) && Number.isFinite(Number(site.lon))
     ? `${Number(site.lat).toFixed(4)}, ${Number(site.lon).toFixed(4)}`
     : "";
-  box.innerHTML = `<b>SCANNER</b> ${esc(site.name)}<br>OpenMHz${where ? " · " + esc(where) : ""}${coords ? "<br>" + coords : ""}`;
+  box.innerHTML = `<b>SCANNER</b> ${esc(site.name)}<br>${streamHtml(site)}`;
   renderStreamList();
   const entity = findStreamEntity(site.id);
   if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
@@ -3032,7 +3075,7 @@ function cullAircraftHorizon() {
     for (const source of sources) {
       if (!source) continue;
       const entities = source.entities.values;
-      for (let i = 0; i < entities.length; i += 1) entities[i].show = true;
+      for (let i = 0; i < entities.length; i += 1) entities[i].show = !entities[i]._gsHide;
     }
     return;
   }
@@ -3046,7 +3089,8 @@ function cullAircraftHorizon() {
     for (let i = 0; i < entities.length; i += 1) {
       const entity = entities[i];
       const position = entity.position && entity.position.getValue(time);
-      entity.show = Boolean(position) && occluder.isPointVisible(position);
+      // _gsHide: nearby.js keeps this pin hidden (outside the search circle, or mid-check).
+      entity.show = !entity._gsHide && Boolean(position) && occluder.isPointVisible(position);
     }
   }
 }
@@ -3246,9 +3290,34 @@ function showLive(item) {
   }
   const box = document.getElementById("selected");
   box.hidden = false;
+  box.innerHTML = liveHtml(item);
+}
+
+// The text of a live pin's info box. opts.list: for the nearby card's pin list (no
+// popup bookkeeping in the layer modules).
+function liveHtml(item, opts = {}) {
   let extra = "";
-  if (item.sw && window.GsaSpaceWeather) {
-    extra = window.GsaSpaceWeather.popupHtml(item);
+  if (item.layer === "aircraft") {
+    // Same facts as the aircraft card (renderAircraft), from the live feed row.
+    extra = `<dl class="nearby-facts">${[
+      aircraftFact("Type", item.t || ""),
+      aircraftFact("Reg.", item.r || ""),
+      aircraftFact("Squawk", item.squawk || ""),
+      aircraftFact("Groundspeed", aircraftNumber(item.gs, 0, " kt")),
+      aircraftFact("Baro. alt.", aircraftNumber(item.alt, 0, " ft")),
+      aircraftFact("Track", aircraftNumber(item.track, 1, "°")),
+      aircraftFact("ICAO", item.hex ? String(item.hex).toUpperCase() : ""),
+    ].join("")}</dl>`;
+    if (item.hex) extra += `<a href="https://adsb.lol/?icao=${encodeURIComponent(String(item.hex).toLowerCase())}" target="_blank" rel="noreferrer">adsb.lol</a>`;
+  }
+  else if (item.sw && window.GsaSpaceWeather) {
+    extra = window.GsaSpaceWeather.popupHtml(item, opts);
+  }
+  else if (item.infra && window.GsaInfra) {
+    extra = window.GsaInfra.popupHtml(item, opts);
+  }
+  else if (item.firearms && window.GsaFirearms) {
+    extra = window.GsaFirearms.popupHtml(item, opts);
   }
   else if (item.layer === "quakes") {
     const mag = item.mag != null ? `Magnitude ${Number(item.mag).toFixed(1)}` : "";
@@ -3293,8 +3362,40 @@ function showLive(item) {
     if (names.length > shown.length) extra += `<br>and ${names.length - shown.length} more`;
   }
   else if (item.sog != null) extra = `<br>${esc(shipTypeLabel(item))} · ${esc(item.sog)} kn`;
-  box.innerHTML = `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
+  return `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
 }
+
+// Name + info-box text for any map pin (nearby.js pin list). Same builders as the
+// pin cards and the info box; nothing is opened.
+function pinInfo(entity) {
+  if (!entity) return null;
+  if (entity._outage) return { name: outagePlace(entity._outage), html: esc(outageText(entity._outage)) };
+  if (entity._hunger) return { name: entity._hunger.name, html: esc(hungerText(entity._hunger)) };
+  if (entity._stream) return { name: entity._stream.name, html: streamHtml(entity._stream) };
+  if (entity._pin) return { name: entity._pin.name, html: esc(entity._pin.meta || "") + (entity._pin.url ? `${entity._pin.meta ? "<br>" : ""}<a href="${esc(entity._pin.url)}" target="_blank" rel="noreferrer">Source</a>` : "") };
+  if (entity._live) {
+    const html = liveHtml(entity._live, { list: true });
+    // The info box leads with "<b>KIND</b> name<br>"; the list shows the name itself.
+    return { name: entity._live.name || entity.name || "", html: html.replace(/^<b>[^<]*<\/b>[^<]*<br>/, "") };
+  }
+  const d = entity.description && entity.description.getValue ? entity.description.getValue(Cesium.JulianDate.now()) : "";
+  return { name: entity.name || "", html: d ? esc(String(d).replace(/<[^>]+>/g, " ")) : "" };
+}
+
+// Fly to a pin and open its usual card / info box, as if it were tapped on the map.
+function showPinOnMap(entity, lat, lon) {
+  const viewer = state.viewer;
+  if (!viewer) return;
+  if (entity) viewer.selectedEntity = entity;
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    const h = Math.max(20000, Math.min(viewer.camera.positionCartographic.height, 150000));
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(lon, lat, h), duration: 0.9 });
+  }
+}
+window.gsPinInfo = pinInfo;
+window.gsLiveHtml = liveHtml;
+window.gsShowPinOnMap = showPinOnMap;
+window.gsShowLive = (item) => showLive(item);
 
 function aircraftFact(label, value) {
   if (value == null || value === "") return "";
@@ -3611,6 +3712,8 @@ function statusLive(error) {
       : "SATELLITES",
   ];
   if (window.GsaSpaceWeather) parts.push(...window.GsaSpaceWeather.statusParts());
+  if (window.GsaInfra) parts.push(...window.GsaInfra.statusParts());
+  if (window.GsaFirearms) parts.push(...window.GsaFirearms.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
 }

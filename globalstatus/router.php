@@ -93,6 +93,8 @@ function gsa_http_routes()
         '/api/gpsjam' => 'api/gpsjam.json',
         '/api/conflicts' => 'api/conflicts.json',
         '/api/hunger' => 'api/hunger.json',
+        '/api/guns-usa' => 'api/guns-usa.json',
+        '/api/guns-world' => 'api/guns-world.json',
         '/api/radio' => 'api/radio.json',
         '/api/streams' => 'api/streams.json',
         '/api/amfm' => 'api/amfm.json',
