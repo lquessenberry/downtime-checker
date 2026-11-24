@@ -1310,6 +1310,19 @@ function hookInstall() {
   syncInstallButton();
 }
 
+// MENU categories (<details class="layer-group">): each header shows how many
+// of its own layers are switched on, e.g. "2 ON". Groups stay as the user
+// left them (all start collapsed); only the count changes.
+function syncLayerGroups() {
+  for (const group of document.querySelectorAll(".rail .layer-group")) {
+    const el = group.querySelector(".layer-group-count");
+    if (!el) continue;
+    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"]').length;
+    el.textContent = n ? `${n} ON` : "";
+  }
+}
+window.gsSyncLayerGroups = syncLayerGroups;
+
 function setLayer(layer, on) {
   if (!Object.prototype.hasOwnProperty.call(state.layers, layer)) return;
   state.layers[layer] = Boolean(on);
@@ -1322,6 +1335,7 @@ function setLayer(layer, on) {
     button.classList.toggle("on", state.layers[layer]);
     button.setAttribute("aria-pressed", state.layers[layer] ? "true" : "false");
   }
+  syncLayerGroups();
   const host = document.getElementById("cesium");
   if (host) {
     host.dataset.visibleLayers = Object.keys(state.layers).filter((key) => state.layers[key]).join(" ");
