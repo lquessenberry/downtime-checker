@@ -25,6 +25,7 @@
     "quakes", "volcanoes", "disasters", "tsunami", "wildfires", "hurricanes", "nwsalerts",
     "rivers", "coastal", "disease", "animal", "hunger",
     "gunsusa", "gunsworld",
+    "militianational", "militiastate", "militialocal", "militiainactive",
   ];
   const MAX_WAIT_MS = 14000;
   const QUIET_MS = 2500;
