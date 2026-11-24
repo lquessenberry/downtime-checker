@@ -355,7 +355,8 @@ async function startGlobe() {
     animation: false,
     timeline: false,
     baseLayerPicker: false,
-    geocoder: false,
+    // Address search: Cesium's own Geocoder widget with a Mapbox service (geocoder.js).
+    geocoder: window.GsaSearch ? window.GsaSearch.viewerOption() : false,
     homeButton: false,
     sceneModePicker: false,
     navigationHelpButton: false,
@@ -380,6 +381,7 @@ async function startGlobe() {
   viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10202c");
   viewer.scene.globe.enableLighting = false;
   state.viewer = viewer;
+  if (window.GsaSearch) window.GsaSearch.attach(viewer);
   state.basemap = startupMap;
   tuneQuality(startupMap);
   const basemapSelect = document.getElementById("basemap");
@@ -1208,6 +1210,7 @@ function resetMap() {
   hideOutageCard();
   hideHungerCard();
   closePin();
+  if (window.GsaSearch) window.GsaSearch.clear();
   state.trafficPane = "air";
   setAirFilter("all", false);
   setShipFilter("underway", false);
