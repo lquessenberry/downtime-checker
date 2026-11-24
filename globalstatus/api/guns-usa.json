@@ -1,0 +1,525 @@
+{
+  "id": "gunsusa",
+  "title": "USA Gun Ownership",
+  "source": "World Population Review",
+  "sourceUrl": "https://worldpopulationreview.com/state-rankings/gun-ownership-by-state",
+  "credit": "World Population Review, from Pew / CBS News \u201cGun map: Ownership by State.\u201d Share of households that own guns and gun-ownership licenses, 2022. District of Columbia has no household percentage in the source table. Saved copy, not a live feed.",
+  "originalSource": "Pew / CBS News, Gun map: Ownership by State",
+  "originalSourceUrl": "https://www.cbsnews.com/pictures/gun-ownership-rates-by-state/20/",
+  "note": "One pin at each state centroid (50 states + D.C.). Figures are a saved snapshot of the World Population Review table, not live.",
+  "year": 2022,
+  "updated": "2026-11-24",
+  "count": 51,
+  "points": [
+    {
+      "id": "MT",
+      "name": "Montana",
+      "lat": 46.97086,
+      "lon": -109.70596,
+      "year": 2022,
+      "householdPct": 66.3,
+      "licenses": 36678,
+      "color": "#a65c18"
+    },
+    {
+      "id": "WY",
+      "name": "Wyoming",
+      "lat": 43.08787,
+      "lon": -107.14256,
+      "year": 2022,
+      "householdPct": 66.2,
+      "licenses": 142247,
+      "color": "#a65c18"
+    },
+    {
+      "id": "AK",
+      "name": "Alaska",
+      "lat": 60.2242,
+      "lon": -136.2539,
+      "year": 2022,
+      "householdPct": 64.5,
+      "licenses": 28237,
+      "color": "#a65c18"
+    },
+    {
+      "id": "ID",
+      "name": "Idaho",
+      "lat": 44.26687,
+      "lon": -114.46154,
+      "year": 2022,
+      "householdPct": 60.1,
+      "licenses": 76425,
+      "color": "#a65c18"
+    },
+    {
+      "id": "WV",
+      "name": "West Virginia",
+      "lat": 38.81191,
+      "lon": -80.61918,
+      "year": 2022,
+      "householdPct": 58.5,
+      "licenses": 50963,
+      "color": "#c4862a"
+    },
+    {
+      "id": "AR",
+      "name": "Arkansas",
+      "lat": 34.91191,
+      "lon": -92.43356,
+      "year": 2022,
+      "householdPct": 57.2,
+      "licenses": 133981,
+      "color": "#c4862a"
+    },
+    {
+      "id": "MS",
+      "name": "Mississippi",
+      "lat": 32.79094,
+      "lon": -89.64614,
+      "year": 2022,
+      "householdPct": 55.8,
+      "licenses": 80712,
+      "color": "#c4862a"
+    },
+    {
+      "id": "AL",
+      "name": "Alabama",
+      "lat": 32.87862,
+      "lon": -86.71128,
+      "year": 2022,
+      "householdPct": 55.5,
+      "licenses": 194920,
+      "color": "#c4862a"
+    },
+    {
+      "id": "SD",
+      "name": "South Dakota",
+      "lat": 44.27082,
+      "lon": -99.30819,
+      "year": 2022,
+      "householdPct": 55.3,
+      "licenses": 64666,
+      "color": "#c4862a"
+    },
+    {
+      "id": "ND",
+      "name": "North Dakota",
+      "lat": 47.39291,
+      "lon": -100.25135,
+      "year": 2022,
+      "householdPct": 55.1,
+      "licenses": 30975,
+      "color": "#c4862a"
+    },
+    {
+      "id": "OK",
+      "name": "Oklahoma",
+      "lat": 35.50186,
+      "lon": -97.25335,
+      "year": 2022,
+      "householdPct": 54.7,
+      "licenses": 103368,
+      "color": "#c4862a"
+    },
+    {
+      "id": "KY",
+      "name": "Kentucky",
+      "lat": 37.62172,
+      "lon": -85.20172,
+      "year": 2022,
+      "householdPct": 54.6,
+      "licenses": 108833,
+      "color": "#c4862a"
+    },
+    {
+      "id": "LA",
+      "name": "Louisiana",
+      "lat": 31.08096,
+      "lon": -91.81972,
+      "year": 2022,
+      "householdPct": 53.1,
+      "licenses": 152061,
+      "color": "#c4862a"
+    },
+    {
+      "id": "TN",
+      "name": "Tennessee",
+      "lat": 35.88464,
+      "lon": -86.10868,
+      "year": 2022,
+      "householdPct": 51.6,
+      "licenses": 151536,
+      "color": "#c4862a"
+    },
+    {
+      "id": "OR",
+      "name": "Oregon",
+      "lat": 44.4939,
+      "lon": -121.48489,
+      "year": 2022,
+      "householdPct": 50.8,
+      "licenses": 97474,
+      "color": "#c4862a"
+    },
+    {
+      "id": "VT",
+      "name": "Vermont",
+      "lat": 44.163,
+      "lon": -72.68711,
+      "year": 2022,
+      "householdPct": 50.5,
+      "licenses": 9451,
+      "color": "#c4862a"
+    },
+    {
+      "id": "SC",
+      "name": "South Carolina",
+      "lat": 33.95521,
+      "lon": -80.98041,
+      "year": 2022,
+      "householdPct": 49.4,
+      "licenses": 119205,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "GA",
+      "name": "Georgia",
+      "lat": 32.8067,
+      "lon": -83.57676,
+      "year": 2022,
+      "householdPct": 49.2,
+      "licenses": 304124,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "KS",
+      "name": "Kansas",
+      "lat": 38.48537,
+      "lon": -98.08533,
+      "year": 2022,
+      "householdPct": 48.9,
+      "licenses": 69850,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "MO",
+      "name": "Missouri",
+      "lat": 38.45002,
+      "lon": -92.48074,
+      "year": 2022,
+      "householdPct": 48.8,
+      "licenses": 113351,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "NV",
+      "name": "Nevada",
+      "lat": 39.24605,
+      "lon": -117.55879,
+      "year": 2022,
+      "householdPct": 47.3,
+      "licenses": 119007,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "ME",
+      "name": "Maine",
+      "lat": 44.67429,
+      "lon": -69.49704,
+      "year": 2022,
+      "householdPct": 46.8,
+      "licenses": 21396,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "UT",
+      "name": "Utah",
+      "lat": 39.63565,
+      "lon": -111.60033,
+      "year": 2022,
+      "householdPct": 46.8,
+      "licenses": 118408,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "AZ",
+      "name": "Arizona",
+      "lat": 33.67825,
+      "lon": -111.47089,
+      "year": 2022,
+      "householdPct": 46.3,
+      "licenses": 258691,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "NM",
+      "name": "New Mexico",
+      "lat": 34.54561,
+      "lon": -105.88714,
+      "year": 2022,
+      "householdPct": 46.2,
+      "licenses": 122968,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "NC",
+      "name": "North Carolina",
+      "lat": 35.6229,
+      "lon": -79.50235,
+      "year": 2022,
+      "householdPct": 45.8,
+      "licenses": 222166,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "TX",
+      "name": "Texas",
+      "lat": 31.65817,
+      "lon": -98.65235,
+      "year": 2022,
+      "householdPct": 45.7,
+      "licenses": 1006555,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "WI",
+      "name": "Wisconsin",
+      "lat": 44.40707,
+      "lon": -89.77151,
+      "year": 2022,
+      "householdPct": 45.3,
+      "licenses": 95430,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "NE",
+      "name": "Nebraska",
+      "lat": 41.32118,
+      "lon": -99.0361,
+      "year": 2022,
+      "householdPct": 45.2,
+      "licenses": 43261,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "CO",
+      "name": "Colorado",
+      "lat": 38.92888,
+      "lon": -105.49101,
+      "year": 2022,
+      "householdPct": 45.1,
+      "licenses": 149382,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "IN",
+      "name": "Indiana",
+      "lat": 39.83864,
+      "lon": -86.21906,
+      "year": 2022,
+      "householdPct": 44.8,
+      "licenses": 157546,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "VA",
+      "name": "Virginia",
+      "lat": 37.56543,
+      "lon": -78.51269,
+      "year": 2022,
+      "householdPct": 44.6,
+      "licenses": 423707,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "IA",
+      "name": "Iowa",
+      "lat": 42.0299,
+      "lon": -93.4661,
+      "year": 2022,
+      "householdPct": 43.6,
+      "licenses": 54178,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "MN",
+      "name": "Minnesota",
+      "lat": 45.5467,
+      "lon": -94.43201,
+      "year": 2022,
+      "householdPct": 42.8,
+      "licenses": 129825,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "WA",
+      "name": "Washington",
+      "lat": 47.23705,
+      "lon": -120.73241,
+      "year": 2022,
+      "householdPct": 42.1,
+      "licenses": 165534,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "NH",
+      "name": "New Hampshire",
+      "lat": 43.47456,
+      "lon": -71.57668,
+      "year": 2022,
+      "householdPct": 41.1,
+      "licenses": 72433,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "PA",
+      "name": "Pennsylvania",
+      "lat": 40.82024,
+      "lon": -77.61764,
+      "year": 2022,
+      "householdPct": 40.7,
+      "licenses": 348167,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "MI",
+      "name": "Michigan",
+      "lat": 44.04902,
+      "lon": -85.19809,
+      "year": 2022,
+      "householdPct": 40.2,
+      "licenses": 109835,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "OH",
+      "name": "Ohio",
+      "lat": 40.31742,
+      "lon": -82.8313,
+      "year": 2022,
+      "householdPct": 40.0,
+      "licenses": 208661,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "FL",
+      "name": "Florida",
+      "lat": 28.93175,
+      "lon": -82.70572,
+      "year": 2022,
+      "householdPct": 35.3,
+      "licenses": 518725,
+      "color": "#d4a84b"
+    },
+    {
+      "id": "DE",
+      "name": "Delaware",
+      "lat": 39.11541,
+      "lon": -75.49471,
+      "year": 2022,
+      "householdPct": 34.4,
+      "licenses": 6092,
+      "color": "#e4c36a"
+    },
+    {
+      "id": "MD",
+      "name": "Maryland",
+      "lat": 39.00293,
+      "lon": -76.68145,
+      "year": 2022,
+      "householdPct": 30.2,
+      "licenses": 136257,
+      "color": "#e4c36a"
+    },
+    {
+      "id": "CA",
+      "name": "California",
+      "lat": 37.83822,
+      "lon": -120.74899,
+      "year": 2022,
+      "householdPct": 28.3,
+      "licenses": 406360,
+      "color": "#e4c36a"
+    },
+    {
+      "id": "IL",
+      "name": "Illinois",
+      "lat": 39.84226,
+      "lon": -89.17445,
+      "year": 2022,
+      "householdPct": 27.8,
+      "licenses": 144749,
+      "color": "#e4c36a"
+    },
+    {
+      "id": "CT",
+      "name": "Connecticut",
+      "lat": 41.52133,
+      "lon": -72.77179,
+      "year": 2022,
+      "householdPct": 23.6,
+      "licenses": 74874,
+      "color": "#e4c36a"
+    },
+    {
+      "id": "NY",
+      "name": "New York",
+      "lat": 42.55453,
+      "lon": -75.47726,
+      "year": 2022,
+      "householdPct": 19.9,
+      "licenses": 92191,
+      "color": "#f0e0a8"
+    },
+    {
+      "id": "HI",
+      "name": "Hawaii",
+      "lat": 21.02917,
+      "lon": -157.39719,
+      "year": 2022,
+      "householdPct": 14.9,
+      "licenses": 9280,
+      "color": "#f0e0a8"
+    },
+    {
+      "id": "RI",
+      "name": "Rhode Island",
+      "lat": 41.62991,
+      "lon": -71.46979,
+      "year": 2022,
+      "householdPct": 14.8,
+      "licenses": 4887,
+      "color": "#f0e0a8"
+    },
+    {
+      "id": "MA",
+      "name": "Massachusetts",
+      "lat": 42.10674,
+      "lon": -71.45056,
+      "year": 2022,
+      "householdPct": 14.7,
+      "licenses": 45138,
+      "color": "#f0e0a8"
+    },
+    {
+      "id": "NJ",
+      "name": "New Jersey",
+      "lat": 40.28043,
+      "lon": -74.62094,
+      "year": 2022,
+      "householdPct": 14.7,
+      "licenses": 102228,
+      "color": "#f0e0a8"
+    },
+    {
+      "id": "DC",
+      "name": "District of Columbia",
+      "lat": 38.90424,
+      "lon": -77.01652,
+      "year": 2022,
+      "householdPct": null,
+      "licenses": 74315,
+      "color": "#8a8f9c"
+    }
+  ]
+}
