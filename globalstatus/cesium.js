@@ -82,6 +82,9 @@ const state = {
     // INFRASTRUCTURE (infra.js): static point layers.
     airports: false,
     bases: false,
+    // FIREARMS (firearms.js): saved static pin layers, not a live feed.
+    gunsusa: false,
+    gunsworld: false,
   },
   openKind: "",
   openId: "",
@@ -106,6 +109,7 @@ const state = {
 const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
 // INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
 const INFRA_KEYS = ["airports", "bases"];
+const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
 
 const COLORS = {
   up: Cesium.Color.fromCssColorString("#3dff9a"),
@@ -441,6 +445,13 @@ async function startGlobe() {
   }
   if (window.GsaInfra) {
     window.GsaInfra.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaFirearms) {
+    window.GsaFirearms.init({
       viewer: () => state.viewer,
       setCount,
       statusLive: () => statusLive(),
@@ -1155,6 +1166,10 @@ function sourceFor(layer) {
   if (layer === "stream") return state.streamSource;
   if (layer === "scan") return state.scanSource;
   if (state.live[layer]?.source) return state.live[layer].source;
+  if (window.GsaFirearms && window.GsaFirearms.sourceFor) {
+    const firearmsSource = window.GsaFirearms.sourceFor(layer);
+    if (firearmsSource) return firearmsSource;
+  }
   return null;
 }
 
@@ -1357,6 +1372,9 @@ function setLayer(layer, on) {
   if (INFRA_KEYS.includes(layer) && window.GsaInfra) {
     window.GsaInfra.setActive(layer, state.layers[layer]);
   }
+  if (FIREARMS_KEYS.includes(layer) && window.GsaFirearms) {
+    window.GsaFirearms.setActive(layer, state.layers[layer]);
+  }
   if ((layer === "quakes" || layer === "sats") && window.GsaSpaceWeather && window.GsaSpaceWeather.renderGroupCount) {
     window.GsaSpaceWeather.renderGroupCount();
   }
@@ -1406,6 +1424,8 @@ const LAYER_LABEL = {
   tsunami: "TSUNAMI ALERTS",
   airports: "AIRPORTS",
   bases: "MILITARY BASES",
+  gunsusa: "USA GUN OWNERSHIP",
+  gunsworld: "WORLD GUN OWNERSHIP",
 };
 
 function setupLegendScroll() {
@@ -1426,7 +1446,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "gunsusa", "gunsworld"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -3214,6 +3234,9 @@ function liveHtml(item, opts = {}) {
   else if (item.infra && window.GsaInfra) {
     extra = window.GsaInfra.popupHtml(item, opts);
   }
+  else if (item.firearms && window.GsaFirearms) {
+    extra = window.GsaFirearms.popupHtml(item, opts);
+  }
   else if (item.layer === "quakes") {
     const mag = item.mag != null ? `Magnitude ${Number(item.mag).toFixed(1)}` : "";
     const depth = Number.isFinite(item.depthKm) ? `Depth ${Math.round(item.depthKm)} km` : "";
@@ -3608,6 +3631,7 @@ function statusLive(error) {
   ];
   if (window.GsaSpaceWeather) parts.push(...window.GsaSpaceWeather.statusParts());
   if (window.GsaInfra) parts.push(...window.GsaInfra.statusParts());
+  if (window.GsaFirearms) parts.push(...window.GsaFirearms.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
 }

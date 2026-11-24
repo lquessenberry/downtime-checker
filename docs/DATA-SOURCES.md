@@ -19,6 +19,8 @@ manual workflow.
 | `streams` | Scanner listen pins | Broadcastify state/county pages, radio-browser.info, OpenMHz if it answers | Daily | 250 ms delay between pages. OpenMHz is often Cloudflare 403. |
 | `radio` | Uniden sites | Public BT885 FTP `ftp.uniden.com/BT885` (`BT885ftp2` installer login in `hpdb-ftp.mjs`) | Weekly (Monday) | Derived overlay only. Do not commit `MasterHpdb_*.gz`. |
 | `hunger` | FAO undernourishment | [FAO Hunger Map](https://www.fao.org/interactive/hunger-map/en/) | Annual / manual | SOFI 3-year average. No stable public bulk API in-tree. |
+| `guns-usa` | 50 states + D.C. | [World Population Review, gun ownership by state](https://worldpopulationreview.com/state-rankings/gun-ownership-by-state) (Pew / CBS News, 2022) | Manual snapshot | Saved static layer, not a live feed. One pin at each state centroid from `county-centroids.json`. D.C. has licenses only. |
+| `guns-world` | One pin per country | [World Population Review, gun ownership by country](https://worldpopulationreview.com/country-rankings/gun-ownership-by-country) (Small Arms Survey 2017) | Manual snapshot | Saved static layer, not a live feed. One pin for the entire United States. Indonesia and Taiwan have no per-person rate. |
 | `county-centroids.json` | County points | Bundled with production | Never | Reference geometry. |
 | `place-centroids.json` | Place points | Bundled with production | Never | Reference geometry. |
 | `icao_aircraft_types.json` | ICAO types | Bundled with production | Rare / manual | Lookup table for AIR cards. |

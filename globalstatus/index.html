@@ -19,7 +19,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261124g" />
+  <link rel="stylesheet" href="/cesium.css?v=20261124h" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -128,6 +128,13 @@
         <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="layer-name"><span class="swatch disease"></span> DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="disease">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="layer-name"><span class="swatch animal"></span> ANIMAL DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="animal">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="hunger" aria-pressed="false"><span class="layer-name"><span class="swatch hunger"></span> WORLD HUNGER</span><span class="layer-meta"><em data-count="hunger">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      </details>
+      <details class="layer-group" id="group-firearms" data-layer-group="firearms">
+        <summary class="layer-group-head"><span>FIREARMS</span><em class="layer-group-count"></em></summary>
+        <button type="button" class="layer" data-layer-toggle="gunsusa" aria-pressed="false"><span class="layer-name"><span class="swatch gunsusa"></span> USA GUN OWNERSHIP</span><span class="layer-meta"><em data-count="gunsusa">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-firearms-note="gunsusa" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="gunsworld" aria-pressed="false"><span class="layer-name"><span class="swatch gunsworld"></span> WORLD GUN OWNERSHIP</span><span class="layer-meta"><em data-count="gunsworld">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-firearms-note="gunsworld" hidden></p>
       </details>
       <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
     </div>
@@ -446,8 +453,9 @@
   <script src="/sats.js"></script>
   <script src="/spaceweather.js?v=20261124d"></script>
   <script src="/infra.js?v=20261124f"></script>
+  <script src="/firearms.js?v=20261124h"></script>
   <script src="/geocoder.js?v=20261124f"></script>
-  <script src="/nearby.js?v=20261124f"></script>
-  <script src="/cesium.js?v=20261124g"></script>
+  <script src="/nearby.js?v=20261124h"></script>
+  <script src="/cesium.js?v=20261124h"></script>
 </body>
 </html>

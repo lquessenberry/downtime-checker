@@ -24,6 +24,7 @@
     "airports", "conflicts", "bases",
     "quakes", "volcanoes", "disasters", "tsunami", "wildfires", "hurricanes", "nwsalerts",
     "rivers", "coastal", "disease", "animal", "hunger",
+    "gunsusa", "gunsworld",
   ];
   const MAX_WAIT_MS = 14000;
   const QUIET_MS = 2500;
