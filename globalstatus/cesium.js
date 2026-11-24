@@ -1675,6 +1675,13 @@ function hideOutageCard() {
   }
 }
 
+// Outage card text (also listed in the nearby card's pin list).
+function outageText(point) {
+  const utils = (point.utilities || []).join(", ");
+  const sourceName = point.source || "DOE/ORNL ODIN";
+  return `${outageCustomers(point.customers)} customers out${utils ? " · " + utils : ""}${sourceName !== utils ? " · " + sourceName : ""}`;
+}
+
 function openOutage(point, options = {}) {
   if (!point) return;
   if (state.openKind === "conflict") closeConflict();
@@ -1691,10 +1698,8 @@ function openOutage(point, options = {}) {
   const title = document.getElementById("outage-title");
   const body = document.getElementById("outage-body");
   if (card && title && body) {
-    const utils = (point.utilities || []).join(", ");
-    const sourceName = point.source || "DOE/ORNL ODIN";
     title.textContent = outagePlace(point);
-    body.textContent = `${outageCustomers(point.customers)} customers out${utils ? " · " + utils : ""}${sourceName !== utils ? " · " + sourceName : ""}`;
+    body.textContent = outageText(point);
     card.hidden = false;
   }
   renderOutageList();
@@ -1810,6 +1815,12 @@ function hideHungerCard() {
   }
 }
 
+function hungerText(point) {
+  const fies = point.fies ? ` Moderate or severe food insecurity ${hungerRate(point.fies)}.` : "";
+  const region = point.region ? ` · ${point.region}` : "";
+  return `${hungerRate(point.pou)} of people undernourished${region}. The ${point.year || "latest"} figure is a 3-year average.${fies}`;
+}
+
 function openHunger(point, options = {}) {
   if (!point) return;
   if (state.openKind === "conflict") closeConflict();
@@ -1826,10 +1837,8 @@ function openHunger(point, options = {}) {
   const title = document.getElementById("hunger-title");
   const body = document.getElementById("hunger-body");
   if (card && title && body) {
-    const fies = point.fies ? ` Moderate or severe food insecurity ${hungerRate(point.fies)}.` : "";
-    const region = point.region ? ` · ${point.region}` : "";
     title.textContent = point.name;
-    body.textContent = `${hungerRate(point.pou)} of people undernourished${region}. The ${point.year || "latest"} figure is a 3-year average.${fies}`;
+    body.textContent = hungerText(point);
     card.hidden = false;
   }
   renderHungerList();
@@ -2198,6 +2207,14 @@ function findStreamEntity(id) {
   return null;
 }
 
+function streamHtml(site) {
+  const where = [site.city, site.county, site.state, site.source].filter((part, index, all) => part && all.indexOf(part) === index).join(" · ");
+  const coords = Number.isFinite(Number(site.lat)) && Number.isFinite(Number(site.lon))
+    ? `${Number(site.lat).toFixed(4)}, ${Number(site.lon).toFixed(4)}`
+    : "";
+  return `OpenMHz${where ? " · " + esc(where) : ""}${coords ? "<br>" + coords : ""}`;
+}
+
 function openStream(site, options = {}) {
   if (!site || !site.url) return;
   if (state.openKind === "conflict") closeConflict();
@@ -2205,11 +2222,10 @@ function openStream(site, options = {}) {
   setFeedMode("stream");
   const box = document.getElementById("selected");
   box.hidden = false;
-  const where = [site.city, site.county, site.state, site.source].filter((part, index, all) => part && all.indexOf(part) === index).join(" · ");
   const coords = Number.isFinite(Number(site.lat)) && Number.isFinite(Number(site.lon))
     ? `${Number(site.lat).toFixed(4)}, ${Number(site.lon).toFixed(4)}`
     : "";
-  box.innerHTML = `<b>SCANNER</b> ${esc(site.name)}<br>OpenMHz${where ? " · " + esc(where) : ""}${coords ? "<br>" + coords : ""}`;
+  box.innerHTML = `<b>SCANNER</b> ${esc(site.name)}<br>${streamHtml(site)}`;
   renderStreamList();
   const entity = findStreamEntity(site.id);
   if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
@@ -3214,12 +3230,31 @@ function showLive(item) {
   }
   const box = document.getElementById("selected");
   box.hidden = false;
+  box.innerHTML = liveHtml(item);
+}
+
+// The text of a live pin's info box. opts.list: for the nearby card's pin list (no
+// popup bookkeeping in the layer modules).
+function liveHtml(item, opts = {}) {
   let extra = "";
-  if (item.sw && window.GsaSpaceWeather) {
-    extra = window.GsaSpaceWeather.popupHtml(item);
+  if (item.layer === "aircraft") {
+    // Same facts as the aircraft card (renderAircraft), from the live feed row.
+    extra = `<dl class="nearby-facts">${[
+      aircraftFact("Type", item.t || ""),
+      aircraftFact("Reg.", item.r || ""),
+      aircraftFact("Squawk", item.squawk || ""),
+      aircraftFact("Groundspeed", aircraftNumber(item.gs, 0, " kt")),
+      aircraftFact("Baro. alt.", aircraftNumber(item.alt, 0, " ft")),
+      aircraftFact("Track", aircraftNumber(item.track, 1, "°")),
+      aircraftFact("ICAO", item.hex ? String(item.hex).toUpperCase() : ""),
+    ].join("")}</dl>`;
+    if (item.hex) extra += `<a href="https://adsb.lol/?icao=${encodeURIComponent(String(item.hex).toLowerCase())}" target="_blank" rel="noreferrer">adsb.lol</a>`;
+  }
+  else if (item.sw && window.GsaSpaceWeather) {
+    extra = window.GsaSpaceWeather.popupHtml(item, opts);
   }
   else if (item.infra && window.GsaInfra) {
-    extra = window.GsaInfra.popupHtml(item);
+    extra = window.GsaInfra.popupHtml(item, opts);
   }
   else if (item.layer === "quakes") {
     const mag = item.mag != null ? `Magnitude ${Number(item.mag).toFixed(1)}` : "";
@@ -3264,8 +3299,40 @@ function showLive(item) {
     if (names.length > shown.length) extra += `<br>and ${names.length - shown.length} more`;
   }
   else if (item.sog != null) extra = `<br>${esc(shipTypeLabel(item))} · ${esc(item.sog)} kn`;
-  box.innerHTML = `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
+  return `<b>${esc(item.kind)}</b> ${esc(item.name)}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}${extra}`;
 }
+
+// Name + info-box text for any map pin (nearby.js pin list). Same builders as the
+// pin cards and the info box; nothing is opened.
+function pinInfo(entity) {
+  if (!entity) return null;
+  if (entity._outage) return { name: outagePlace(entity._outage), html: esc(outageText(entity._outage)) };
+  if (entity._hunger) return { name: entity._hunger.name, html: esc(hungerText(entity._hunger)) };
+  if (entity._stream) return { name: entity._stream.name, html: streamHtml(entity._stream) };
+  if (entity._pin) return { name: entity._pin.name, html: esc(entity._pin.meta || "") + (entity._pin.url ? `${entity._pin.meta ? "<br>" : ""}<a href="${esc(entity._pin.url)}" target="_blank" rel="noreferrer">Source</a>` : "") };
+  if (entity._live) {
+    const html = liveHtml(entity._live, { list: true });
+    // The info box leads with "<b>KIND</b> name<br>"; the list shows the name itself.
+    return { name: entity._live.name || entity.name || "", html: html.replace(/^<b>[^<]*<\/b>[^<]*<br>/, "") };
+  }
+  const d = entity.description && entity.description.getValue ? entity.description.getValue(Cesium.JulianDate.now()) : "";
+  return { name: entity.name || "", html: d ? esc(String(d).replace(/<[^>]+>/g, " ")) : "" };
+}
+
+// Fly to a pin and open its usual card / info box, as if it were tapped on the map.
+function showPinOnMap(entity, lat, lon) {
+  const viewer = state.viewer;
+  if (!viewer) return;
+  if (entity) viewer.selectedEntity = entity;
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    const h = Math.max(20000, Math.min(viewer.camera.positionCartographic.height, 150000));
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(lon, lat, h), duration: 0.9 });
+  }
+}
+window.gsPinInfo = pinInfo;
+window.gsLiveHtml = liveHtml;
+window.gsShowPinOnMap = showPinOnMap;
+window.gsShowLive = (item) => showLive(item);
 
 function aircraftFact(label, value) {
   if (value == null || value === "") return "";

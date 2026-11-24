@@ -28,7 +28,7 @@
   const MAX_WAIT_MS = 14000;
   const QUIET_MS = 2500;
 
-  const run = { place: null, miles: DEFAULT_MILES, autoOn: new Set(), probing: new Set(), showAll: false, mode: {}, hooked: new Set(), counts: {}, token: 0, checking: false, startedAt: 0, ms: 0 };
+  const run = { place: null, miles: DEFAULT_MILES, autoOn: new Set(), probing: new Set(), showAll: false, mode: {}, hooked: new Set(), expanded: new Set(), limit: {}, pins: {}, counts: {}, token: 0, checking: false, startedAt: 0, ms: 0 };
   let circleSource = null;
 
   const $ = (id) => document.getElementById(id);
@@ -252,6 +252,24 @@
         setLayer(key, !state.layers[key]);
         renderCard();
       }
+      const exp = ev.target.closest("[data-nearby-expand]");
+      if (exp) {
+        const key = exp.dataset.nearbyExpand;
+        if (run.expanded.has(key)) run.expanded.delete(key);
+        else {
+          run.expanded.add(key);
+          run.limit[key] = PAGE;
+        }
+        renderCard();
+      }
+      const more = ev.target.closest("[data-nearby-more]");
+      if (more) {
+        const key = more.dataset.nearbyMore;
+        run.limit[key] = (run.limit[key] || PAGE) + PAGE;
+        renderCard();
+      }
+      const go = ev.target.closest("[data-nearby-go]");
+      if (go) showOnMap(go.dataset.nearbyGo, Number(go.dataset.i));
     });
     $("nearby-all").addEventListener("click", () => {
       run.showAll = !run.showAll;
@@ -267,6 +285,100 @@
       minLabel();
     });
     return el;
+  }
+
+  // ---------- pins of one layer inside the circle (tap a row) ----------
+  const PAGE = 25;
+
+  function mi(kmv) {
+    const m = kmv / 1.609344;
+    return m < 10 ? `${m.toFixed(1)} mi` : `${Math.round(m)} mi`;
+  }
+
+  // Every pin of the layer inside the circle, nearest first. One entry per map item
+  // (a few layers draw a pin and a label as two entities).
+  function pinsInside(key) {
+    const out = [];
+    if (!run.place) return out;
+    const { lat, lon } = run.place;
+    const rk = run.miles * MILE / 1000;
+    const now = Cesium.JulianDate.now();
+    const seen = new Set();
+    const src = typeof sourceFor === "function" ? sourceFor(key) : null;
+    if (src) {
+      for (const e of src.entities.values) {
+        if (entityInside(e, lat, lon, rk, now) !== true) continue;
+        const ref = e._live || e._outage || e._hunger || e._pin || e._stream || e;
+        if (seen.has(ref)) continue;
+        seen.add(ref);
+        let at = e.position ? toLatLon(e.position.getValue(now)) : null;
+        let d = at ? km(lat, lon, at.lat, at.lon) : Infinity;
+        if (!at) {
+          const h = e.polygon && e.polygon.hierarchy && e.polygon.hierarchy.getValue(now);
+          const line = e.polyline && e.polyline.positions && e.polyline.positions.getValue(now);
+          const pts = ((h && h.positions) || line || []).map(toLatLon).filter(Boolean);
+          if (pts.length) {
+            at = { lat: pts.reduce((a, p) => a + p.lat, 0) / pts.length, lon: pts.reduce((a, p) => a + p.lon, 0) / pts.length };
+            d = h && insidePolygon(lat, lon, pts) ? 0 : Math.min(...pts.map((p) => km(lat, lon, p.lat, p.lon)));
+          }
+        }
+        out.push({ entity: e, lat: at && at.lat, lon: at && at.lon, d });
+      }
+    }
+    for (const coll of infraCollections(key)) {
+      for (let j = 0; j < coll.length; j += 1) {
+        const p = coll.get(j);
+        const at = toLatLon(p.position);
+        if (!at) continue;
+        const d = km(lat, lon, at.lat, at.lon);
+        if (d <= rk) out.push({ infra: p.id, lat: at.lat, lon: at.lon, d });
+      }
+    }
+    out.sort((a, b) => a.d - b.d);
+    return out;
+  }
+
+  function pinInfo(p) {
+    if (p.infra && root.GsaInfra && root.GsaInfra.itemFor) {
+      const item = root.GsaInfra.itemFor(p.infra);
+      return { name: item.name, html: `${esc(item.kind)}${root.GsaInfra.popupHtml(item, { list: true })}` };
+    }
+    const info = root.gsPinInfo ? root.gsPinInfo(p.entity) : null;
+    return info || { name: (p.entity && p.entity.name) || "", html: "" };
+  }
+
+  function pinListHtml(key) {
+    const pins = pinsInside(key);
+    run.pins[key] = pins;
+    if (!pins.length) return `<p class="nearby-pins-empty">No pins of this layer inside the circle right now.</p>`;
+    const limit = Math.min(pins.length, run.limit[key] || PAGE);
+    let html = `<ol class="nearby-pins">`;
+    for (let i = 0; i < limit; i += 1) {
+      const p = pins[i];
+      const info = pinInfo(p);
+      html += `<li><div class="nearby-pin-head"><b>${esc(info.name || label(key))}</b><span>${Number.isFinite(p.d) ? mi(p.d) : ""}</span></div>`
+        + (info.html ? `<div class="nearby-pin-info">${String(info.html).replace(/^(<br>)+/, "")}</div>` : "")
+        + (Number.isFinite(p.lat) ? `<button type="button" class="nearby-go" data-nearby-go="${key}" data-i="${i}">SHOW ON MAP</button>` : "")
+        + `</li>`;
+    }
+    html += `</ol>`;
+    if (pins.length > limit) html += `<button type="button" class="nearby-more" data-nearby-more="${key}">SHOW ${Math.min(PAGE, pins.length - limit)} MORE (${(pins.length - limit).toLocaleString("en-US")} LEFT)</button>`;
+    return html;
+  }
+
+  function showOnMap(key, i) {
+    const p = run.pins[key] && run.pins[key][i];
+    if (!p) return;
+    if (!state.layers[key] && typeof setLayer === "function") setLayer(key, true);
+    if (p.infra && root.GsaInfra) {
+      if (root.gsShowLive) root.gsShowLive(root.GsaInfra.itemFor(p.infra));
+      if (root.gsShowPinOnMap) root.gsShowPinOnMap(null, p.lat, p.lon);
+    } else if (root.gsShowPinOnMap) root.gsShowPinOnMap(p.entity, p.lat, p.lon);
+    // Phones: the full-screen card steps aside so the pin and its card are visible.
+    if (PHONE && PHONE.matches) {
+      card().classList.add("is-min");
+      minLabel();
+    }
   }
 
   function sw(k) {
@@ -326,7 +438,15 @@
     all.textContent = run.showAll ? "SHOW ONLY INSIDE CIRCLE" : "SHOW ALL PINS";
     all.classList.toggle("on", run.showAll);
     all.setAttribute("aria-pressed", run.showAll ? "true" : "false");
-    $("nearby-list").innerHTML = found.map((k) => `<li><button type="button" data-nearby-layer="${k}" class="${state.layers[k] ? "on" : ""}" aria-pressed="${state.layers[k] ? "true" : "false"}"><span${layerColor(k) ? ` style="color:${layerColor(k)}"` : ""}>${sw(k)}${esc(label(k))}</span><em>${run.counts[k].toLocaleString("en-US")}</em></button></li>`).join("");
+    $("nearby-list").innerHTML = found.map((k) => {
+      const on = Boolean(state.layers[k]);
+      const open = run.expanded.has(k);
+      const color = layerColor(k);
+      return `<li class="nearby-row${open ? " open" : ""}"><div class="nearby-row-main">`
+        + `<button type="button" class="nearby-name" data-nearby-expand="${k}" aria-expanded="${open ? "true" : "false"}" title="List the pins inside the circle"><span${color ? ` style="color:${color}"` : ""}>${sw(k)}${esc(label(k))}</span><em>${run.counts[k].toLocaleString("en-US")}</em><i class="nearby-chev" aria-hidden="true">${open ? "▴" : "▾"}</i></button>`
+        + `<button type="button" class="nearby-tog${on ? " on" : ""}" data-nearby-layer="${k}" aria-pressed="${on ? "true" : "false"}" aria-label="${on ? "Hide" : "Show"} ${esc(label(k))} on the map">${on ? "ON" : "OFF"}</button>`
+        + `</div>${open ? pinListHtml(k) : ""}</li>`;
+    }).join("");
   }
 
   // ---------- run ----------
@@ -429,6 +549,7 @@
     run.showAll = false;
     run.place = { name: place.name, lat: place.lat, lon: place.lon };
     card().classList.remove("is-min"); // a new place opens the full list
+    run.expanded.clear();
     run.counts = {};
     drawCircle();
     frameCircle();
