@@ -1,0 +1,1 @@
+{"source":"OurAirports","license":"Public domain","url":"https://ourairports.com/data/","built":"2026-11-24","fields":["ident","name","type","lat","lon","elev_ft","city","cc","iata"],"tile":"1_22","rows":[["AQ-0007","Enigma Lake Skiway","S",-74.7164,164.0341,null,"Zucchelli Station","AQ",""],["AT13","Zucchelli Ice Runway","S",-74.6811,164.1276,null,"Zucchelli Station","AQ",""]]}
