@@ -622,7 +622,7 @@ function hookUi() {
   document.getElementById("open-view").addEventListener("click", () => setViewOpen(true));
   document.getElementById("open-grid-results").addEventListener("click", () => setGridResultsOpen(true));
   document.getElementById("close-grid-results").addEventListener("click", () => setGridResultsOpen(false));
-  hookInstall();
+  hookServiceWorker();
   document.getElementById("country").addEventListener("change", syncUsTests);
   document.getElementById("btn-country").addEventListener("click", () => {
     const country = document.getElementById("country").value;
@@ -687,10 +687,7 @@ function hookUi() {
     tuneQuality(state.basemap || "natural");
     if (!phoneLayout()) {
       setGridResultsOpen(false);
-      const help = document.getElementById("install-help");
-      if (help) help.hidden = true;
     } else syncGridResultsButton();
-    syncInstallButton();
   });
   setupLegendScroll();
   for (const button of document.querySelectorAll("[data-layer-toggle]")) {
@@ -1265,52 +1262,13 @@ function syncGridResultsButton() {
   button.hidden = !(phoneLayout() && hasGridResults());
 }
 
-let installPrompt = null;
-
-function appIsInstalled() {
-  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-}
-
-function syncInstallButton() {
-  const button = document.getElementById("install-app");
-  if (!button) return;
-  button.hidden = !phoneLayout() || appIsInstalled();
-}
-
-function hookInstall() {
-  const button = document.getElementById("install-app");
-  const help = document.getElementById("install-help");
-  const close = document.getElementById("install-help-close");
-  if (!button) return;
-  window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault();
-    installPrompt = event;
-    syncInstallButton();
-  });
-  window.addEventListener("appinstalled", () => {
-    installPrompt = null;
-    button.hidden = true;
-    if (help) help.hidden = true;
-  });
-  button.addEventListener("click", async () => {
-    if (!phoneLayout()) return;
-    if (installPrompt) {
-      try {
-        installPrompt.prompt();
-        await installPrompt.userChoice;
-        installPrompt = null;
-        return;
-      } catch (error) {
-        installPrompt = null;
-      }
-    }
-    if (help) help.hidden = false;
-  });
-  if (close && help) close.addEventListener("click", () => { help.hidden = true; });
+// PWA: keep the service worker so the existing manifest still works offline
+// on phones. The INSTALL MOBILE APP button and its help dialog were removed
+// to give the map more vertical room.
+function hookServiceWorker() {
   if (phoneLayout() && "serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }
-  syncInstallButton();
 }
 
 // MENU categories (<details class="layer-group">): each header shows how many

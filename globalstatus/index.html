@@ -19,7 +19,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261124f" />
+  <link rel="stylesheet" href="/cesium.css?v=20261124g" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -46,7 +46,6 @@
       <button type="button" id="open-list">LIST</button>
       <button type="button" id="reset-mobile">RESET MAP</button>
     </div>
-    <button type="button" id="install-app" class="install-app" hidden>INSTALL MOBILE APP</button>
   </header>
 
   <button type="button" id="panel-backdrop" class="panel-backdrop" hidden>Close</button>
@@ -441,14 +440,6 @@
     <div id="grid-results-body" class="grid-results-body"></div>
   </div>
 
-  <div id="install-help" class="install-help" hidden>
-    <div class="install-help-card">
-      <strong>INSTALL MOBILE APP</strong>
-      <p>iPhone: tap Share, then Add to Home Screen.</p>
-      <p>Android: tap the browser menu, then Install app or Add to Home screen.</p>
-      <button type="button" id="install-help-close">CLOSE</button>
-    </div>
-  </div>
 
   <script src="/effects-radius.js"></script>
   <script src="/quakes.js"></script>
@@ -457,6 +448,6 @@
   <script src="/infra.js?v=20261124f"></script>
   <script src="/geocoder.js?v=20261124f"></script>
   <script src="/nearby.js?v=20261124f"></script>
-  <script src="/cesium.js?v=20261124f"></script>
+  <script src="/cesium.js?v=20261124g"></script>
 </body>
 </html>
