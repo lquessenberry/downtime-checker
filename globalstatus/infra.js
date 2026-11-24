@@ -56,6 +56,12 @@
   const mil = { coll: null, countries: {} };
   let lastShown = null;
 
+  // Address-search area check (nearby.js): hidden while loading, then optionally only
+  // the points that pass filters[key] (inside the search circle).
+  const filters = {};
+  function hidden(key) { return Boolean(root.gsProbeHidden && root.gsProbeHidden(key)); }
+  function shown(key) { return st[key].on && !hidden(key); }
+
   function C() { return root.Cesium; }
   function viewer() { return ctx && ctx.viewer ? ctx.viewer() : null; }
 
@@ -111,7 +117,7 @@
   // ---------- notes, counts, credits ----------
   function countText(key) {
     const s = st[key];
-    if (!s.on) return "—";
+    if (!shown(key)) return "—";
     if (s.count == null) return "…";
     if (key === "airports" && air.smallShown && air.smallCount) return `${fmt(s.count)} + ${fmt(air.smallCount)}`;
     return fmt(s.count);
@@ -121,8 +127,8 @@
     const s = st[key];
     const note = document.querySelector(`[data-infra-note="${key}"]`);
     if (note) {
-      note.hidden = !s.on;
-      if (s.on) {
+      note.hidden = !shown(key);
+      if (shown(key)) {
         const bits = [META[key].credit, `<i>${esc(META[key].caption)}</i>`];
         if (s.ready && key === "airports") {
           bits.push(air.smallShown
@@ -144,7 +150,7 @@
   function renderCredit() {
     const line = document.querySelector(".infra-credit");
     if (!line) return;
-    const on = KEYS.filter((key) => st[key].on);
+    const on = KEYS.filter((key) => shown(key));
     line.hidden = !on.length;
     const track = line.querySelector(".infra-credit-track");
     if (track) track.innerHTML = on.map((key) => META[key].credit).join(" · ");
@@ -252,13 +258,15 @@
     if (!st.airports.on || !st.airports.ready || !air.small) return;
     const near = cameraHeight() < SMALL_MAX_HEIGHT;
     air.smallShown = near;
-    air.small.show = near;
+    air.small.show = near && !hidden("airports");
+    cullSoon();
     if (near) {
       try {
         const index = await ensureIndex();
         if (!st.airports.on) return;
         const want = tileKeysInView().filter((key) => index.tiles && index.tiles[key] && !air.tiles.has(key)).slice(0, MAX_TILES);
         await Promise.all(want.map((key) => loadTile(key)));
+        if (want.length) cullSoon(); // new points: horizon and search-circle filter
       } catch (error) {
         st.airports.error = `Small airports: ${error && error.message ? error.message : String(error)}`;
       }
@@ -311,7 +319,7 @@
     const moved = cam.x !== lastCam.x || cam.y !== lastCam.y || cam.z !== lastCam.z || dir.x !== lastCam.dx;
     if (!moved && !cullDirty) return;
     const now = performance.now();
-    if (now - cullAt < 120) return;
+    if (!cullDirty && now - cullAt < 120) return;
     cullAt = now;
     cullDirty = false;
     lastCam.x = cam.x; lastCam.y = cam.y; lastCam.z = cam.z; lastCam.dx = dir.x;
@@ -321,7 +329,8 @@
     for (const coll of colls) {
       for (let i = 0, n = coll.length; i < n; i += 1) {
         const p = coll.get(i);
-        p.show = flat || occluder.isPointVisible(p.position);
+        const f = p.id && filters[p.id.__infra];
+        p.show = (flat || occluder.isPointVisible(p.position)) && (!f || f(p.position));
       }
     }
   }
@@ -399,19 +408,19 @@
     const s = st[key];
     s.on = Boolean(on);
     if (key === "airports") {
-      if (air.major) air.major.show = s.on;
-      if (air.small) air.small.show = s.on && air.smallShown;
+      if (air.major) air.major.show = shown(key);
+      if (air.small) air.small.show = shown(key) && air.smallShown;
     }
-    if (key === "bases" && mil.coll) mil.coll.show = s.on;
+    if (key === "bases" && mil.coll) mil.coll.show = shown(key);
     if (!s.on) hidePopupFor(key);
     if (s.on && !s.ready && !s.loading) {
       s.error = "";
       s.loading = (key === "airports" ? loadAirports() : loadBases())
         .then(() => {
           if (key === "airports") {
-            air.major.show = st.airports.on;
+            air.major.show = shown("airports");
             updateSmall();
-          } else mil.coll.show = st.bases.on;
+          } else mil.coll.show = shown("bases");
           cullSoon();
           if (ctx && ctx.statusLive) ctx.statusLive();
         })
@@ -425,7 +434,7 @@
   }
 
   function statusParts() {
-    return KEYS.filter((key) => st[key].on).map((key) => (st[key].count == null ? META[key].label : `${META[key].label} ${countText(key)}`));
+    return KEYS.filter((key) => shown(key)).map((key) => (st[key].count == null ? META[key].label : `${META[key].label} ${countText(key)}`));
   }
 
   function init(options) {
@@ -442,8 +451,17 @@
     for (const key of KEYS) render(key);
   }
 
+  // fn(cartesian) -> keep this point; null shows every point again.
+  function setFilter(key, fn) {
+    if (fn) filters[key] = fn;
+    else delete filters[key];
+    cullSoon();
+    try { cull(); } catch (error) { /* the next frame retries */ }
+  }
+
   root.GsaInfra = {
     KEYS,
+    setFilter,
     init,
     setActive,
     pick,

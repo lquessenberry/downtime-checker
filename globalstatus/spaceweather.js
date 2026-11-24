@@ -166,12 +166,18 @@
   }
 
   // ---------- notes, counts, credits ----------
+  // On, and not just loading hidden for the address-search area check (nearby.js).
+  function shown(key) {
+    return st[key].on && !(root.gsProbeHidden && root.gsProbeHidden(key));
+  }
+
   function render(key) {
     const s = st[key];
+    const vis = shown(key);
     const note = document.querySelector(`[data-sw-note="${key}"]`);
     if (note) {
-      note.hidden = !s.on;
-      if (s.on) {
+      note.hidden = !vis;
+      if (vis) {
         const bits = [META[key].credit];
         if (META[key].caption) bits.push(`<i>${esc(META[key].caption)}</i>`);
         if (s.updated) bits.push(`Updated ${esc(fmtTime(s.updated))} (${esc(ageText(s.updated))})`);
@@ -182,7 +188,7 @@
         note.innerHTML = bits.join(" · ");
       }
     }
-    if (ctx && ctx.setCount) ctx.setCount(key, s.on ? (s.count == null ? "…" : s.count) : "—");
+    if (ctx && ctx.setCount) ctx.setCount(key, vis ? (s.count == null ? "…" : s.count) : "—");
     renderCredit();
     renderGroupCount();
   }
@@ -190,7 +196,7 @@
   function renderCredit() {
     const line = document.querySelector(".sw-credit");
     if (!line) return;
-    const on = KEYS.filter((key) => st[key].on);
+    const on = KEYS.filter((key) => shown(key));
     line.hidden = !on.length;
     const track = line.querySelector(".sw-credit-track");
     if (track) track.innerHTML = on.map((key) => META[key].credit).join(" · ");
@@ -930,7 +936,7 @@
   }
 
   function statusParts() {
-    return KEYS.filter((key) => st[key].on).map((key) => {
+    return KEYS.filter((key) => shown(key)).map((key) => {
       const s = st[key];
       return s.count == null ? META[key].label : `${META[key].label} ${s.count}`;
     });

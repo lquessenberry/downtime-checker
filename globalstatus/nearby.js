@@ -1,12 +1,17 @@
 /* Global Status · WHAT'S NEARBY (runs after an address search pick, geocoder.js)
  *
- * Draws a radius circle (default 50 miles) around the searched place, switches on
- * every point layer that has at least one pin inside it, and opens a small card to
- * change the radius. CLEAR puts the layers back the way they were.
+ * Draws a radius circle (default 50 miles) around the searched place, loads every
+ * point layer out of sight, switches on only the layers with a pin inside the circle,
+ * and shows just those pins (SHOW ALL on the card shows them worldwide). CLEAR puts
+ * the layers back the way they were. Layers already on before the search are untouched.
  *
- * Reuses the site's own code: setLayer() to switch layers (each layer's normal loader
- * fetches its data), each layer's Cesium data source (sourceFor) or the infrastructure
- * point collections for positions, and a Cesium EllipseGraphics for the circle.
+ * Reuses the site's own code: setLayer() (each layer's normal loader fetches its data),
+ * state.probeHidden in cesium.js (loading with the switch still OFF and nothing drawn),
+ * each layer's Cesium data source (sourceFor) and EntityCollection.collectionChanged to
+ * catch pins a feed redraws, Entity.show through the horizon cull's _gsHide flag,
+ * GsaInfra.setFilter for the airport/base point primitives, and Cesium EllipseGraphics
+ * for the circle. (DistanceDisplayCondition was considered; it is camera distance, not
+ * distance from a place, so it cannot do this.)
  */
 (function (root) {
   const MILE = 1609.344;
@@ -23,7 +28,7 @@
   const MAX_WAIT_MS = 14000;
   const QUIET_MS = 2500;
 
-  const run = { place: null, miles: DEFAULT_MILES, autoOn: new Set(), probing: new Set(), counts: {}, token: 0, checking: false, startedAt: 0, ms: 0 };
+  const run = { place: null, miles: DEFAULT_MILES, autoOn: new Set(), probing: new Set(), showAll: false, mode: {}, hooked: new Set(), counts: {}, token: 0, checking: false, startedAt: 0, ms: 0 };
   let circleSource = null;
 
   const $ = (id) => document.getElementById(id);
@@ -55,40 +60,105 @@
     return inside;
   }
 
+  // Is this entity (pin, area or line) inside the circle? null = no geometry to judge.
+  function entityInside(e, lat, lon, radiusKm, now) {
+    if (e.position) {
+      const p = toLatLon(e.position.getValue(now));
+      return p ? km(lat, lon, p.lat, p.lon) <= radiusKm : null;
+    }
+    const h = e.polygon && e.polygon.hierarchy && e.polygon.hierarchy.getValue(now);
+    if (h && h.positions && h.positions.length) {
+      const ring = h.positions.map(toLatLon).filter(Boolean);
+      return insidePolygon(lat, lon, ring) || ring.some((p) => km(lat, lon, p.lat, p.lon) <= radiusKm);
+    }
+    const line = e.polyline && e.polyline.positions && e.polyline.positions.getValue(now);
+    if (line && line.length) return line.map(toLatLon).filter(Boolean).some((p) => km(lat, lon, p.lat, p.lon) <= radiusKm);
+    return null;
+  }
+
+  function infraCollections(key) {
+    const out = [];
+    const prims = viewer() ? viewer().scene.primitives : null;
+    if (!prims || (key !== "airports" && key !== "bases")) return out;
+    for (let i = 0; i < prims.length; i += 1) {
+      const coll = prims.get(i);
+      if (!(coll instanceof Cesium.PointPrimitiveCollection) || !coll.length) continue;
+      const first = coll.get(0);
+      if (first && first.id && first.id.__infra === key) out.push(coll);
+    }
+    return out;
+  }
+
   // Number of a layer's pins (or areas) inside the circle, from data already on the page.
   function countWithin(key, lat, lon, radiusKm) {
     let n = 0;
     const now = Cesium.JulianDate.now();
     const src = typeof sourceFor === "function" ? sourceFor(key) : null;
-    if (src) {
-      for (const e of src.entities.values) {
-        if (e.position) {
-          const p = toLatLon(e.position.getValue(now));
-          if (p && km(lat, lon, p.lat, p.lon) <= radiusKm) n += 1;
-          continue;
-        }
-        const h = e.polygon && e.polygon.hierarchy && e.polygon.hierarchy.getValue(now);
-        if (h && h.positions && h.positions.length) {
-          const ring = h.positions.map(toLatLon).filter(Boolean);
-          if (insidePolygon(lat, lon, ring) || ring.some((p) => km(lat, lon, p.lat, p.lon) <= radiusKm)) n += 1;
-        }
-      }
-    }
+    if (src) for (const e of src.entities.values) if (entityInside(e, lat, lon, radiusKm, now)) n += 1;
     // Airports and military bases are point primitives (infra.js), not entities.
-    const prims = viewer() ? viewer().scene.primitives : null;
-    if (prims && (key === "airports" || key === "bases")) {
-      for (let i = 0; i < prims.length; i += 1) {
-        const coll = prims.get(i);
-        if (!(coll instanceof Cesium.PointPrimitiveCollection) || !coll.length) continue;
-        const first = coll.get(0);
-        if (!first || !first.id || first.id.__infra !== key) continue;
-        for (let j = 0; j < coll.length; j += 1) {
-          const p = toLatLon(coll.get(j).position);
-          if (p && km(lat, lon, p.lat, p.lon) <= radiusKm) n += 1;
-        }
+    for (const coll of infraCollections(key)) {
+      for (let j = 0; j < coll.length; j += 1) {
+        const p = toLatLon(coll.get(j).position);
+        if (p && km(lat, lon, p.lat, p.lon) <= radiusKm) n += 1;
       }
     }
     return n;
+  }
+
+  // ---------- which pins a layer draws ----------
+  // mode: "none" (loading for the check), "circle" (only inside), undefined (all).
+  function hideEntity(e, hide) {
+    if (hide) {
+      e._gsHide = true;
+      e.show = false;
+    } else if (e._gsHide) {
+      e._gsHide = false;
+      e.show = true; // the horizon cull re-hides far-side pins on the next frame
+    }
+  }
+
+  function entityHidden(key, e, now) {
+    const mode = run.mode[key];
+    if (mode === "none") return true;
+    if (mode !== "circle" || !run.place) return false;
+    return entityInside(e, run.place.lat, run.place.lon, run.miles * MILE / 1000, now) === false;
+  }
+
+  function setMode(key, mode) {
+    if (mode) run.mode[key] = mode;
+    else delete run.mode[key];
+    const src = typeof sourceFor === "function" ? sourceFor(key) : null;
+    if (src) {
+      if (!run.hooked.has(key)) {
+        // Feeds redraw their pins on every poll; judge each new pin as it arrives.
+        run.hooked.add(key);
+        src.entities.collectionChanged.addEventListener((coll, added) => {
+          if (!run.mode[key] || !added.length) return;
+          const now = Cesium.JulianDate.now();
+          for (const e of added) hideEntity(e, entityHidden(key, e, now));
+        });
+      }
+      const now = Cesium.JulianDate.now();
+      for (const e of src.entities.values) hideEntity(e, entityHidden(key, e, now));
+    }
+    if ((key === "airports" || key === "bases") && root.GsaInfra && root.GsaInfra.setFilter) {
+      if (mode === "none") root.GsaInfra.setFilter(key, () => false);
+      else if (mode === "circle" && run.place) {
+        // Same great-circle test as the count, so the pins shown match the numbers.
+        const { lat, lon } = run.place;
+        const rk = run.miles * MILE / 1000;
+        const scratch = new Cesium.Cartographic();
+        root.GsaInfra.setFilter(key, (pos) => {
+          const c = Cesium.Cartographic.fromCartesian(pos, Cesium.Ellipsoid.WGS84, scratch);
+          return Boolean(c) && km(lat, lon, Cesium.Math.toDegrees(c.latitude), Cesium.Math.toDegrees(c.longitude)) <= rk;
+        });
+      } else root.GsaInfra.setFilter(key, null);
+    }
+  }
+
+  // Card-enabled layers: circle only, or everything when SHOW ALL is on.
+  function refreshModes() {
+    for (const k of run.autoOn) setMode(k, run.showAll ? null : "circle");
   }
 
   function settled(key, since) {
@@ -168,6 +238,7 @@
         ${RADII.map((m) => `<button type="button" class="chip" data-nearby-miles="${m}" aria-pressed="false">${m}</button>`).join("")}<span>MI</span>
       </div>
       <p class="nearby-status" id="nearby-status"></p>
+      <button type="button" id="nearby-all" class="nearby-all" aria-pressed="false">SHOW ALL PINS</button>
       <ul class="nearby-list" id="nearby-list"></ul>
       <button type="button" id="nearby-clear" class="nearby-clear">CLEAR SEARCH &amp; LAYERS</button>`;
     const stage = document.querySelector(".stage") || document.body;
@@ -181,6 +252,11 @@
         setLayer(key, !state.layers[key]);
         renderCard();
       }
+    });
+    $("nearby-all").addEventListener("click", () => {
+      run.showAll = !run.showAll;
+      refreshModes();
+      renderCard();
     });
     $("nearby-clear").addEventListener("click", () => {
       if (root.GsaSearch) root.GsaSearch.clear(); // also clears this card via onCleared
@@ -211,6 +287,11 @@
     if (run.checking) status.textContent = `Checking ${CANDIDATES.length} map layers…`;
     else if (!found.length) status.textContent = "No pins from any layer inside this circle. Try a bigger radius.";
     else status.textContent = `${found.length} layer${found.length === 1 ? "" : "s"} with pins inside · checked in ${(run.ms / 1000).toFixed(1)} s`;
+    const all = $("nearby-all");
+    all.hidden = run.checking || !run.autoOn.size;
+    all.textContent = run.showAll ? "SHOW ONLY INSIDE CIRCLE" : "SHOW ALL PINS";
+    all.classList.toggle("on", run.showAll);
+    all.setAttribute("aria-pressed", run.showAll ? "true" : "false");
     $("nearby-list").innerHTML = found.map((k) => `<li><button type="button" data-nearby-layer="${k}" class="${state.layers[k] ? "on" : ""}" aria-pressed="${state.layers[k] ? "true" : "false"}"><span>${esc(label(k))}</span><em>${run.counts[k].toLocaleString("en-US")}</em></button></li>`).join("");
   }
 
@@ -221,18 +302,26 @@
     for (const k of CANDIDATES) run.counts[k] = countWithin(k, run.place.lat, run.place.lon, rk);
   }
 
-  // Turn on layers with pins inside; turn off ones we turned on that now have none.
+  function enableAuto(k) {
+    run.autoOn.add(k);
+    setMode(k, run.showAll ? null : "circle");
+    setLayer(k, true);
+  }
+
+  function disableAuto(k) {
+    run.autoOn.delete(k);
+    setLayer(k, false);
+    setMode(k, null);
+  }
+
+  // Radius changed: layers with pins inside come on, card layers with none go off.
   function applyCounts() {
     for (const k of CANDIDATES) {
       const hit = run.counts[k] > 0;
-      if (hit && !state.layers[k]) {
-        setLayer(k, true);
-        run.autoOn.add(k);
-      } else if (!hit && run.autoOn.has(k)) {
-        setLayer(k, false);
-        run.autoOn.delete(k);
-      }
+      if (hit && !state.layers[k]) enableAuto(k);
+      else if (!hit && run.autoOn.has(k)) disableAuto(k);
     }
+    refreshModes();
   }
 
   async function check() {
@@ -240,10 +329,15 @@
     run.checking = true;
     run.startedAt = Date.now();
     renderCard();
-    // Load every candidate layer that is off through its normal switch.
+    // Load every candidate layer that is off through its normal switch, out of sight:
+    // the switch stays OFF (state.probeHidden) and no pin is drawn (mode "none").
     const probing = CANDIDATES.filter((k) => !state.layers[k]);
     run.probing = new Set(probing);
-    for (const k of probing) setLayer(k, true);
+    for (const k of probing) {
+      state.probeHidden.add(k);
+      setMode(k, "none");
+      setLayer(k, true);
+    }
     const since = run.startedAt;
     let last = "";
     let quietSince = Date.now();
@@ -261,21 +355,34 @@
     }
     if (token !== run.token) return;
     recount();
-    // Probe layers without pins inside go back off; the rest stay on.
+    // Layers with pins inside appear (inside pins only); the rest go back off unseen.
     for (const k of probing) {
-      if (run.counts[k] > 0) run.autoOn.add(k);
-      else setLayer(k, false);
+      if (run.counts[k] > 0) {
+        state.probeHidden.delete(k);
+        enableAuto(k);
+      } else {
+        setLayer(k, false);
+        state.probeHidden.delete(k);
+        setMode(k, null);
+      }
     }
     run.probing.clear();
     run.checking = false;
     run.ms = Date.now() - since;
     renderCard();
+    // Pins that finish drawing just after the check get the same circle filter.
+    setTimeout(() => { if (token === run.token) refreshModes(); }, 1500);
   }
 
-  // Switch off every layer this card turned on (kept or still being checked).
+  // Switch off every layer this card turned on (kept or still being checked) and give
+  // every layer back its full worldwide display.
   function undoAuto() {
     if (typeof setLayer !== "function") return;
-    for (const k of new Set([...run.autoOn, ...run.probing])) setLayer(k, false);
+    for (const k of new Set([...run.autoOn, ...run.probing])) {
+      setLayer(k, false);
+      state.probeHidden.delete(k);
+      setMode(k, null);
+    }
     run.autoOn.clear();
     run.probing.clear();
   }
@@ -285,6 +392,7 @@
     // A new search: layers this card turned on for the last place go back off first.
     run.token += 1;
     undoAuto();
+    run.showAll = false;
     run.place = { name: place.name, lat: place.lat, lon: place.lon };
     run.counts = {};
     drawCircle();
@@ -308,15 +416,36 @@
     const restore = !opts || opts.restore !== false;
     run.token += 1;
     if (restore) undoAuto();
+    else {
+      for (const k of new Set([...run.autoOn, ...run.probing])) {
+        state.probeHidden.delete(k);
+        setMode(k, null);
+      }
+    }
     run.autoOn.clear();
     run.probing.clear();
     run.place = null;
     run.checking = false;
+    run.showAll = false;
     run.counts = {};
     if (circleSource) circleSource.entities.removeAll();
     const el = $("nearby-card");
     if (el) el.hidden = true;
   }
+
+  // A layer switched from the MENU or the dot row belongs to the user again: full
+  // worldwide display, and CLEAR leaves it alone. (Capture phase: runs before the
+  // site's own toggle handler; the card's own list is not affected.)
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest && ev.target.closest("[data-layer-toggle]");
+    if (!b || b.closest("#nearby-card")) return;
+    const k = b.dataset.layerToggle;
+    if (run.autoOn.has(k)) {
+      run.autoOn.delete(k);
+      setMode(k, null);
+      if (run.place) setTimeout(renderCard, 0);
+    }
+  }, true);
 
   root.GsaNearby = {
     start,

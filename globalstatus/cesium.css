@@ -1414,12 +1414,56 @@ button:hover { border-color: #9fd4e2; }
   right: auto;
   z-index: 4;
 }
-/* Desktop: the heading and traffic filters sit under the search box. */
+/* Desktop: the heading and traffic filters sit under the search box and its
+   MY AREA / EXACT row. */
 @media (min-width: 801px) {
-  .stage-stack { top: 56px; }
+  .stage-stack { top: 96px; }
 }
-.cesium-viewer-toolbar > :not(.cesium-viewer-geocoderContainer) { display: none; }
-.cesium-viewer-geocoderContainer { margin: 0; }
+.cesium-viewer-toolbar > :not(.cesium-viewer-geocoderContainer):not(.gsa-locate) { display: none; }
+/* MY AREA (approx.) and EXACT location buttons (geocoder.js): a row under the search box. */
+.gsa-locate {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+.gsa-locate button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 10px;
+  font: 600 11px var(--font);
+  letter-spacing: 0.06em;
+  color: #9fd4e2;
+  background: rgba(8, 14, 20, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.gsa-locate button svg { flex: none; }
+.gsa-locate button b { font-weight: 600; }
+.gsa-locate button:hover { border-color: #9fd4e2; }
+.gsa-locate button:disabled { opacity: 0.55; cursor: progress; }
+.gsa-locate-note {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  width: max-content;
+  max-width: 300px;
+  margin: 0;
+  padding: 6px 8px;
+  font: 12px/1.35 var(--font);
+  white-space: normal;
+  color: var(--text);
+  background: rgba(8, 14, 20, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.cesium-viewer-geocoderContainer { margin: 0; position: relative; z-index: 2; } /* suggestions above the locate row */
+.cesium-viewer-toolbar .gsa-locate { z-index: 1; }
 .cesium-viewer-geocoderContainer .cesium-geocoder-input,
 .cesium-viewer-geocoderContainer:hover .cesium-geocoder-input,
 .cesium-viewer-geocoderContainer .cesium-geocoder-input:focus,
@@ -1499,6 +1543,13 @@ button:hover { border-color: #9fd4e2; }
   .cesium-geocoder-input-wide + .cesium-geocoder-searchButton { pointer-events: auto; }
   .cesium-viewer-geocoderContainer .search-results { max-height: min(260px, 40dvh); }
   .cesium-viewer-geocoderContainer .search-results ul li { padding: 11px 10px; font-size: 14px; }
+  /* Locate buttons: icons stacked under the search button; hidden while typing. */
+  .gsa-locate { top: 46px; left: auto; right: 0; flex-direction: column; }
+  .gsa-locate button { width: 40px; height: 40px; padding: 0; justify-content: center; }
+  .gsa-locate button svg { width: 18px; height: 18px; }
+  .gsa-locate button b { display: none; }
+  .cesium-viewer-geocoderContainer:focus-within ~ .gsa-locate { display: none; }
+  .gsa-locate-note { top: 0; left: auto; right: 46px; max-width: min(240px, calc(100vw - 72px)); }
 }
 
 /* WHAT'S NEARBY card (nearby.js): opens after an address search pick. */
@@ -1542,12 +1593,20 @@ button:hover { border-color: #9fd4e2; }
 .nearby-list button.on { opacity: 1; border-color: #9fd4e2; }
 .nearby-list em { font-style: normal; color: #ffcf73; }
 .nearby-clear { min-height: 36px; font-size: 12px; }
+.nearby-all { min-height: 32px; font-size: 11px; }
+.nearby-all.on { border-color: #ffb020; color: #ffcf73; }
 .nearby-card.is-min .nearby-radius,
 .nearby-card.is-min .nearby-status,
 .nearby-card.is-min .nearby-list,
+.nearby-card.is-min .nearby-all,
 .nearby-card.is-min .nearby-clear { display: none; }
 /* The nuke simulator panel owns the top right on desktop; sit below the search box instead. */
-.stage:has(#effects-hud:not([hidden])) .nearby-card { right: auto; left: 12px; top: 56px; }
+.stage:has(#effects-hud:not([hidden])) .nearby-card { right: auto; left: 12px; top: 96px; }
+/* Nuke panel open: the locate buttons shrink to icons (desktop) or step aside (phones). */
+.stage:has(#effects-hud:not([hidden])) .gsa-locate b { display: none; }
+@media (max-width: 800px) {
+  .stage:has(#effects-hud:not([hidden])) .gsa-locate { display: none; }
+}
 /* Stop above the VIEW panel when it is open. */
 @media (min-width: 801px) {
   .stage:has(.view-settings:not(.is-closed)) .nearby-card { max-height: calc(100% - 300px); min-height: 200px; }
@@ -1565,5 +1624,5 @@ button:hover { border-color: #9fd4e2; }
   }
   .nearby-radius .chip { min-height: 40px; font-size: 14px; }
   .nearby-list button { min-height: 40px; font-size: 13px; }
-  .nearby-min, .nearby-clear { min-height: 40px; }
+  .nearby-min, .nearby-clear, .nearby-all { min-height: 40px; }
 }

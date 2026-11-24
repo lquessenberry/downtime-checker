@@ -1316,6 +1316,14 @@ function hookInstall() {
 // MENU categories (<details class="layer-group">): each header shows how many
 // of its own layers are switched on, e.g. "2 ON". Groups stay as the user
 // left them (all start collapsed); only the count changes.
+// nearby.js loads layers for an area check with nothing drawn and the switch still
+// showing OFF: their keys sit in probeHidden until the check decides.
+state.probeHidden = new Set();
+function layerShown(key) {
+  return Boolean(state.layers[key]) && !state.probeHidden.has(key);
+}
+window.gsProbeHidden = (key) => state.probeHidden.has(key);
+
 function syncLayerGroups() {
   for (const group of document.querySelectorAll(".rail .layer-group")) {
     const el = group.querySelector(".layer-group-count");
@@ -1335,13 +1343,13 @@ function setLayer(layer, on) {
   if (layer === "outages" && !state.layers.outages) hideOutageCard();
   if (layer === "hunger" && !state.layers.hunger) hideHungerCard();
   for (const button of document.querySelectorAll(`[data-layer-toggle="${layer}"]`)) {
-    button.classList.toggle("on", state.layers[layer]);
-    button.setAttribute("aria-pressed", state.layers[layer] ? "true" : "false");
+    button.classList.toggle("on", layerShown(layer));
+    button.setAttribute("aria-pressed", layerShown(layer) ? "true" : "false");
   }
   syncLayerGroups();
   const host = document.getElementById("cesium");
   if (host) {
-    host.dataset.visibleLayers = Object.keys(state.layers).filter((key) => state.layers[key]).join(" ");
+    host.dataset.visibleLayers = Object.keys(state.layers).filter((key) => layerShown(key)).join(" ");
   }
   if (layer === "aircraft" || layer === "ships") {
     if (state.layers.aircraft && state.layers.ships && state.layers[layer]) {
@@ -1355,7 +1363,7 @@ function setLayer(layer, on) {
   }
   if (layer === "jamming") {
     const jamCreditLine = document.querySelector(".jam-credit");
-    if (jamCreditLine) jamCreditLine.hidden = !state.layers.jamming;
+    if (jamCreditLine) jamCreditLine.hidden = !layerShown("jamming");
     if (state.layers.jamming && !(state.live.jamming.points || []).length) {
       pollJamming().catch((error) => statusLive(error.message || String(error)));
     }
@@ -1461,8 +1469,8 @@ function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
   const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases"];
-  const on = order.filter((key) => state.layers[key]);
-  if (just && state.layers[just]) {
+  const on = order.filter((key) => layerShown(key));
+  if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
     on.length = 0;
     on.push(just, ...rest);
@@ -1477,8 +1485,8 @@ function syncMobilePick(just) {
 }
 
 function syncTrafficBars() {
-  const airOn = Boolean(state.layers.aircraft);
-  const shipOn = Boolean(state.layers.ships);
+  const airOn = layerShown("aircraft");
+  const shipOn = layerShown("ships");
   const pane = state.trafficPane === "ships" ? "ships" : "air";
   const switcher = document.querySelector(".traffic-switch");
   if (switcher) switcher.hidden = !(airOn && shipOn);
@@ -1491,7 +1499,7 @@ function syncTrafficBars() {
   const airCreditLine = document.querySelector(".air-credit");
   if (airCreditLine) airCreditLine.hidden = !airOn;
   const jamCreditLine = document.querySelector(".jam-credit");
-  if (jamCreditLine) jamCreditLine.hidden = !state.layers.jamming;
+  if (jamCreditLine) jamCreditLine.hidden = !layerShown("jamming");
   for (const button of document.querySelectorAll("[data-traffic-pane]")) {
     const on = button.dataset.trafficPane === pane;
     button.classList.toggle("on", on);
@@ -2993,7 +3001,7 @@ function cullAircraftHorizon() {
     for (const source of sources) {
       if (!source) continue;
       const entities = source.entities.values;
-      for (let i = 0; i < entities.length; i += 1) entities[i].show = true;
+      for (let i = 0; i < entities.length; i += 1) entities[i].show = !entities[i]._gsHide;
     }
     return;
   }
@@ -3007,7 +3015,8 @@ function cullAircraftHorizon() {
     for (let i = 0; i < entities.length; i += 1) {
       const entity = entities[i];
       const position = entity.position && entity.position.getValue(time);
-      entity.show = Boolean(position) && occluder.isPointVisible(position);
+      // _gsHide: nearby.js keeps this pin hidden (outside the search circle, or mid-check).
+      entity.show = !entity._gsHide && Boolean(position) && occluder.isPointVisible(position);
     }
   }
 }
