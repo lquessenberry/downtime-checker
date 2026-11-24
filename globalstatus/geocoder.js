@@ -25,6 +25,15 @@
   const MAX_RESULTS = 5;
   const MAX_POIS = 2;
   const SETTLE_MS = 350; // type-ahead waits until the text stops changing this long
+  // MY AREA (approx.): free, no-key, HTTPS + CORS IP lookups, tried in order. ipwho.is is
+  // the lookup the repo already uses (downtime.py, visualizer); its free tier is 1,000
+  // requests a day per caller, commercial use allowed. GeoJS (MaxMind GeoLite data) has
+  // no rate limit and is the fallback. Each call runs from the visitor's own browser.
+  const IP_SERVICES = [
+    { name: "ipwho.is", url: "https://ipwho.is/", parse: (d) => (d && d.success !== false ? d : null) },
+    { name: "GeoJS", url: "https://get.geojs.io/v1/ip/geo.json", parse: (d) => d },
+  ];
+  const LOCATE_TIMEOUT_MS = 8000;
   // ---------------------------------------------------------------------------
 
   const GEOCODE_URL = "https://api.mapbox.com/search/geocode/v6/forward";
@@ -49,6 +58,8 @@
   let viewerRef = null;
   let pinSource = null;
   let pinImage = null;
+  let locateSeq = 0;
+  let noteTimer = 0;
 
   const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
   const lang = () => {
@@ -267,12 +278,120 @@
     }
   }
 
+  // ---------- MY AREA / MY EXACT LOCATION ----------
+  // Same path as a picked search result: pin, search box text, nearby radius card.
+  function goTo(info) {
+    lastPicked = info.name;
+    if (viewerRef && viewerRef.geocoder) viewerRef.geocoder.viewModel.searchText = info.name;
+    dropPin(info);
+    if (root.GsaNearby) root.GsaNearby.start(info);
+    else if (viewerRef) viewerRef.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(info.lon, info.lat, 60000) });
+  }
+
+  function note(text, ms) {
+    const el = document.getElementById("gsa-locate-note");
+    if (!el) return;
+    clearTimeout(noteTimer);
+    el.textContent = text || "";
+    el.hidden = !text;
+    if (text && ms) noteTimer = setTimeout(() => { el.hidden = true; }, ms);
+  }
+
+  function busy(on) {
+    for (const b of document.querySelectorAll("[data-gsa-locate]")) {
+      b.disabled = on;
+      b.setAttribute("aria-busy", on ? "true" : "false");
+    }
+  }
+
+  async function ipLocate() {
+    for (const svc of IP_SERVICES) {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), LOCATE_TIMEOUT_MS);
+      try {
+        const res = await fetch(svc.url, { signal: ctl.signal, cache: "no-store", credentials: "omit" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = svc.parse(await res.json());
+        const lat = Number(d && d.latitude);
+        const lon = Number(d && d.longitude);
+        if (!d || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) throw new Error("no location");
+        const where = [d.city, d.region, d.country].filter(Boolean).join(", ") || `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+        return { name: `≈ ${where}`, lat, lon, approx: true, service: svc.name };
+      } catch (err) {
+        stats.locateErrors = (stats.locateErrors || 0) + 1;
+      } finally {
+        clearTimeout(t);
+      }
+    }
+    return null;
+  }
+
+  async function locateApprox(prefix) {
+    const seq = ++locateSeq;
+    busy(true);
+    note(`${prefix || ""}Finding your approximate area…`);
+    const info = await ipLocate();
+    if (seq !== locateSeq) return null;
+    busy(false);
+    if (!info) {
+      note(`${prefix || ""}Could not find your area. Search an address instead.`, 8000);
+      return null;
+    }
+    goTo(info);
+    note(`${prefix || ""}Approximate (city-level) area from your internet address, via ${info.service}.`, 15000);
+    return info;
+  }
+
+  function locateExact() {
+    const seq = ++locateSeq;
+    const geo = root.navigator && root.navigator.geolocation;
+    if (!geo || !root.isSecureContext) return locateApprox("Exact location is not available here. ");
+    busy(true);
+    note("Waiting for location permission…");
+    return new Promise((resolve) => {
+      geo.getCurrentPosition((pos) => {
+        if (seq !== locateSeq) return resolve(null);
+        busy(false);
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const acc = Math.round(pos.coords.accuracy || 0);
+        const info = { name: "My location", lat, lon, approx: false, accuracy: acc };
+        goTo(info);
+        note(acc ? `Your device location, accurate to about ${acc >= 1000 ? `${(acc / 1609.344).toFixed(1)} mi` : `${acc} m`}.` : "Your device location.", 7000);
+        resolve(info);
+      }, (err) => {
+        if (seq !== locateSeq) return resolve(null);
+        const why = err && err.code === 1 ? "Location permission denied" : "Exact location unavailable";
+        resolve(locateApprox(`${why}; showing your approximate area instead. `));
+      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+    });
+  }
+
+  function addLocateButtons(viewer) {
+    const toolbar = viewer.container.querySelector(".cesium-viewer-toolbar");
+    if (!toolbar || toolbar.querySelector(".gsa-locate")) return;
+    const box = document.createElement("div");
+    box.className = "gsa-locate";
+    box.innerHTML = `
+      <button type="button" data-gsa-locate="approx" title="Show my approximate area (city-level, from my internet address)" aria-label="Show my approximate area, city-level"><svg aria-hidden="true" viewBox="0 0 16 16" width="15" height="15"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.2 1.8"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg><b>MY AREA (APPROX)</b></button>
+      <button type="button" data-gsa-locate="exact" title="Use my exact location (asks permission)" aria-label="Use my exact location"><svg aria-hidden="true" viewBox="0 0 16 16" width="15" height="15"><circle cx="8" cy="8" r="4.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 0.5v3M8 12.5v3M0.5 8h3M12.5 8h3" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/></svg><b>MY EXACT LOCATION</b></button>
+      <p id="gsa-locate-note" class="gsa-locate-note" role="status" hidden></p>`;
+    toolbar.appendChild(box);
+    box.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-gsa-locate]");
+      if (!b || b.disabled) return;
+      if (b.dataset.gsaLocate === "exact") locateExact();
+      else locateApprox();
+    });
+  }
+
   root.GsaSearch = {
     enabled: () => Boolean(MAPBOX_TOKEN),
     // Viewer option value: false (no search) or the service list.
     viewerOption: () => (MAPBOX_TOKEN ? [new MapboxGeocoderService()] : false),
     attach(viewer) {
       viewerRef = viewer;
+      addLocateButtons(viewer);
       if (!viewer.geocoder) return;
       const vm = viewer.geocoder.viewModel;
       vm.destinationFound = destinationFound;
@@ -292,12 +411,18 @@
       });
     },
     clear() {
+      locateSeq += 1;
+      busy(false);
+      note("");
       lastPicked = "";
       clearPin();
       if (root.GsaNearby) root.GsaNearby.clear();
       if (viewerRef && viewerRef.geocoder) viewerRef.geocoder.viewModel.searchText = "";
     },
     stats: () => ({ ...stats }),
+    locateApprox,
+    locateExact,
+    IP_SERVICES: IP_SERVICES.map((s) => s.name),
     _parseLatLon: parseLatLon,
   };
 })(window);
