@@ -1346,6 +1346,9 @@ function setLayer(layer, on) {
   if (SPACE_KEYS.includes(layer) && window.GsaSpaceWeather) {
     window.GsaSpaceWeather.setActive(layer, state.layers[layer]);
   }
+  if ((layer === "quakes" || layer === "sats") && window.GsaSpaceWeather && window.GsaSpaceWeather.renderGroupCount) {
+    window.GsaSpaceWeather.renderGroupCount();
+  }
   if ((layer === "quakes" || layer === "sats" || SPACE_KEYS.includes(layer)) && !state.layers[layer]) {
     const selected = state.viewer && state.viewer.selectedEntity;
     if (selected && selected._live && selected._live.layer === layer) {
@@ -1407,7 +1410,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "quakes", "daynight", "sats", ...SPACE_KEYS];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "aurora", "hurricanes", "wildfires"];
   const on = order.filter((key) => state.layers[key]);
   if (just && state.layers[just]) {
     const rest = on.filter((key) => key !== just);
