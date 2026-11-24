@@ -1,0 +1,1 @@
+{"source":"OurAirports","license":"Public domain","url":"https://ourairports.com/data/","built":"2026-11-24","fields":["ident","name","type","lat","lon","elev_ft","city","cc","iata"],"tile":"7_21","rows":[["JP-0001","JMSDF Chichijima Airfield","W",27.0902,142.192,null,"Ogasawara","JP",""],["TT01","Pagan Airstrip","S",18.1232,145.7633,34,"Shomu-Shon, Pagan","MP",""]]}

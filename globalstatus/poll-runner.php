@@ -1,13 +1,31 @@
 <?php
-// One synthetic user (#34). Polls upstream, writes cache, visitors read /api.
+// Scheduled jobs. Run from cPanel cron, never from the web:
 //
+//   /usr/local/bin/php -q /home/<user>/public_html/globalstatus.app/poll-runner.php grid
+//   /usr/local/bin/php -q /home/<user>/public_html/globalstatus.app/poll-runner.php aircraft
 //   php poll-runner.php status
-//   php poll-runner.php outages|mesh|disease|animal|mil|jamming|aircraft|grid
-//   php poll-runner.php once
-//   php poll-runner.php loop
-//   php poll-runner.php grid --slice=16
+//   php poll-runner.php jamming [--force-jam]
+//   php poll-runner.php space [--force-space] [--only=nws,hurricanes,wildfires,tsunami,rivers,coastal]
+//   php poll-runner.php grid --slice=40     (test: first 40 sites only, never published)
 //
-// 3 minutes is the max for AIR/JAM. Grid is ~15 minutes.
+// World Grid: one full pass is saved to data/scan-cache.json. Visitors'
+// LOCK & SCAN replays that file; it never starts a scan.
+// Aircraft: one civilian adsb.lol pull each run, plus /v2/mil only when
+// the last mil pull is at least 15 minutes old. Visitors read the cache.
+// Jamming: the same */5 aircraft cron also refreshes GPSInterference.com
+// when the last pull is at least 15 minutes old. No third cron is needed.
+// Space & Weather: the same */5 aircraft cron also refreshes NWS alerts
+// (every run), NHC storms (15 min), NASA FIRMS fires (3 h), tsunami.gov
+// alerts (every run), NWPS river gauges (15 min) and CO-OPS coastal water
+// levels (15 min). Each feed is
+// time-gated in poll-lib.php (gsa_space_refresh). Still no new cron.
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "Not found\n";
+    exit;
+}
 
 define('GSA_RUNNER', true);
 
@@ -18,165 +36,159 @@ $argv = $_SERVER['argv'] ?? array('poll-runner.php');
 array_shift($argv);
 $job = $argv ? array_shift($argv) : 'status';
 $slice = 0;
+$forceMil = false;
+$skipMil = false;
+$forceJam = false;
+$skipJam = false;
+$skipAircraft = false;
+$forceSpace = false;
+$skipSpace = false;
+$onlySpace = array();
 foreach ($argv as $arg) {
     if (strpos($arg, '--slice=') === 0) {
         $slice = (int) substr($arg, 8);
+    } elseif ($arg === '--force-mil') {
+        $forceMil = true;
+    } elseif ($arg === '--skip-mil') {
+        $skipMil = true;
+    } elseif ($arg === '--force-jam') {
+        $forceJam = true;
+    } elseif ($arg === '--skip-jam') {
+        $skipJam = true;
+    } elseif ($arg === '--force-space') {
+        $forceSpace = true;
+    } elseif ($arg === '--skip-space') {
+        $skipSpace = true;
+    } elseif (strpos($arg, '--only=') === 0) {
+        $onlySpace = array_filter(explode(',', substr($arg, 7)));
+    } elseif ($arg === '--mock-space-fail') {
+        $GLOBALS['GSA_SPACE_MOCK_FAIL'] = true;
+    } elseif (strpos($arg, '--mock-nhc=') === 0) {
+        $GLOBALS['GSA_SPACE_MOCK_NHC'] = substr($arg, 11);
+    } elseif (strpos($arg, '--mock-tsunami=') === 0) {
+        $GLOBALS['GSA_SPACE_MOCK_TSUNAMI'] = substr($arg, 15);
+    } elseif (strpos($arg, '--mock-coops=') === 0) {
+        $GLOBALS['GSA_SPACE_MOCK_COOPS'] = substr($arg, 13);
+    } elseif ($arg === '--skip-aircraft') {
+        $skipAircraft = true;
+    } elseif (strpos($arg, '--mock=') === 0) {
+        $GLOBALS['GSA_ADSB_MOCK'] = substr($arg, 7);
+    } elseif (strpos($arg, '--mock-jam=') === 0) {
+        $GLOBALS['GSA_JAM_MOCK'] = substr($arg, 11);
     }
-}
-
-$ttls = array(
-    'jamming' => 180,
-    'aircraft' => 180,
-    'outages' => 180,
-    'mil' => 180,
-    'mesh' => 90,
-    'disease' => 180,
-    'animal' => 600,
-    'grid' => 900,
-);
-
-function runner_timed($name, $fn)
-{
-    $t0 = microtime(true);
-    try {
-        $info = $fn();
-        if (!is_array($info)) {
-            $info = array('ok' => true);
-        }
-        $info['ms'] = (int) round((microtime(true) - $t0) * 1000);
-        $info['error'] = $info['error'] ?? null;
-        gsa_poll_status_note($name, $info);
-        return $info;
-    } catch (Throwable $e) {
-        $info = array(
-            'ok' => false,
-            'error' => $e->getMessage(),
-            'ms' => (int) round((microtime(true) - $t0) * 1000),
-        );
-        gsa_poll_status_note($name, $info);
-        return $info;
-    }
-}
-
-function runner_run($name, $slice = 0)
-{
-    if ($name === 'status') {
-        return gsa_poll_status_read();
-    }
-    if ($name === 'outages') {
-        return runner_timed('outages', function () {
-            $snap = outages_snapshot();
-            return array(
-                'ok' => empty($snap['error']),
-                'count' => $snap['count'] ?? ($snap['counties'] ?? 0),
-                'error' => $snap['error'] ?? null,
-            );
-        });
-    }
-    if ($name === 'mil') {
-        return runner_timed('mil', function () {
-            $snap = military_snapshot();
-            return array(
-                'ok' => empty($snap['error']),
-                'count' => $snap['count'] ?? 0,
-                'error' => $snap['error'] ?? null,
-            );
-        });
-    }
-    if ($name === 'mesh') {
-        return runner_timed('mesh', function () {
-            $snap = mesh_snapshot();
-            return array(
-                'ok' => empty($snap['error']),
-                'count' => $snap['count'] ?? 0,
-                'error' => $snap['error'] ?? null,
-            );
-        });
-    }
-    if ($name === 'disease') {
-        return runner_timed('disease', function () {
-            $snap = disease_snapshot();
-            return array(
-                'ok' => empty($snap['error']),
-                'count' => $snap['count'] ?? 0,
-                'error' => $snap['error'] ?? null,
-            );
-        });
-    }
-    if ($name === 'animal') {
-        return runner_timed('animal', function () {
-            $snap = animal_snapshot();
-            return array(
-                'ok' => empty($snap['error']),
-                'count' => $snap['count'] ?? 0,
-                'error' => $snap['error'] ?? null,
-            );
-        });
-    }
-    if ($name === 'jamming') {
-        return runner_timed('jamming', function () {
-            return jamming_refresh();
-        });
-    }
-    if ($name === 'aircraft') {
-        return runner_timed('aircraft', function () {
-            return aircraft_refresh();
-        });
-    }
-    if ($name === 'grid') {
-        return runner_timed('grid', function () use ($slice) {
-            return run_scheduled_scan('everything', '', $slice);
-        });
-    }
-    if ($name === 'once') {
-        $out = array();
-        foreach (array('outages', 'mesh', 'disease', 'animal', 'mil', 'jamming', 'aircraft') as $job) {
-            $out[$job] = runner_run($job);
-        }
-        return $out;
-    }
-    fwrite(STDERR, "Unknown job: $name\n");
-    exit(1);
-}
-
-function runner_due($ttls)
-{
-    $status = gsa_poll_status_read();
-    $jobs = $status['jobs'] ?? array();
-    $due = array();
-    foreach ($ttls as $name => $ttl) {
-        $at = $jobs[$name]['at'] ?? '';
-        if ($name === 'grid' && $at === '') {
-            gsa_poll_status_note('grid', array('ok' => true, 'deferred' => true, 'ms' => 0));
-            continue;
-        }
-        $age = $at === '' ? PHP_INT_MAX : max(0, time() - strtotime($at . ' UTC'));
-        if ($age >= $ttl) {
-            $due[] = $name;
-        }
-    }
-    return $due;
 }
 
 function runner_print($data)
 {
-    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+    echo gmdate('c') . ' ' . json_encode($data, JSON_UNESCAPED_SLASHES) . "\n";
 }
 
-if ($job === 'loop') {
-    fwrite(STDERR, "gsa poll-runner loop pid=" . getmypid() . "\n");
-    while (true) {
-        $due = runner_due($ttls);
-        if (!$due) {
-            sleep(15);
+if ($job === 'status') {
+    runner_print(gsa_poll_status_read());
+    exit(0);
+}
+
+function runner_jamming($forceJam)
+{
+    $t0 = microtime(true);
+    try {
+        $info = gsa_jamming_refresh(array('force' => $forceJam));
+    } catch (Throwable $e) {
+        $info = array('ok' => false, 'error' => $e->getMessage());
+    }
+    $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+    if (empty($info['busy'])) {
+        gsa_poll_status_note('jamming', $info);
+    }
+    return $info;
+}
+
+// Space & Weather feeds. A failure here never changes the exit code of the
+// aircraft job; the last good cache stays up, marked stale.
+function runner_space($force, $only)
+{
+    $out = array();
+    foreach (array_keys(gsa_space_feeds()) as $name) {
+        if ($only && !in_array($name, $only, true)) {
             continue;
         }
-        foreach ($due as $name) {
-            fwrite(STDERR, gmdate('c') . " poll $name\n");
-            runner_print(array($name => runner_run($name, $slice)));
+        $t0 = microtime(true);
+        try {
+            $info = gsa_space_refresh($name, array('force' => $force));
+        } catch (Throwable $e) {
+            $info = array('ok' => false, 'error' => $e->getMessage());
         }
-        sleep(5);
+        $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+        if (empty($info['busy']) && empty($info['skipped'])) {
+            gsa_poll_status_note('space-' . $name, $info);
+        }
+        $out[$name] = $info;
     }
+    return $out;
 }
 
-runner_print(runner_run($job, $slice));
+if ($job === 'space') {
+    $info = runner_space($forceSpace, $onlySpace);
+    runner_print(array('space' => $info));
+    $ok = true;
+    foreach ($info as $row) {
+        $ok = $ok && (!empty($row['ok']) || !empty($row['busy']) || !empty($row['skipped']));
+    }
+    exit($ok ? 0 : 2);
+}
+
+if ($job === 'jamming') {
+    $info = runner_jamming($forceJam);
+    runner_print(array('jamming' => $info));
+    exit(!empty($info['ok']) || !empty($info['busy']) || !empty($info['skipped']) ? 0 : 2);
+}
+
+if ($job === 'aircraft') {
+    $out = array();
+    if ($skipAircraft) {
+        $info = array('ok' => true, 'skipped' => true, 'ms' => 0);
+    } else {
+        $t0 = microtime(true);
+        try {
+            $info = gsa_aircraft_refresh(array(
+                'forceMil' => $forceMil,
+                'skipMil' => $skipMil,
+            ));
+        } catch (Throwable $e) {
+            $info = array('ok' => false, 'error' => $e->getMessage());
+        }
+        $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+        if (empty($info['busy'])) {
+            gsa_poll_status_note('aircraft', $info);
+        }
+    }
+    $out['aircraft'] = $info;
+    if (!$skipJam) {
+        $out['jamming'] = runner_jamming($forceJam);
+    }
+    if (!$skipSpace) {
+        $out['space'] = runner_space($forceSpace, $onlySpace);
+    }
+    runner_print($out);
+    $airOk = !empty($info['ok']) || !empty($info['busy']) || !empty($info['skipped']);
+    $jamOk = $skipJam || !empty($out['jamming']['ok']) || !empty($out['jamming']['busy']) || !empty($out['jamming']['skipped']);
+    exit($airOk && $jamOk ? 0 : 2);
+}
+
+if ($job !== 'grid') {
+    fwrite(STDERR, "Unknown job: $job (use grid, aircraft, jamming, space, or status)\n");
+    exit(1);
+}
+
+$t0 = microtime(true);
+try {
+    $info = run_scheduled_scan('everything', '', $slice);
+} catch (Throwable $e) {
+    $info = array('ok' => false, 'error' => $e->getMessage());
+}
+$info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+if (empty($info['busy'])) {
+    gsa_poll_status_note('grid', $info);
+}
+runner_print(array('grid' => $info));
+exit(!empty($info['ok']) || !empty($info['busy']) ? 0 : 2);

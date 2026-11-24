@@ -1,0 +1,1 @@
+{"source":"OurAirports","license":"Public domain","url":"https://ourairports.com/data/","built":"2026-11-24","fields":["ident","name","type","lat","lon","elev_ft","city","cc","iata"],"tile":"11_9","rows":[["GL-0003","NorthGRIP Airport","S",75.1,-42.3167,null,"NorthGRIP","GL",""],["GL-0014","EastGRIP Airport","S",75.63,-35.99,null,"EastGRIP","GL",""]]}

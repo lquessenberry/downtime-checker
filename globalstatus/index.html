@@ -19,7 +19,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css" />
+  <link rel="stylesheet" href="/cesium.css?v=20261123t" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -73,26 +73,149 @@
       <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="layer-name"><span class="swatch disease"></span> DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="disease">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="layer-name"><span class="swatch animal"></span> ANIMAL DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="animal">—</em><span class="switch" aria-hidden="true"></span></span></button>
       <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="layer-name"><span class="swatch amfm"></span> AM FM TOWERS</span><span class="layer-meta"><em data-count="amfm">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="designations" aria-pressed="false"><span class="layer-name"><span class="swatch designations"></span> DESIGNATIONS</span><span class="layer-meta"><em data-count="designations">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="violence" aria-pressed="false"><span class="layer-name"><span class="swatch violence"></span> ATTRIBUTED VIOLENCE</span><span class="layer-meta"><em data-count="violence">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="nuke" aria-pressed="false"><span class="layer-name"><span class="swatch nuke"></span> NUCLEAR</span><span class="layer-meta"><em data-count="nuke">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="layer-name"><span class="swatch quakes"></span> QUAKES</span><span class="layer-meta"><em data-count="quakes">—</em><span class="switch" aria-hidden="true"></span></span></button>
-      <button type="button" class="layer" data-layer-toggle="streets3d" aria-pressed="false"><span class="layer-name"><span class="swatch streets3d"></span> STREETS 3D</span><span class="layer-meta"><em data-count="streets3d">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="effects" aria-pressed="false"><span class="layer-name"><span class="swatch effects"></span> NUKE SIMULATOR</span><span class="layer-meta"><em data-count="effects">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <button type="button" class="layer" data-layer-toggle="daynight" aria-pressed="false"><span class="layer-name"><span class="swatch daynight"></span> DAY / NIGHT</span><span class="layer-meta"><em data-count="daynight">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      <details class="layer-group" id="space-weather">
+        <summary class="layer-group-head"><span>SPACE &amp; WEATHER</span><em id="sw-on-count"></em></summary>
+        <button type="button" class="layer" data-layer-toggle="iss" aria-pressed="false"><span class="layer-name"><span class="swatch sw-iss"></span> ISS POSITION</span><span class="layer-meta"><em data-count="iss">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="iss" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="sats" aria-pressed="false"><span class="layer-name"><span class="swatch sats"></span> SATELLITES</span><span class="layer-meta"><em data-count="sats">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="volcanoes" aria-pressed="false"><span class="layer-name"><span class="swatch sw-volcanoes"></span> VOLCANO ALERTS</span><span class="layer-meta"><em data-count="volcanoes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="volcanoes" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="disasters" aria-pressed="false"><span class="layer-name"><span class="swatch sw-disasters"></span> WORLD DISASTERS</span><span class="layer-meta"><em data-count="disasters">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="disasters" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="layer-name"><span class="swatch quakes"></span> EARTHQUAKES</span><span class="layer-meta"><em data-count="quakes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="radar" aria-pressed="false"><span class="layer-name"><span class="swatch sw-radar"></span> WEATHER RADAR</span><span class="layer-meta"><em data-count="radar">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="radar" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="nwsalerts" aria-pressed="false"><span class="layer-name"><span class="swatch sw-nwsalerts"></span> US WEATHER ALERTS</span><span class="layer-meta"><em data-count="nwsalerts">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="nwsalerts" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="rivers" aria-pressed="false"><span class="layer-name"><span class="swatch sw-rivers"></span> RIVER GAUGES IN FLOOD (US)</span><span class="layer-meta"><em data-count="rivers">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="rivers" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="coastal" aria-pressed="false"><span class="layer-name"><span class="swatch sw-coastal"></span> COASTAL WATER LEVELS (US)</span><span class="layer-meta"><em data-count="coastal">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="coastal" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="aurora" aria-pressed="false"><span class="layer-name"><span class="swatch sw-aurora"></span> AURORA / SPACE WEATHER</span><span class="layer-meta"><em data-count="aurora">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="aurora" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="tsunami" aria-pressed="false"><span class="layer-name"><span class="swatch sw-tsunami"></span> TSUNAMI ALERTS</span><span class="layer-meta"><em data-count="tsunami">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="tsunami" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="hurricanes" aria-pressed="false"><span class="layer-name"><span class="swatch sw-hurricanes"></span> HURRICANES</span><span class="layer-meta"><em data-count="hurricanes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="hurricanes" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="wildfires" aria-pressed="false"><span class="layer-name"><span class="swatch sw-wildfires"></span> WILDFIRES</span><span class="layer-meta"><em data-count="wildfires">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-sw-note="wildfires" hidden></p>
+      </details>
+      <details class="layer-group" id="infrastructure">
+        <summary class="layer-group-head"><span>INFRASTRUCTURE</span><em id="infra-on-count"></em></summary>
+        <button type="button" class="layer" data-layer-toggle="airports" aria-pressed="false"><span class="layer-name"><span class="swatch infra-airports"></span> AIRPORTS</span><span class="layer-meta"><em data-count="airports">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-infra-note="airports" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="bases" aria-pressed="false"><span class="layer-name"><span class="swatch infra-bases"></span> MILITARY BASES</span><span class="layer-meta"><em data-count="bases">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-infra-note="bases" hidden></p>
+      </details>
       <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
     </div>
   </aside>
 
   <main class="stage">
     <div id="cesium"></div>
-    <div id="nuke-hud" class="nuke-hud" hidden>
-      <div class="defcon-lamp" id="defcon-lamp" data-defcon="5">DEFCON <strong id="defcon-level">5</strong></div>
-      <label class="nuke-yield">
-        <span id="nuke-yield-label">15 kt</span>
-        <input type="range" id="nuke-yield" min="0" max="4" value="0" step="1" />
-      </label>
-      <button type="button" id="nuke-burst" class="nuke-burst" aria-pressed="true">AIR</button>
-      <p class="nuke-hint" id="nuke-hint">TAP THE GLOBE</p>
-      <pre id="nuke-card" class="nuke-card" hidden></pre>
+    <div id="effects-hud" class="effects-hud" hidden>
+      <h2>Nuke Simulator</h2>
+      <button type="button" id="effects-sound" class="effects-sound" aria-pressed="true">Sound on</button>
+      <p class="effects-lede" id="effects-lede">Tap the globe to choose ground zero, then pick a weapon or type a yield and press Launch Nuke.</p>
+      <form id="effects-calc" autocomplete="off">
+        <div class="effects-span">
+          <label for="effects-weapon">Weapon</label>
+          <select id="effects-weapon">
+        <option value="">Choose a weapon…</option>
+        <option value="davy-crockett" data-amount="20" data-unit="0.001">&quot;Davy Crockett&quot; - smallest US bomb produced (20 t)</option>
+        <option value="crude-terrorist" data-amount="100" data-unit="0.001">Crude nuclear terrorist weapon (100 t)</option>
+        <option value="b61-mod3" data-amount="300" data-unit="0.001">B-61 Mod 3 (lowest kt currently in US arsenal) (300 t)</option>
+        <option value="nk-2006" data-amount="500" data-unit="0.001">North Korean weapon tested in 2006 (500 t)</option>
+        <option value="nk-2009" data-amount="6" data-unit="1">North Korean weapon tested in 2009 (6 kt)</option>
+        <option value="nk-2013" data-amount="10" data-unit="1">North Korean weapon tested in 2013 (10 kt)</option>
+        <option value="improvised-heu" data-amount="10" data-unit="1">Improvised HEU device - nuclear terrorism (10 kt)</option>
+        <option value="little-boy" data-amount="15" data-unit="1">&quot;Little Boy&quot; - Hiroshima bomb (15 kt)</option>
+        <option value="gadget" data-amount="20" data-unit="1">&quot;Gadget&quot; - Trinity test (20 kt)</option>
+        <option value="fat-man" data-amount="20" data-unit="1">&quot;Fat Man&quot; - Nagasaki bomb (20 kt)</option>
+        <option value="pakistan" data-amount="45" data-unit="1">Largest Pakistani weapon tested (45 kt)</option>
+        <option value="india" data-amount="60" data-unit="1">Largest Indian weapon tested (60 kt)</option>
+        <option value="w76" data-amount="100" data-unit="1">W-76 (common in US &amp; UK SLBM arsenal) (100 kt)</option>
+        <option value="nk-2017" data-amount="150" data-unit="1">North Korean weapon tested in 2017 (150 kt?)</option>
+        <option value="w80" data-amount="150" data-unit="1">W-80 (currently in US arsenal, cruise missile) (150 kt)</option>
+        <option value="w87" data-amount="300" data-unit="1">W-87 (currently in US arsenal, Minuteman III) (300 kt)</option>
+        <option value="tn8081" data-amount="300" data-unit="1">TN 80/81 (largest current French warhead) (300 kt)</option>
+        <option value="b61-mod7" data-amount="340" data-unit="1">B-61 Mod 7 (currently in US arsenal) (340 kt)</option>
+        <option value="w78" data-amount="350" data-unit="1">W-78 (currently in US arsenal, Minuteman III) (350 kt)</option>
+        <option value="w88" data-amount="455" data-unit="1">W-88 (Trident D5 warhead) (455 kt)</option>
+        <option value="ivy-king" data-amount="500" data-unit="1">&quot;Ivy King&quot; - largest pure fission weapon tested by USA (500 kt)</option>
+        <option value="topol" data-amount="800" data-unit="1">Topol (SS-25) (currently in Russian arsenal) (800 kt)</option>
+        <option value="w59" data-amount="1" data-unit="1000">W-59 (Minuteman I warhead) (1 Mt)</option>
+        <option value="b83" data-amount="1.2" data-unit="1000">B-83 (largest bomb in current US arsenal) (1.2 Mt)</option>
+        <option value="r12" data-amount="2.42" data-unit="1000">R-12 (SS-4) Soviet missile, Cuban missile crisis (2.42 Mt)</option>
+        <option value="df4" data-amount="3.3" data-unit="1000">Dong Feng-4, China&#39;s first deployed ICBM (3.3 Mt)</option>
+        <option value="w39" data-amount="4" data-unit="1000">W-39, US H-bomb, almost accidentally detonated in 1961 (4 Mt)</option>
+        <option value="df5" data-amount="5" data-unit="1000">Dong Feng-5, China&#39;s current ICBMs (5 Mt)</option>
+        <option value="w53" data-amount="9" data-unit="1000">W-53 (Titan II warhead, highest kt ICBM US deployed) (9 Mt)</option>
+        <option value="ivy-mike" data-amount="10.4" data-unit="1000">&quot;Ivy Mike&quot; - first H-bomb (10.4 Mt)</option>
+        <option value="castle-bravo" data-amount="15" data-unit="1000">&quot;Castle Bravo&quot; - largest US bomb tested (15 Mt)</option>
+        <option value="tsar-tested" data-amount="50" data-unit="1000">&quot;Tsar Bomba&quot; - largest USSR bomb tested (50 Mt)</option>
+        <option value="tsar-designed" data-amount="100" data-unit="1000">&quot;Tsar Bomba&quot; - largest USSR bomb designed (100 Mt)</option>
+      </select>
+        </div>
+        <div>
+          <label for="effects-yield">Yield</label>
+          <input id="effects-yield" type="number" min="0" step="any" value="15" inputmode="decimal">
+        </div>
+        <div>
+          <label for="effects-unit">Unit</label>
+          <select id="effects-unit">
+            <option value="0.001">tons</option>
+            <option value="1" selected>kilotons</option>
+            <option value="1000">megatons</option>
+          </select>
+        </div>
+        <div class="effects-span">
+          <label for="effects-burst">Burst</label>
+          <select id="effects-burst">
+            <option value="air" selected>Airburst, optimum height</option>
+            <option value="surface">Contact surface burst</option>
+          </select>
+        </div>
+        <div class="effects-span">
+          <label for="effects-go">Calculate</label>
+          <button id="effects-go" class="effects-go" type="submit">Launch Nuke</button>
+        </div>
+      </form>
+      <div class="presets" id="effects-presets">
+    <button type="button" class="chip" data-kt="1">1 kt</button>
+    <button type="button" class="chip" data-kt="15">15 kt</button>
+    <button type="button" class="chip" data-kt="20">20 kt</button>
+    <button type="button" class="chip" data-kt="100">100 kt</button>
+    <button type="button" class="chip" data-kt="300">300 kt</button>
+    <button type="button" class="chip" data-kt="1000">1 Mt</button>
+    <button type="button" class="chip" data-kt="10000">10 Mt</button>
+  </div>
+      <p class="effects-note" id="effects-note"></p>
+    </div>
+    <div id="effects-results" class="effects-results" hidden>
+      <div class="effects-results-head">
+        <h2 id="effects-results-title">Blast area</h2>
+        <button type="button" id="effects-close" aria-label="Close results">&times;</button>
+      </div>
+      <p class="effects-yield-line" id="effects-yield-line"></p>
+      <p class="effects-note" id="effects-popup-note"></p>
+      <table class="effects-table">
+        <thead>
+          <tr>
+            <th>Ring</th>
+            <th>What it means</th>
+            <th>Radius</th>
+          </tr>
+        </thead>
+        <tbody id="effects-rows"></tbody>
+      </table>
+      <footer class="effects-disc">
+        <p>Original calculator from public civil-defense reports. It is not NUKEMAP and it does not use that site’s code. Blast distances use the curve fits in Fletcher, Albright, Perret, Franklin, Bowen, and White, <em>Nuclear Bomb Effects Computer</em>, CEX-62.2, U.S. Atomic Energy Commission, 1963 (equations 2.5, 2.61, 2.78, 2.108, 2.110, 2.111, and 2.116). Fireball size and the crater radius use Glasstone and Dolan, <em>The Effects of Nuclear Weapons</em>, 1977, sections 2.127 and 6.09.</p>
+    <p>Checked against the published 1 megaton optimum airburst: about 2.8 km at 20 psi, 7.0 km at 5 psi, and 21.7 km at 1 psi. The fits are for roughly 1 kiloton to 20 megatons. Outside that, radii follow the cube-root law. Clear air, flat ground, no terrain, no casualties, and no fallout plume.</p>
+    <p>15 kilotons is about the yield of the Hiroshima bomb. That line is only a scale marker.</p>
+      </footer>
     </div>
     <div class="stage-stack">
       <div class="stage-meta">
@@ -160,7 +283,11 @@
       <dl id="ac-facts"></dl>
     </aside>
     <div class="progress-wrap"><div class="progress" id="progress"></div></div>
+    <p class="jam-credit" hidden><span class="jam-credit-track">GPS interference from <a href="https://gpsinterference.com/" target="_blank" rel="noreferrer">GPSInterference.com</a> (adsb.lol globe history, ODbL)</span></p>
+    <p class="air-credit" hidden><span class="air-credit-track">Aircraft from <a href="https://www.adsb.lol/docs/open-data/api" target="_blank" rel="noreferrer">adsb.lol</a> (ODbL 1.0)</span></p>
     <p class="ship-credit" hidden><span class="ship-credit-track">Positions from <a href="https://openwaters.io/ais/#license" target="_blank" rel="noreferrer">Open Waters AIS</a></span></p>
+    <p class="sw-credit" hidden><span class="sw-credit-track"></span></p>
+    <p class="infra-credit" hidden><span class="infra-credit-track"></span></p>
     <div class="view-settings" id="view-settings">
       <div class="view-head">
         <span>VIEW</span>
@@ -175,8 +302,8 @@
         <select id="basemap">
           <option value="natural">Natural Earth II</option>
           <option value="plain">Plain globe</option>
-          <option value="osm" selected>OpenStreetMap</option>
-          <option value="streets">Street map (Esri, optional)</option>
+          <option value="osm">OpenStreetMap</option>
+          <option value="streets" selected>Street map</option>
           <option value="satellite">Aerial photo</option>
           <option value="sentinel">Sentinel-2</option>
           <option value="marble">Blue Marble</option>
@@ -261,11 +388,10 @@
       <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="swatch disease"></span> DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="swatch animal"></span> ANIMAL DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="swatch amfm"></span> AM FM TOWERS <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="designations" aria-pressed="false"><span class="swatch designations"></span> DESIGNATIONS <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="violence" aria-pressed="false"><span class="swatch violence"></span> ATTRIBUTED VIOLENCE <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="nuke" aria-pressed="false"><span class="swatch nuke"></span> NUCLEAR <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="swatch quakes"></span> QUAKES <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="streets3d" aria-pressed="false"><span class="swatch streets3d"></span> STREETS 3D <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="effects" aria-pressed="false"><span class="swatch effects"></span> NUKE SIMULATOR <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="daynight" aria-pressed="false"><span class="swatch daynight"></span> DAY / NIGHT <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="sats" aria-pressed="false"><span class="swatch sats"></span> SATELLITES <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="swatch quakes"></span> EARTHQUAKES <span class="switch" aria-hidden="true"></span></button>
     </div>
     <div id="status-line"><span id="status-track">CESIUM READY · LOADING POWER OUTAGES, JAMMED GPS SIGNALS, AND CONFLICT TRACKER</span></div>
   </footer>
@@ -303,8 +429,11 @@
     </div>
   </div>
 
-  <script src="/blast.js"></script>
+  <script src="/effects-radius.js"></script>
   <script src="/quakes.js"></script>
-  <script src="/cesium.js"></script>
+  <script src="/sats.js"></script>
+  <script src="/spaceweather.js?v=20261123t"></script>
+  <script src="/infra.js?v=20261123t"></script>
+  <script src="/cesium.js?v=20261123t"></script>
 </body>
 </html>

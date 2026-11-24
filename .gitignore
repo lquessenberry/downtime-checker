@@ -34,3 +34,6 @@ data/designations/SYMMETRY.md
 data/designations/geo/*.geojson
 .geocode-cache/
 
+
+# Raw downloads for scripts/build_infra_layers.py
+.infra-raw/

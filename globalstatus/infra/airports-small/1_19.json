@@ -1,0 +1,1 @@
+{"source":"OurAirports","license":"Public domain","url":"https://ourairports.com/data/","built":"2026-11-24","fields":["ident","name","type","lat","lon","elev_ft","city","cc","iata"],"tile":"1_19","rows":[["YCSK","Casey Station Skiway","S",-66.2881,110.7575,1178,"Casey Station","AQ",""],["YWKS","Wilkins Runway","S",-66.6908,111.5236,2529,"Preston Heath","AQ",""]]}

@@ -1,10 +1,12 @@
 /* Global Status USGS earthquake layer.
  * Public GeoJSON summary feeds: https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php
  * Same module pattern as blast.js. No third-party globe code.
+ * From Lee's feat/globalstatus-prod (PR #95, issue #81), adapted for the live
+ * file set: label EARTHQUAKES, 60-second refresh while the layer is on.
  */
 (function (root) {
   const FEED = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson";
-  const POLL_MS = 5 * 60 * 1000;
+  const POLL_MS = 60 * 1000;
   const CREDIT = "Earthquake data: USGS";
 
   function colorForMag(mag) {
@@ -19,7 +21,7 @@
 
   function sizeForMag(mag) {
     const value = Math.max(0, Number(mag) || 0);
-    return Math.min(36, Math.max(6, 3 + (value * value) / 2));
+    return Math.round(Math.min(36, Math.max(8, 3 + (value * value) / 2)));
   }
 
   function formatTime(ms) {
@@ -58,7 +60,7 @@
       url: props.url || "",
       color: colorForMag(mag),
       size: sizeForMag(mag),
-      kind: "QUAKES",
+      kind: "EARTHQUAKES",
     };
   }
 
@@ -87,6 +89,7 @@
       });
     }
     if (inflight) return inflight;
+    // The cache is reused for POLL_MS, so a 60 s timer fetches about once a minute.
     inflight = fetch(FEED, { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error(`USGS quakes HTTP ${response.status}`);
