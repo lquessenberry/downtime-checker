@@ -166,8 +166,9 @@ const COLORS = {
   pending: Cesium.Color.fromCssColorString("#ffb020"),
 };
 
-// Same hub the canvas globe draws its search lines from.
-const ORIGIN = { lat: 35.84, lon: -90.7 };
+// Blue hub pin and World Grid scan-line start. There is no default city:
+// a pin appears only after a fresh per-visitor lookup (see locateStartup).
+let visitorOrigin = null;
 const IMAGERY_URL = "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer";
 const STREET_URL = "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer";
 const TERRAIN_URL = "https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer";
@@ -531,7 +532,12 @@ async function startGlobe() {
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
   });
-  ensureOrigin();
+  // Do not pin a hardcoded city. Place the blue hub only after a fresh lookup.
+  if (window.GsaSearch && window.GsaSearch.locateStartup) {
+    window.GsaSearch.locateStartup().then((info) => {
+      if (info) setVisitorOrigin(info);
+    });
+  }
   // A second handler, so Cesium can still select a pin. Empty ground is not a pin.
   // Cesium then inserts a temporary imagery entity; that is not a layer pin either.
   const popupClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
@@ -1058,10 +1064,42 @@ function clearPoints() {
   ensureOrigin();
 }
 
-function ensureOrigin() {
-  if (!state.viewer || state.origin) return;
+function originLabel(info) {
+  if (!info) return "";
+  if (info.approx) return "Approximate, from your internet connection";
+  return "Your exact location";
+}
+
+function setVisitorOrigin(info) {
+  if (!info || !Number.isFinite(info.lat) || !Number.isFinite(info.lon)) return;
+  if (Math.abs(info.lat) > 90 || Math.abs(info.lon) > 180 || (info.lat === 0 && info.lon === 0)) return;
+  visitorOrigin = {
+    lat: info.lat,
+    lon: info.lon,
+    exact: !info.approx,
+    approx: !!info.approx,
+    label: originLabel(info),
+    name: info.name || "",
+    service: info.service || "",
+  };
+  paintOrigin();
+}
+
+function paintOrigin() {
+  if (!state.viewer || !visitorOrigin) return;
+  const pos = Cesium.Cartesian3.fromDegrees(visitorOrigin.lon, visitorOrigin.lat, 0);
+  const label = visitorOrigin.label;
+  if (state.origin) {
+    state.origin.position = pos;
+    state.origin.name = label;
+    state.origin.description = label;
+    return;
+  }
   state.origin = state.viewer.entities.add({
-    position: Cesium.Cartesian3.fromDegrees(ORIGIN.lon, ORIGIN.lat, 0),
+    name: label,
+    description: label,
+    position: pos,
+    _gsaOrigin: true,
     point: {
       pixelSize: 8,
       color: Cesium.Color.fromCssColorString("#7ef6ff"),
@@ -1072,8 +1110,13 @@ function ensureOrigin() {
   });
 }
 
+function ensureOrigin() {
+  paintOrigin();
+}
+
 function arcPositions(lat, lon) {
-  const start = Cesium.Cartesian3.fromDegrees(ORIGIN.lon, ORIGIN.lat, 0);
+  if (!visitorOrigin) return null;
+  const start = Cesium.Cartesian3.fromDegrees(visitorOrigin.lon, visitorOrigin.lat, 0);
   const end = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
   const distance = Cesium.Cartesian3.distance(start, end);
   if (distance < 1500) return null;
@@ -1300,10 +1343,8 @@ function resetMap() {
   const selected = document.getElementById("selected");
   if (selected) selected.hidden = true;
   clearPoints();
-  if (state.origin && state.viewer) {
-    state.viewer.entities.remove(state.origin);
-    state.origin = null;
-  }
+  // Keep the visitor hub pin if we already know this visitor's location.
+  // It is not a map layer, and RESET should not fall back to a default city.
   if (state.viewer) state.viewer.selectedEntity = undefined;
   for (const key of Object.keys(state.layers)) setLayer(key, false);
   closeAircraft();
@@ -3774,3 +3815,8 @@ function statusLive(error) {
 }
 
 boot().catch((error) => setStatus(error.message || String(error)));
+
+window.GsaOrigin = {
+  get: () => (visitorOrigin ? { ...visitorOrigin } : null),
+  set: setVisitorOrigin,
+};
