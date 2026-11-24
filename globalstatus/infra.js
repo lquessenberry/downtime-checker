@@ -112,6 +112,13 @@
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
       id,
     });
+    // A search-circle filter is on (nearby.js): new points start out filtered, so a tile
+    // that lands between two culls never shows pins outside the circle.
+    const f = id && filters[id.__infra];
+    if (f) {
+      const p = coll.get(coll.length - 1);
+      p.show = f(p.position);
+    }
   }
 
   // ---------- notes, counts, credits ----------

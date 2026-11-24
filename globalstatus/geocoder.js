@@ -34,6 +34,7 @@
     { name: "GeoJS", url: "https://get.geojs.io/v1/ip/geo.json", parse: (d) => d },
   ];
   const LOCATE_TIMEOUT_MS = 8000;
+  const EXACT_TIMEOUT_MS = 30000; // first GPS fix on a phone
   // ---------------------------------------------------------------------------
 
   const GEOCODE_URL = "https://api.mapbox.com/search/geocode/v6/forward";
@@ -326,8 +327,10 @@
     return null;
   }
 
-  async function locateApprox(prefix) {
-    const seq = ++locateSeq;
+  // seq: the locate request this lookup belongs to (a newer tap, CLEAR or a GPS fix
+  // cancels it, so an IP answer can never replace an exact fix).
+  async function locateApprox(prefix, seq) {
+    if (seq == null) seq = ++locateSeq;
     busy(true);
     note(`${prefix || ""}Finding your approximate area…`);
     const info = await ipLocate();
@@ -342,29 +345,41 @@
     return info;
   }
 
+  function fixNote(acc) {
+    if (!acc) return "Your device location.";
+    return `Your device location, accurate to about ${acc >= 1000 ? `${(acc / 1609.344).toFixed(1)} mi` : `${acc} m`}.`;
+  }
+
+  // Phones can take 10–30 s for a first GPS fix after the permission prompt, so wait for
+  // it. A high-accuracy timeout retries once with network location before giving up.
+  // Only a denial, "position unavailable" or both timeouts fall back to MY AREA.
   function locateExact() {
     const seq = ++locateSeq;
     const geo = root.navigator && root.navigator.geolocation;
-    if (!geo || !root.isSecureContext) return locateApprox("Exact location is not available here. ");
+    if (!geo || !root.isSecureContext) return locateApprox("Exact location is not available in this browser. ", seq);
     busy(true);
-    note("Waiting for location permission…");
-    return new Promise((resolve) => {
-      geo.getCurrentPosition((pos) => {
-        if (seq !== locateSeq) return resolve(null);
+    note("Locating… allow location access if asked. A phone's first GPS fix can take up to 30 s.");
+    const ask = (opts) => new Promise((resolve) => geo.getCurrentPosition((pos) => resolve({ pos }), (err) => resolve({ err }), opts));
+    return (async () => {
+      let r = await ask({ enableHighAccuracy: true, timeout: EXACT_TIMEOUT_MS, maximumAge: 120000 });
+      if (seq !== locateSeq) return null;
+      if (r.err && r.err.code === 3) {
+        note("Still locating… trying network location.");
+        r = await ask({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+        if (seq !== locateSeq) return null;
+      }
+      if (r.pos) {
         busy(false);
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        const acc = Math.round(pos.coords.accuracy || 0);
-        const info = { name: "My location", lat, lon, approx: false, accuracy: acc };
+        const acc = Math.round(r.pos.coords.accuracy || 0);
+        const info = { name: "My location", lat: r.pos.coords.latitude, lon: r.pos.coords.longitude, approx: false, accuracy: acc };
         goTo(info);
-        note(acc ? `Your device location, accurate to about ${acc >= 1000 ? `${(acc / 1609.344).toFixed(1)} mi` : `${acc} m`}.` : "Your device location.", 7000);
-        resolve(info);
-      }, (err) => {
-        if (seq !== locateSeq) return resolve(null);
-        const why = err && err.code === 1 ? "Location permission denied" : "Exact location unavailable";
-        resolve(locateApprox(`${why}; showing your approximate area instead. `));
-      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
-    });
+        note(fixNote(acc), 8000);
+        return info;
+      }
+      const code = r.err && r.err.code;
+      const why = code === 1 ? "Location permission was denied" : code === 3 ? "Your device did not return a location in time" : "Your device location is unavailable";
+      return locateApprox(`${why}, so this is your approximate area instead. `, seq);
+    })();
   }
 
   function addLocateButtons(viewer) {
@@ -373,8 +388,8 @@
     const box = document.createElement("div");
     box.className = "gsa-locate";
     box.innerHTML = `
+      <button type="button" data-gsa-locate="exact" title="Use my exact location (asks permission)" aria-label="Use my exact location (GPS)"><svg aria-hidden="true" viewBox="0 0 16 16" width="15" height="15"><circle cx="8" cy="8" r="4.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 0.5v3M8 12.5v3M0.5 8h3M12.5 8h3" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/></svg><b>MY EXACT LOCATION</b></button>
       <button type="button" data-gsa-locate="approx" title="Show my approximate area (city-level, from my internet address)" aria-label="Show my approximate area, city-level"><svg aria-hidden="true" viewBox="0 0 16 16" width="15" height="15"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.2 1.8"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg><b>MY AREA (APPROX)</b></button>
-      <button type="button" data-gsa-locate="exact" title="Use my exact location (asks permission)" aria-label="Use my exact location"><svg aria-hidden="true" viewBox="0 0 16 16" width="15" height="15"><circle cx="8" cy="8" r="4.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 0.5v3M8 12.5v3M0.5 8h3M12.5 8h3" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/></svg><b>MY EXACT LOCATION</b></button>
       <p id="gsa-locate-note" class="gsa-locate-note" role="status" hidden></p>`;
     toolbar.appendChild(box);
     box.addEventListener("click", (ev) => {

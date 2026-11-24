@@ -1446,6 +1446,9 @@ button:hover { border-color: #9fd4e2; }
 .gsa-locate button svg { flex: none; }
 .gsa-locate button b { font-weight: 600; }
 .gsa-locate button:hover { border-color: #9fd4e2; }
+/* MY EXACT LOCATION is the main button; MY AREA (approx.) is the fallback. */
+.gsa-locate [data-gsa-locate="exact"] { color: #d7e6ea; border-color: #9fd4e2; background: rgba(20, 48, 60, 0.95); }
+.gsa-locate [data-gsa-locate="approx"] { color: var(--dim); }
 .gsa-locate button:disabled { opacity: 0.55; cursor: progress; }
 .gsa-locate-note {
   position: absolute;
@@ -1565,13 +1568,13 @@ button:hover { border-color: #9fd4e2; }
   gap: 8px;
   padding: 10px 12px;
   background: rgba(8, 14, 20, 0.94);
-  border: 1px solid #ffb020;
+  border: 1px solid var(--line);
   border-radius: 4px;
   color: var(--text);
 }
 .nearby-card[hidden] { display: none; }
 .nearby-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.nearby-head strong { font-size: 12px; letter-spacing: 0.06em; line-height: 1.3; color: #ffcf73; overflow-wrap: anywhere; }
+.nearby-head strong { font-size: 12px; letter-spacing: 0.06em; line-height: 1.3; color: var(--text); overflow-wrap: anywhere; }
 .nearby-min { flex: none; min-height: 28px; padding: 2px 8px; font-size: 11px; }
 .nearby-radius { display: flex; align-items: center; gap: 4px; }
 .nearby-radius .chip { flex: 1 1 0; min-width: 0; min-height: 34px; padding: 4px 0; font-size: 13px; }
@@ -1591,15 +1594,19 @@ button:hover { border-color: #9fd4e2; }
   opacity: 0.6;
 }
 .nearby-list button.on { opacity: 1; border-color: #9fd4e2; }
-.nearby-list em { font-style: normal; color: #ffcf73; }
+.nearby-list em { font-style: normal; color: var(--text); }
+.nearby-list button span { display: inline-flex; align-items: center; min-width: 0; }
+.nearby-list .swatch { flex: none; }
 .nearby-clear { min-height: 36px; font-size: 12px; }
 .nearby-all { min-height: 32px; font-size: 11px; }
-.nearby-all.on { border-color: #ffb020; color: #ffcf73; }
+.nearby-all.on { border-color: #9fd4e2; color: var(--text); }
 .nearby-card.is-min .nearby-radius,
 .nearby-card.is-min .nearby-status,
 .nearby-card.is-min .nearby-list,
 .nearby-card.is-min .nearby-all,
 .nearby-card.is-min .nearby-clear { display: none; }
+.nearby-card.is-min,
+.stage:has(.view-settings:not(.is-closed)) .nearby-card.is-min { min-height: 0; }
 /* The nuke simulator panel owns the top right on desktop; sit below the search box instead. */
 .stage:has(#effects-hud:not([hidden])) .nearby-card { right: auto; left: 12px; top: 96px; }
 /* Nuke panel open: the locate buttons shrink to icons (desktop) or step aside (phones). */
@@ -1625,4 +1632,23 @@ button:hover { border-color: #9fd4e2; }
   .nearby-radius .chip { min-height: 40px; font-size: 14px; }
   .nearby-list button { min-height: 40px; font-size: 13px; }
   .nearby-min, .nearby-clear, .nearby-all { min-height: 40px; }
+}
+/* Phones: the open card is a full-screen sheet over the map (CLOSE returns to the map;
+   the closed card is the small bar with SHOW). */
+@media (max-width: 600px) {
+  .nearby-card:not(.is-min),
+  .stage:has(#effects-hud:not([hidden])) .nearby-card:not(.is-min) {
+    position: fixed;
+    inset: 0;
+    width: auto;
+    max-height: none;
+    z-index: 1000;
+    padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
+    border: 0;
+    border-radius: 0;
+    background: rgba(6, 10, 15, 0.98);
+  }
+  .nearby-card:not(.is-min) .nearby-head strong { font-size: 14px; }
+  .nearby-card:not(.is-min) .nearby-list { flex: 1 1 auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .nearby-card:not(.is-min) .nearby-min { min-width: 92px; border-color: #9fd4e2; }
 }
