@@ -126,7 +126,7 @@ def main() -> int:
             "expression": """(() => {
               const toggles = [...document.querySelectorAll('[data-layer-toggle]')]
                 .map((el) => el.getAttribute('data-layer-toggle'));
-              const nukemap = document.getElementById('nuke-hud');
+              const nukeHud = document.getElementById('nuke-hud');
               return JSON.stringify({
                 title: document.title,
                 toggles,
@@ -135,7 +135,7 @@ def main() -> int:
                 conflicts: toggles.includes('conflicts'),
                 nuke: toggles.includes('nuke'),
                 streets3d: toggles.includes('streets3d'),
-                nukemap: Boolean(nukemap),
+                nuke_hud: Boolean(nukeHud),
               });
             })()""",
             "returnByValue": True,
@@ -154,7 +154,7 @@ def main() -> int:
         SHOT.write_bytes(base64.b64decode(b64))
         print("shot", SHOT)
     sock.close()
-    ok = bool(info.get("designations") and info.get("nukemap"))
+    ok = bool(info.get("designations") and info.get("nuke_hud"))
     # Staging may not have this branch yet; local php -S will.
     if not ok and "localhost" not in TARGET and "127.0.0.1" not in TARGET:
         print("staging missing new toggles; not a hard fail until this branch is on Fly")

@@ -704,6 +704,13 @@ button:hover { border-color: #9fd4e2; }
   letter-spacing: 0.14em;
 }
 .nuke-hint { margin: 8px 0 0; font-size: 11px; color: #6fbb78; }
+.nuke-credit {
+  margin: 8px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  color: #5ea866;
+}
 .nuke-card {
   margin: 8px 0 0;
   white-space: pre-wrap;

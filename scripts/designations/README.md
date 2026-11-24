@@ -34,5 +34,7 @@ python3 scripts/designations/designations.py --filter zone --out data/designatio
 ```
 
 Cesium layers: DESIGNATIONS, ATTRIBUTED VIOLENCE. NUCLEAR is a separate,
-first-party layer (`globalstatus/blast.js`, #39): no NUKEMAP link-out, iframe,
-or copied code. No FTP until Lee says go-live.
+first-party Global Status layer (`globalstatus/blast.js`, #39), built by
+Will Casey and Lee and inspired by NUKEMAP by Alex Wellerstein: no NUKEMAP
+iframe, copied code, or link-out as the source of the calculations. No FTP
+until Lee says go-live.

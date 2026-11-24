@@ -1,6 +1,7 @@
-/* Global Status first-party blast rings.
+/* Global Status nuclear blast rings, built by Will Casey and Lee.
  * Cube-root scaling from public 1 kt airburst radii (Glasstone & Dolan order
- * of magnitude). Not NUKEMAP, not NukeSim, not their code.
+ * of magnitude). Inspired by NUKEMAP by Alex Wellerstein. This is not
+ * NUKEMAP, does not use NUKEMAP, and is not a port of that site or its code.
  */
 (function (root) {
   const KT_PRESETS = [15, 100, 300, 1000, 5000];
@@ -60,7 +61,8 @@
       `thermal ${km(r.thermalM)} km`,
     ];
     if (r.falloutM) lines.push(`fallout footprint ${km(r.falloutM)} km (downwind sketch)`);
-    lines.push("GSA model · cube-root scaling · not a population estimate");
+    lines.push("Global Status model · cube-root scaling · not a population estimate");
+    lines.push("Inspired by NUKEMAP by Alex Wellerstein");
     return lines.join("\n");
   }
 

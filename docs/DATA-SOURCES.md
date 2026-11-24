@@ -79,7 +79,7 @@ Globe: `GET /api/designations`, `GET /api/violence`. Layers default off.
 
 Shared schema is `claims.jsonl` (#59): `claimant`, `basis`, `asserted_date`, `status`, `geometry` or `location.county_fips`, `class` in `designation` | `violence` | `zone`. Filter with `--filter`. CFR theaters ingest as `class=zone`; CONFLICT TRACKER remains the zone renderer. `GET /api/claims` is the class index.
 
-Do not cron designation dumps into git. Source addresses stay on the claim. NUCLEAR is a first-party cube-root blast layer on the globe (#39). Math lives in `downtime-core` and `globalstatus/blast.js`. The multithreaded server is `downtime-server` (tokio). PHP is legacy.
+Do not cron designation dumps into git. Source addresses stay on the claim. NUCLEAR is a first-party cube-root blast layer on the globe (#39), part of the Global Status nuclear simulator built by Will Casey and Lee. Inspired by NUKEMAP by Alex Wellerstein; it is not NUKEMAP, does not use that site, and is not a port of its calculations. Math lives in `downtime-core` and `globalstatus/blast.js`. The multithreaded server is `downtime-server` (tokio). PHP is legacy.
 
 ## Credit / license reminders
 
@@ -92,4 +92,5 @@ Do not cron designation dumps into git. Source addresses stay on the claim. NUCL
 - Uniden HPDB is the public BT885 Update Manager dump.
 - HealthMap: credit Boston Children's Hospital / healthmap.org. Aggregates news, ProMED, WHO, etc.
 - GIDEON: credit gideononline.com. Public events feed is free to view; bulk licensed API is not. Do not scrape the paid app UI.
+- NUKEMAP by Alex Wellerstein is an inspiration for the Global Status nuclear simulator and calculator only. It is not a source of our calculations.
 - Do not use ADS-B Exchange as a bulk API. Do not store church FTP logins.

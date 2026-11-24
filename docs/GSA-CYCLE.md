@@ -35,7 +35,7 @@ cargo run -p downtime-server -- --root . --static globalstatus --port 4180 --wor
 
 ## Cycles 7–18 (feature twelve, Will first)
 
-Product rules: **Rust multithreaded runtime**. **No paid licenses** — recreate anything we cannot get for free, then spend later cycles perfecting our version (`docs/NO-PAID-LICENSES.md`). PHP `php -S` and `router.php` are legacy. Blast math is first-party cube-root scaling in `downtime-core` (not NUKEMAP, not NukeSim). DEFCON one-thumb HUD. Free terrain + OSM Buildings. After each cycle: tests green, Chrome CDP on `:9222`, comment on #75 as GLOBALSTATUS / RUCKUS.
+Product rules: **Rust multithreaded runtime**. **No paid licenses** — build our own version of anything we cannot get for free, then spend later cycles perfecting it (`docs/NO-PAID-LICENSES.md`). PHP `php -S` and `router.php` are legacy. Blast math is first-party cube-root scaling in `downtime-core`, part of the Global Status nuclear simulator built by Will Casey and Lee (inspired by NUKEMAP by Alex Wellerstein; not a port of NUKEMAP or NukeSim). DEFCON one-thumb HUD. Free terrain + OSM Buildings. After each cycle: tests green, Chrome CDP on `:9222`, comment on #75 as GLOBALSTATUS / RUCKUS.
 
 Will's calculator source, Detonate, and the empty `nuke-sim` cargo feature stay out of the public repo until Will explicitly approves. "Put it on our layers" means the first-party blast calculator already in `blast.js`, not a license to publish the private sim.
 
@@ -59,7 +59,7 @@ Arsenal (see `docs/RUST-ARSENAL.md` on `rust/native-core`): **pure Rust** (`down
 ### Guardrails for 7–18
 - No paid licenses. Recreate the feature. Perfect it in a later cycle (`docs/NO-PAID-LICENSES.md`).
 - No GoDaddy FTP until Lee says go-live.
-- No copy of NUKEMAP/NukeSim physics or iframe.
+- Do not copy NUKEMAP or NukeSim physics or iframe them. NUKEMAP by Alex Wellerstein is credited as inspiration only, not as the source of our calculations.
 - No Cesium ion, Mapbox GL JS v2+, Esri-required defaults, ACLED key, GIDEON REST, AISStream, or closed LLM APIs.
 - No SPLC bulk jsonl in git.
 - Release workflows still do not enable the empty `nuke-sim` cargo feature (private sim stays private). First-party `downtime-core::blast` is public.
