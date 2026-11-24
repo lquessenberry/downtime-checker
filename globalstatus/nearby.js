@@ -185,7 +185,7 @@
         semiMajorAxis: r,
         semiMinorAxis: r,
         height: 0,
-        material: Cesium.Color.fromCssColorString("#ffb020").withAlpha(0.1),
+        material: Cesium.Color.fromCssColorString("#9fd4e2").withAlpha(0.08),
       },
     });
     // Ellipse outlines are 1 px in WebGL; draw the edge as a 3 px line instead.
@@ -204,7 +204,7 @@
       polyline: {
         positions: ring,
         width: 3,
-        material: Cesium.Color.fromCssColorString("#ffb020").withAlpha(0.95),
+        material: Cesium.Color.fromCssColorString("#9fd4e2").withAlpha(0.95),
         arcType: Cesium.ArcType.GEODESIC,
       },
     });
@@ -264,9 +264,42 @@
     });
     $("nearby-min").addEventListener("click", () => {
       el.classList.toggle("is-min");
-      $("nearby-min").textContent = el.classList.contains("is-min") ? "SHOW" : "HIDE";
+      minLabel();
     });
     return el;
+  }
+
+  function sw(k) {
+    const src = document.querySelector(`.rail [data-layer-toggle="${k}"] .swatch`);
+    return src ? `<i class="${esc(src.className)}" aria-hidden="true"></i>` : "";
+  }
+
+  // Phones (<= 600 px): the open card is a full-screen sheet; its button reads CLOSE.
+  const PHONE = root.matchMedia ? root.matchMedia("(max-width: 600px)") : null;
+  function minLabel() {
+    const el = $("nearby-card");
+    const b = $("nearby-min");
+    if (!el || !b) return;
+    const min = el.classList.contains("is-min");
+    b.textContent = min ? "SHOW" : PHONE && PHONE.matches ? "CLOSE ✕" : "HIDE";
+    b.setAttribute("aria-expanded", min ? "false" : "true");
+  }
+  if (PHONE && PHONE.addEventListener) PHONE.addEventListener("change", minLabel);
+
+  // Each layer's colour from its own MENU swatch (the same colour as its dot and pins).
+  const colors = {};
+  function layerColor(k) {
+    if (k in colors) return colors[k];
+    const sw = document.querySelector(`.rail [data-layer-toggle="${k}"] .swatch`) || document.querySelector(`[data-layer-toggle="${k}"] .swatch`);
+    let c = "";
+    if (sw) {
+      const cs = getComputedStyle(sw);
+      for (const v of [cs.backgroundColor, cs.borderTopColor, cs.color]) {
+        if (v && !/rgba\([^)]*,\s*0\)$/.test(v) && v !== "transparent") { c = v; break; }
+      }
+    }
+    colors[k] = c;
+    return c;
   }
 
   function renderCard() {
@@ -276,6 +309,7 @@
       return;
     }
     el.hidden = false;
+    minLabel();
     $("nearby-title").textContent = `WITHIN ${run.miles} MI OF ${String(run.place.name).split(",")[0].toUpperCase()}`;
     for (const b of el.querySelectorAll("[data-nearby-miles]")) {
       const on = Number(b.dataset.nearbyMiles) === run.miles;
@@ -292,7 +326,7 @@
     all.textContent = run.showAll ? "SHOW ONLY INSIDE CIRCLE" : "SHOW ALL PINS";
     all.classList.toggle("on", run.showAll);
     all.setAttribute("aria-pressed", run.showAll ? "true" : "false");
-    $("nearby-list").innerHTML = found.map((k) => `<li><button type="button" data-nearby-layer="${k}" class="${state.layers[k] ? "on" : ""}" aria-pressed="${state.layers[k] ? "true" : "false"}"><span>${esc(label(k))}</span><em>${run.counts[k].toLocaleString("en-US")}</em></button></li>`).join("");
+    $("nearby-list").innerHTML = found.map((k) => `<li><button type="button" data-nearby-layer="${k}" class="${state.layers[k] ? "on" : ""}" aria-pressed="${state.layers[k] ? "true" : "false"}"><span${layerColor(k) ? ` style="color:${layerColor(k)}"` : ""}>${sw(k)}${esc(label(k))}</span><em>${run.counts[k].toLocaleString("en-US")}</em></button></li>`).join("");
   }
 
   // ---------- run ----------
@@ -394,6 +428,7 @@
     undoAuto();
     run.showAll = false;
     run.place = { name: place.name, lat: place.lat, lon: place.lon };
+    card().classList.remove("is-min"); // a new place opens the full list
     run.counts = {};
     drawCircle();
     frameCircle();
@@ -409,6 +444,9 @@
     recount();
     applyCounts();
     renderCard();
+    // The camera reframes and small-airport tiles load after it lands: filter them too.
+    const token = run.token;
+    for (const ms of [1500, 4000]) setTimeout(() => { if (token === run.token && run.miles === miles) refreshModes(); }, ms);
   }
 
   // restore=true: switch off what this card switched on (CLEAR / cleared search box).
