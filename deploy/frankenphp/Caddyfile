@@ -56,22 +56,60 @@
 			}
 		}
 
-		# Runner caches: the poll runner writes ready-to-serve JSON every >= 5 minutes.
-		# Falls back to PHP (which answers "awaiting poller") until the first poll lands.
-		@cached path_regexp cached ^/api/(outages|mil|mesh|disease|animal)$
+		# Tiny manifest: layer -> hash, ts. Clients use this to skip unchanged layers.
+		handle /api/manifest {
+			route {
+				try_files /data/manifest.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=15, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+
+		# Runner snapshots. Written atomically only when the payload hash changes.
+		# Caddy's ETag follows mtime/size, so it only changes on a real content change.
+		# Precompressed zstd/gzip twins are written next to the JSON. PHP is the
+		# fallback until the first poll lands.
+		@cached path_regexp cached ^/api/(outages|mil|mesh|disease|animal|jamming|aircraft)$
 		handle @cached {
 			route {
 				try_files /data/{re.cached.1}-cache.json /router.php
 				@json path *.json
-				header @json Cache-Control "public, max-age=60, stale-while-revalidate=300"
+				header @json Cache-Control "public, max-age=60, stale-while-revalidate=600"
 				file_server @json {
-					precompressed gzip
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		handle /api/poll-status {
+			route {
+				try_files /data/poll-status.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=15, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		@space path_regexp space ^/api/space/(nws|hurricanes|wildfires|tsunami|rivers|coastal)$
+		handle @space {
+			route {
+				try_files /data/space-{re.space.1}.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=60, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
 				}
 				php
 			}
 		}
 		handle /api/feeds {
-			header Cache-Control "public, max-age=60, stale-while-revalidate=300"
+			header Cache-Control "public, max-age=60, stale-while-revalidate=600"
 			try_files /data/feeds-cache.json /api/feeds.json
 			file_server {
 				precompressed zstd br gzip
@@ -79,7 +117,7 @@
 		}
 
 		# Everything else under /api goes to the PHP router (scan, scan-state,
-		# poll-status, aircraft/:hex). router.php sets its own Cache-Control.
+		# aircraft/:hex). router.php sets its own Cache-Control.
 		handle /api/* {
 			rewrite * /router.php
 			php

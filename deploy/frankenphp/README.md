@@ -8,11 +8,18 @@ poller from `deploy/globalstatus-live`.
 
 `start.sh` runs `php poll-runner.php loop` in the background:
 
-- `poll-runner.php aircraft` every 5 minutes (civilian adsb.lol, plus
-  time-gated mil and jamming at 15 minutes, Space & Weather feeds, and
-  outages/mesh/disease at 5 minutes and animal at 10 minutes).
-- `poll-runner.php grid` every 10 minutes (Will's live cadence). The
-  image includes `iputils` so the pass uses real ICMP ping.
+- Due HTTP sources (aircraft, jamming, Space & Weather, outages, mesh,
+  disease, animal) run as parallel `--solo` child processes, at most
+  three at a time, each with its own lock and cadence.
+- Adaptive cadence slows a source after several unchanged payload
+  hashes, but never faster than its set limit (5 min most, 15 min
+  mil/jamming, 3 h wildfires). 5-minute sources stretch to at most
+  10 minutes so visitors are never more than about 10 minutes stale.
+- Snapshots are hashed (xxh128, else sha1) and written atomically only
+  when the normalized payload changes. A small `/api/manifest` lists
+  each layer's hash and timestamp so the client fetches only what changed.
+- `poll-runner.php grid` every 10 minutes, exclusive of the HTTP wave.
+  The image includes `iputils` so the pass uses real ICMP ping.
 - Last-poll timestamps and caches live on a 1 GB Fly volume mounted at
   `/app/public/data`, so a restart does not immediately re-poll.
 - The machine is always on (`auto_stop` off, `min_machines_running` 1).
@@ -25,9 +32,15 @@ poller from `deploy/globalstatus-live`.
   `/api/catalog`, `streams`, `amfm`, `designations`, `violence`, `conflicts`,
   `hunger`, `websdr`, `gpsjam`, `radio`, `zones`, `claims`.
 - **Live layers** (`/api/outages`, `mil`, `mesh`, `disease`, `animal`,
-  `feeds`): runner caches in `data/*-cache.json` are served as static
-  files with a 60 s cache. Until the first poll lands, they fall back
-  to the PHP router, which answers "Awaiting poller".
+  `jamming`, `aircraft`, plus `/api/space/*` and `/api/poll-status`):
+  runner snapshots are served by Caddy `file_server` with hash-stable
+  ETags (write-only-on-change), zstd/gzip precompression, and
+  `Cache-Control: public, max-age=60, stale-while-revalidate=600`
+  (`max-age=15` on the manifest and poll-status). Until the first poll
+  lands, they fall back to the PHP router, which answers "Awaiting poller".
+- **`/api/manifest`**: tiny layer → hash, ts index. The client skips
+  unchanged layers (mesh and the old `/api/feeds` jamming poll were the
+  main waste).
 - **Blocked routes:**
 
   | Request | Response |

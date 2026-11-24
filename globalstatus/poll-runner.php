@@ -48,6 +48,7 @@ $skipAircraft = false;
 $forceSpace = false;
 $skipSpace = false;
 $skipLayers = false;
+$solo = false;
 $onlySpace = array();
 foreach ($argv as $arg) {
     if (strpos($arg, '--slice=') === 0) {
@@ -82,6 +83,8 @@ foreach ($argv as $arg) {
         $GLOBALS['GSA_ADSB_MOCK'] = substr($arg, 7);
     } elseif (strpos($arg, '--mock-jam=') === 0) {
         $GLOBALS['GSA_JAM_MOCK'] = substr($arg, 11);
+    } elseif ($arg === '--solo') {
+        $solo = true;
     }
 }
 
@@ -140,7 +143,7 @@ function runner_space($force, $only)
             $info = array('ok' => false, 'error' => $e->getMessage());
         }
         $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
-        if (empty($info['busy']) && empty($info['skipped'])) {
+        if (empty($info['busy'])) {
             gsa_poll_status_note('space-' . $name, $info);
         }
         $out[$name] = $info;
@@ -294,33 +297,132 @@ if ($job === 'jamming') {
 }
 
 if ($job === 'outages' || $job === 'mesh' || $job === 'disease' || $job === 'animal') {
-    $all = runner_layers(true);
-    $info = $all[$job];
+    $info = runner_layer($job, 0, function () use ($job) {
+        if ($job === 'outages') {
+            return outages_snapshot();
+        }
+        if ($job === 'mesh') {
+            return mesh_snapshot();
+        }
+        if ($job === 'disease') {
+            return disease_snapshot();
+        }
+        return animal_snapshot();
+    });
     runner_print(array($job => $info));
     exit(runner_ok($info) ? 0 : 2);
 }
 
 if ($job === 'aircraft') {
-    $out = runner_aircraft(runner_aircraft_opts());
+    $opts = runner_aircraft_opts();
+    if ($solo) {
+        $opts['skipJam'] = true;
+        $opts['skipSpace'] = true;
+        $opts['skipLayers'] = true;
+    }
+    $out = runner_aircraft($opts);
     runner_print($out);
     $airOk = runner_ok($out['aircraft']);
-    $jamOk = $skipJam || runner_ok($out['jamming'] ?? array('skipped' => true));
+    $jamOk = !empty($opts['skipJam']) || runner_ok($out['jamming'] ?? array('skipped' => true));
     exit($airOk && $jamOk ? 0 : 2);
+}
+
+function runner_http_jobs()
+{
+    return array(
+        'aircraft',
+        'jamming',
+        'space-nws',
+        'space-hurricanes',
+        'space-wildfires',
+        'space-tsunami',
+        'space-rivers',
+        'space-coastal',
+        'outages',
+        'mesh',
+        'disease',
+        'animal',
+    );
+}
+
+function runner_job_argv($name)
+{
+    if (strpos($name, 'space-') === 0) {
+        return array('space', '--only=' . substr($name, 6), '--solo');
+    }
+    return array($name, '--solo');
+}
+
+// Run due HTTP jobs as child processes (own lock + cadence), at most three
+// at a time, so one 512 MB machine stays inside its memory cap. Grid is
+// exclusive: it is a 2-4 minute ping pass and runs alone.
+function runner_spawn_jobs($names, $max = 4)
+{
+    $php = PHP_BINARY;
+    $script = __DIR__ . '/poll-runner.php';
+    $queue = array_values($names);
+    $procs = array();
+    $results = array();
+    while ($queue || $procs) {
+        while ($queue && count($procs) < $max) {
+            $name = array_shift($queue);
+            $args = runner_job_argv($name);
+            $cmd = array_merge(array($php, $script), $args);
+            fwrite(STDERR, gmdate('c') . " poll $name\n");
+            $descriptors = array(
+                1 => array('pipe', 'w'),
+                2 => array('pipe', 'w'),
+            );
+            $pipes = array();
+            $proc = @proc_open($cmd, $descriptors, $pipes, __DIR__);
+            if (!is_resource($proc)) {
+                $results[$name] = array('ok' => false, 'error' => 'Could not start job');
+                continue;
+            }
+            $procs[$name] = array('proc' => $proc, 'pipes' => $pipes);
+        }
+        foreach (array_keys($procs) as $name) {
+            $row = $procs[$name];
+            $status = proc_get_status($row['proc']);
+            if (!empty($status['running'])) {
+                continue;
+            }
+            $stdout = stream_get_contents($row['pipes'][1]);
+            $stderr = stream_get_contents($row['pipes'][2]);
+            foreach ($row['pipes'] as $pipe) {
+                fclose($pipe);
+            }
+            $code = proc_close($row['proc']);
+            if ($stdout !== '') {
+                echo $stdout;
+            }
+            if ($stderr !== '') {
+                fwrite(STDERR, $stderr);
+            }
+            $results[$name] = array('ok' => $code === 0, 'code' => $code);
+            unset($procs[$name]);
+        }
+        if ($procs) {
+            usleep(100000);
+        }
+    }
+    return $results;
 }
 
 if ($job === 'loop') {
     fwrite(STDERR, 'gsa poll-runner loop pid=' . getmypid() . "\n");
-    // Lee approved keeping Will's live 10-minute grid on staging (t103u).
-    // Never poll a source faster than 5 minutes.
-    $gridTtl = max(300, (int) (getenv('GSA_GRID_SEC') ?: 600));
-    $airTtl = max(300, (int) (getenv('GSA_AIRCRAFT_SEC') ?: 300));
-    $opts = runner_aircraft_opts();
     while (true) {
-        if (runner_job_age('aircraft') >= $airTtl) {
-            fwrite(STDERR, gmdate('c') . " poll aircraft\n");
-            runner_print(runner_aircraft($opts));
+        $dueHttp = array();
+        foreach (runner_http_jobs() as $name) {
+            if (runner_job_age($name) >= gsa_adaptive_ttl($name)) {
+                $dueHttp[] = $name;
+            }
         }
-        if (runner_job_age('grid') >= $gridTtl) {
+        $gridDue = runner_job_age('grid') >= gsa_adaptive_ttl('grid');
+        if ($dueHttp) {
+            runner_spawn_jobs($dueHttp, 3);
+        }
+        if ($gridDue) {
             fwrite(STDERR, gmdate('c') . " poll grid\n");
             runner_print(array('grid' => runner_grid($slice)));
         }

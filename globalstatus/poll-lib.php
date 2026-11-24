@@ -31,11 +31,25 @@ function gsa_atomic_write($file, $body)
         @unlink($tmp);
         return false;
     }
-    // A gzip twin lets Caddy serve runner caches without compressing them per request.
-    if (function_exists('gzencode') && substr($file, -5) === '.json') {
-        $gz = gzencode($body, 6);
-        if ($gz !== false && file_put_contents($tmp . '.gz', $gz) !== false) {
-            @rename($tmp . '.gz', $file . '.gz');
+    // gzip + zstd twins let Caddy serve runner caches without compressing them per request.
+    if (substr($file, -5) === '.json') {
+        if (function_exists('gzencode')) {
+            $gz = gzencode($body, 6);
+            if ($gz !== false && file_put_contents($tmp . '.gz', $gz) !== false) {
+                @rename($tmp . '.gz', $file . '.gz');
+            }
+        }
+        $zstd = '/usr/bin/zstd';
+        if (is_executable($zstd)) {
+            $zst = $tmp . '.zst';
+            $cmd = $zstd . ' -q -6 -f -o ' . escapeshellarg($zst) . ' ' . escapeshellarg($tmp);
+            $code = 0;
+            @exec($cmd, $out, $code);
+            if ($code === 0 && is_file($zst)) {
+                @rename($zst, $file . '.zst');
+            } else {
+                @unlink($zst);
+            }
         }
     }
     if (!rename($tmp, $file)) {
@@ -86,20 +100,12 @@ function gsa_fingerprint($payload)
     return hash('sha256', json_encode($core));
 }
 
-function gsa_cache_put($file, $payload)
+function gsa_cache_put($file, $payload, $source = null)
 {
-    $payload['fetchedAt'] = time();
-    $payload['stale'] = false;
-    $body = json_encode($payload);
-    if ($body === false || !gsa_atomic_write($file, $body)) {
-        return array('changed' => false, 'error' => 'Could not save ' . basename($file));
+    if ($source === null) {
+        $source = gsa_source_from_file($file);
     }
-    return array(
-        'changed' => true,
-        'bytes' => strlen($body),
-        'fingerprint' => gsa_fingerprint($payload),
-        'count' => isset($payload['results']) ? count($payload['results']) : 0,
-    );
+    return gsa_snapshot_put($file, $payload, $source);
 }
 
 function gsa_poll_status_file()
@@ -122,21 +128,47 @@ function gsa_poll_status_read()
     return $decoded;
 }
 
+function gsa_poll_status_lock_file()
+{
+    global $dataDir;
+    return $dataDir . '/poll-status.lock';
+}
+
 function gsa_poll_status_note($job, $info)
 {
-    $all = gsa_poll_status_read();
-    if (!isset($all['jobs']) || !is_array($all['jobs'])) {
-        $all['jobs'] = array();
+    global $dataDir;
+    if (!is_dir($dataDir)) {
+        mkdir($dataDir, 0755, true);
     }
-    $info['at'] = gmdate('Y-m-d\TH:i:s\Z');
-    if (!empty($info['ok'])) {
-        $info['lastOkAt'] = $info['at'];
-    } elseif (isset($all['jobs'][$job]['lastOkAt'])) {
-        $info['lastOkAt'] = $all['jobs'][$job]['lastOkAt'];
+    $lock = fopen(gsa_poll_status_lock_file(), 'c');
+    if ($lock) {
+        flock($lock, LOCK_EX);
     }
-    $all['jobs'][$job] = $info;
-    $all['updated'] = $info['at'];
-    gsa_atomic_write(gsa_poll_status_file(), json_encode($all));
+    try {
+        $all = gsa_poll_status_read();
+        if (!isset($all['jobs']) || !is_array($all['jobs'])) {
+            $all['jobs'] = array();
+        }
+        $info['at'] = gmdate('Y-m-d\TH:i:s\Z');
+        if (!empty($info['ok'])) {
+            $info['lastOkAt'] = $info['at'];
+        } elseif (isset($all['jobs'][$job]['lastOkAt'])) {
+            $info['lastOkAt'] = $all['jobs'][$job]['lastOkAt'];
+        }
+        $all['jobs'][$job] = $info;
+        $all['updated'] = $info['at'];
+        $all['mode'] = 'one-user';
+        gsa_atomic_write(gsa_poll_status_file(), json_encode($all));
+        if (function_exists('gsa_cadence_note')) {
+            $statusHash = gsa_payload_hash($all);
+            gsa_cadence_note('poll-status', $statusHash, true, array('count' => count($all['jobs'])));
+        }
+    } finally {
+        if ($lock) {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
 }
 
 function gsa_scan_cache_file()
@@ -421,12 +453,13 @@ function gsa_aircraft_merge($map, $rows, $tag)
 
 function gsa_aircraft_publish($map, $meta)
 {
+    $count = count($map);
     $points = array_values($map);
-    usort($points, function ($a, $b) {
-        return ((int) ($b['ts'] ?? 0)) <=> ((int) ($a['ts'] ?? 0));
-    });
-    $count = count($points);
+    // Hash map already dedupes by hex. Only sort when we have to cap.
     if ($count > GSA_AIRCRAFT_CAP) {
+        usort($points, function ($a, $b) {
+            return ((int) ($b['ts'] ?? 0)) <=> ((int) ($a['ts'] ?? 0));
+        });
         $points = array_slice($points, 0, GSA_AIRCRAFT_CAP);
     }
     $layer = array(
@@ -459,14 +492,11 @@ function gsa_aircraft_publish($map, $meta)
         if (is_array($prev) && !empty($prev['updated'])) {
             $layer['updated'] = $prev['updated'];
         }
-        $body = json_encode($layer);
-        $ok = $body !== false && gsa_atomic_write(gsa_aircraft_cache_file(), $body);
-        $put = $ok
-            ? array('changed' => true, 'bytes' => strlen($body), 'count' => $layer['count'])
-            : array('changed' => false, 'error' => 'Could not save aircraft cache', 'bytes' => 0);
+        $put = gsa_snapshot_put(gsa_aircraft_cache_file(), $layer, 'aircraft');
     } else {
-        $put = gsa_cache_put(gsa_aircraft_cache_file(), $layer);
+        $put = gsa_cache_put(gsa_aircraft_cache_file(), $layer, 'aircraft');
     }
+    gsa_write_mil_from_aircraft($layer);
     $put['count'] = $layer['count'];
     $put['published'] = count($points);
     return array($layer, $put);
@@ -1035,13 +1065,9 @@ function gsa_jamming_publish($layer)
             $layer['points'] = $prev['points'];
             $layer['count'] = $prev['count'] ?? count($prev['points']);
         }
-        $body = json_encode($layer);
-        $ok = $body !== false && gsa_atomic_write(gsa_jamming_cache_file(), $body);
-        $put = $ok
-            ? array('changed' => true, 'bytes' => strlen($body), 'count' => $layer['count'] ?? 0)
-            : array('changed' => false, 'error' => 'Could not save jamming cache', 'bytes' => 0);
+        $put = gsa_snapshot_put(gsa_jamming_cache_file(), $layer, 'jamming');
     } else {
-        $put = gsa_cache_put(gsa_jamming_cache_file(), $layer);
+        $put = gsa_cache_put(gsa_jamming_cache_file(), $layer, 'jamming');
     }
     $put['count'] = $layer['count'] ?? 0;
     $put['published'] = isset($layer['points']) && is_array($layer['points']) ? count($layer['points']) : 0;
@@ -2430,3 +2456,5 @@ function gsa_space_snapshot($name)
     $cached['stale'] = $ageSec === null || $ageSec > $meta['staleSec'] || !empty($cached['stale']);
     return $cached;
 }
+
+require __DIR__ . '/poll-cache.php';

@@ -99,6 +99,49 @@ const state = {
   scanCheckedAt: 0,
 };
 
+
+// Small layer manifest (hash, ts). Clients fetch a layer only when its hash changed.
+const GsaManifest = {
+  data: null,
+  hashes: Object.create(null),
+  inflight: null,
+  async refresh() {
+    if (this.inflight) return this.inflight;
+    this.inflight = fetch("/api/manifest")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (body && body.layers) this.data = body;
+        return this.data;
+      })
+      .catch(() => this.data)
+      .finally(() => { this.inflight = null; });
+    return this.inflight;
+  },
+  layer(name) {
+    return (this.data && this.data.layers && this.data.layers[name]) || null;
+  },
+  unchanged(name) {
+    const row = this.layer(name);
+    if (!row || !row.hash) return false;
+    return this.hashes[name] === row.hash;
+  },
+  remember(name, hash) {
+    const value = hash || (this.layer(name) && this.layer(name).hash) || "";
+    if (value) this.hashes[name] = value;
+  },
+};
+window.GsaManifest = GsaManifest;
+
+async function fetchLayer(name, url) {
+  await GsaManifest.refresh();
+  if (GsaManifest.unchanged(name)) return { skipped: true, body: null };
+  const response = await fetch(url);
+  const body = await response.json();
+  if (!response.ok) throw new Error((body && body.error) || `${name} failed`);
+  GsaManifest.remember(name, (body && body.hash) || "");
+  return { skipped: false, response, body };
+}
+
 // SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
 const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
 
@@ -1506,9 +1549,9 @@ function outageColor(customers) {
 }
 
 async function loadOutages() {
-  const response = await fetch("/api/outages");
-  const body = await response.json();
-  if (!response.ok) throw new Error(body.error || "Power outages failed");
+  const got = await fetchLayer("outages", "/api/outages");
+  if (got.skipped) return;
+  const body = got.body;
   state.outagePoints = Array.isArray(body.points) ? body.points : [];
   state.outageMeta = body;
   setCount("outages", state.outagePoints.length);
@@ -2707,9 +2750,9 @@ async function loadMesh() {
   if (!state.layers.mesh) return;
   const token = ++meshToken;
   try {
-    const response = await fetch("/api/mesh");
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || "Mesh Nodes failed");
+    const got = await fetchLayer("mesh", "/api/mesh");
+    if (got.skipped) return;
+    const body = got.body;
     if (token !== meshToken || !state.layers.mesh) return;
     const points = Array.isArray(body.points) ? body.points : [];
     state.live.mesh.points = points;
@@ -2733,9 +2776,9 @@ async function loadDisease() {
   if (!state.layers.disease) return;
   const token = ++diseaseToken;
   try {
-    const response = await fetch("/api/disease");
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || "Disease Outbreak failed");
+    const got = await fetchLayer("disease", "/api/disease");
+    if (got.skipped) return;
+    const body = got.body;
     if (token !== diseaseToken || !state.layers.disease) return;
     const points = Array.isArray(body.points) ? body.points : [];
     state.live.disease.points = points;
@@ -2761,9 +2804,9 @@ async function loadAnimal() {
   if (!state.layers.animal) return;
   const token = ++animalToken;
   try {
-    const response = await fetch("/api/animal");
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || "Animal Disease Outbreak failed");
+    const got = await fetchLayer("animal", "/api/animal");
+    if (got.skipped) return;
+    const body = got.body;
     if (token !== animalToken || !state.layers.animal) return;
     const points = Array.isArray(body.points) ? body.points : [];
     state.live.animal.points = points;
@@ -2913,8 +2956,9 @@ async function refreshMilitary() {
 }
 
 async function pollJamming() {
-  const data = await fetch("/api/feeds").then((response) => response.json());
-  const jam = data.jamming || {};
+  const got = await fetchLayer("jamming", "/api/jamming");
+  if (got.skipped) return;
+  const jam = got.body || {};
   state.live.jamming.points = jam.points || [];
   setCount("jamming", jam.count ?? state.live.jamming.points.length);
   placeLiveLayer("jamming", state.live.jamming.points);
@@ -2926,8 +2970,9 @@ async function pollAircraft() {
   } catch (error) {
     state.adsbIcons = null;
   }
-  const data = await fetch("/api/aircraft").then((response) => response.json());
-  applyAircraftSnapshot(data);
+  const got = await fetchLayer("aircraft", "/api/aircraft");
+  if (got.skipped) return;
+  applyAircraftSnapshot(got.body);
   statusLive();
 }
 

@@ -45,6 +45,12 @@ function gsa_http_routes()
     if ($path === '/api/poll-status' && $method === 'GET') {
         json_out(200, gsa_poll_status_read());
     }
+    if ($path === '/api/manifest' && $method === 'GET') {
+        json_out(200, gsa_manifest_read());
+    }
+    if ($path === '/api/jamming' && $method === 'GET') {
+        json_out(200, gsa_jamming_snapshot());
+    }
     if ($path === '/api/stop' && $method === 'POST') {
         // Stop is local to each visitor now. Visitors can no longer write
         // data/stop.flag, so nobody can abort the scheduled pass.
@@ -762,14 +768,14 @@ function outages_snapshot_locked()
         if (!empty($built['points'])) {
             $stored = $built;
             $stored['fetchedAt'] = time();
-            gsa_atomic_write($cacheFile, json_encode($stored));
+            gsa_snapshot_put($cacheFile, $stored, gsa_source_from_file($cacheFile));
         }
         return $built;
     }
     $built = outages_attach_world(outages_build($root, $raw), false);
     $stored = $built;
     $stored['fetchedAt'] = time();
-    gsa_atomic_write($cacheFile, json_encode($stored));
+    gsa_snapshot_put($cacheFile, $stored, gsa_source_from_file($cacheFile));
     unset($built['fetchedAt']);
     return $built;
 }
@@ -1518,7 +1524,7 @@ function mesh_snapshot_locked()
     );
     $stored = $built;
     $stored['fetchedAt'] = time();
-    gsa_atomic_write($cacheFile, json_encode($stored));
+    gsa_snapshot_put($cacheFile, $stored, gsa_source_from_file($cacheFile));
     return $built;
 }
 
@@ -1619,7 +1625,7 @@ function outbreak_cached($cacheFile, $ttl, $fetch, $emptyError, $source, $source
     );
     $stored = $built;
     $stored['fetchedAt'] = time();
-    gsa_atomic_write($cacheFile, json_encode($stored));
+    gsa_snapshot_put($cacheFile, $stored, gsa_source_from_file($cacheFile));
     return $built;
 }
 

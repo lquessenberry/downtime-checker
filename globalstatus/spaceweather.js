@@ -131,10 +131,32 @@
     return `${Math.round(hours / 24)} days ago`;
   }
 
+  const SPACE_MANIFEST = {
+    nwsalerts: "space-nws",
+    hurricanes: "space-hurricanes",
+    wildfires: "space-wildfires",
+    rivers: "space-rivers",
+    coastal: "space-coastal",
+    tsunami: "space-tsunami",
+  };
+
   async function getJson(url) {
-    const response = await fetch(url, { cache: "no-store" });
+    const key = Object.keys(URLS).find((k) => URLS[k] === url);
+    const layer = key && SPACE_MANIFEST[key];
+    const man = root.GsaManifest;
+    if (layer && man) {
+      await man.refresh();
+      if (man.unchanged(layer)) {
+        const skip = new Error("unchanged");
+        skip.unchanged = true;
+        throw skip;
+      }
+    }
+    const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response.json();
+    const body = await response.json();
+    if (layer && man) man.remember(layer, body && body.hash);
+    return body;
   }
 
   function source(key) {
@@ -882,7 +904,10 @@
     if (!first && document.hidden) return;
     Promise.resolve()
       .then(() => LOADERS[key](first))
-      .catch((error) => fail(key, error));
+      .catch((error) => {
+        if (error && error.unchanged) return;
+        fail(key, error);
+      });
   }
 
   function setActive(key, on) {
