@@ -1,11 +1,11 @@
 /* Global Status · FIREARMS layers (saved static files, not a live feed).
  *
  *   USA GUN OWNERSHIP    /api/guns-usa     50 states + D.C. centroids
- *   WORLD GUN OWNERSHIP  /api/guns-world   one pin per country (one for the US)
+ *   GLOBAL GUN OWNERSHIP  /api/guns-world   one pin per country (one for the US)
  *
  * World Population Review tables, themselves from Pew / CBS News (US, 2022)
  * and the Small Arms Survey 2017 (world). Drawn as Cesium entities so the
- * nearby list and pin cards work the same way as WORLD HUNGER.
+ * nearby list and pin cards work the same way as GLOBAL HUNGER.
  */
 (function (root) {
   const KEYS = ["gunsusa", "gunsworld"];
@@ -21,8 +21,8 @@
       caption: "Share of households that own guns and gun-ownership licenses, 2022. District of Columbia has no household percentage in the source table. Saved copy, not a live feed.",
     },
     gunsworld: {
-      label: "WORLD GUN OWNERSHIP",
-      kind: "WORLD GUN OWNERSHIP",
+      label: "GLOBAL GUN OWNERSHIP",
+      kind: "GLOBAL GUN OWNERSHIP",
       caption: "Civilian guns per 100 people, plus civilian, military and law-enforcement firearm totals, 2017. Indonesia and Taiwan have no per-person rate in the source table. One pin for the entire United States. Saved copy, not a live feed.",
     },
   };
