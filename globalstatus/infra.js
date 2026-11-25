@@ -14,12 +14,19 @@
  *                   /infra/cell-towers/<tile>.json    every site, 2-degree tiles,
  *                   fetched only when zoomed in over that tile
  *                   Cards are on-screen text only: no links off globalstatus.app.
+ *   GLOBAL POWER PLANTS  WRI Global Power Plant Database v1.3 (CC BY 4.0) outside the
+ *                   US; EIA-860M operating generators (grouped by plant) for the US and
+ *                   Puerto Rico. Built by scripts/build_power_plants.py
+ *                   /infra/power-plants/overview.json  plants of 50 MW and up
+ *                   /infra/power-plants/<tile>.json    smaller plants, 10-degree tiles,
+ *                   fetched only when zoomed in over that tile
+ *                   Cards are on-screen text only: no links off globalstatus.app.
  *
  * Drawn with Cesium PointPrimitiveCollections (tens of thousands of points stay
  * cheap on phones). Nothing is fetched until a layer is switched on.
  */
 (function (root) {
-  const KEYS = ["airports", "bases", "celltowers"];
+  const KEYS = ["airports", "bases", "celltowers", "powerplants"];
   const V = "20261123t";
   const BASE_URL = "/infra/";
   // Small airports appear below this camera height (metres above the ellipsoid).
@@ -33,6 +40,11 @@
   // Loaded tiles are dropped and refetched after this many, so panning the whole
   // country does not keep 140,000 points in the per-frame horizon cull.
   const CELL_KEEP_TILES = 90;
+  const PLANT_V = "20261124q";
+  const PLANT_URL = "/infra/power-plants/";
+  // Plants under 50 MW appear below this camera height.
+  const PLANT_NEAR_HEIGHT = 2500 * 1000;
+  const PLANT_MAX_TILES = 24;
 
   const META = {
     airports: {
@@ -51,6 +63,12 @@
       credit: "Cell towers: FCC Antenna Structure Registration and FCC cellular license sites (public records)",
       caption: "Constructed towers, monopoles, poles and masts registered with the FCC, US and territories. Most carry cellular antennas; some are broadcast, utility, railroad or public-safety radio towers. Zoom in to see every site. Carriers are named only where an FCC cellular license lists the site; the FCC tower file does not list tenants, so most towers show the owner only.",
     },
+    powerplants: {
+      label: "GLOBAL POWER PLANTS",
+      // Plain text on purpose: nothing in this layer links off globalstatus.app.
+      credit: "Power plants: World Resources Institute, Global Power Plant Database v1.3 (CC BY 4.0); U.S. Energy Information Administration (EIA-860M, October 2026)",
+      caption: "Outside the US: WRI database (last updated 2021). US and Puerto Rico: EIA operating generator inventory, grouped by plant. Colored by main fuel, sized by capacity. Plants of 50 MW and up show at every zoom; zoom in for smaller plants.",
+    },
   };
 
   // FCC ASR structure type codes (build script TYPES order).
@@ -63,6 +81,18 @@
     B: "Building", BANT: "Antenna on a building", SILO: "Silo", OTHER: "Other structure",
   };
   const CELL_STYLE = { color: "#3fd0c9", size: 5, far: true };
+  // GLOBAL POWER PLANTS: fuel colors (build script FUELS order), size by capacity.
+  const PLANT_FUELS = ["coal", "gas", "oil", "nuclear", "hydro", "solar", "wind", "other"];
+  const PLANT_FUEL_LABEL = { coal: "Coal", gas: "Gas", oil: "Oil", nuclear: "Nuclear", hydro: "Hydro", solar: "Solar", wind: "Wind", other: "Other" };
+  const PLANT_COLORS = { coal: "#6b5544", gas: "#ff8c2a", oil: "#d6403a", nuclear: "#c86bff", hydro: "#2f8fff", solar: "#ffd83a", wind: "#5fe0d0", other: "#9aa79a" };
+  const PLANT_SIZES = [[1000, 11], [300, 9], [50, 7], [10, 5], [0, 4]];
+  const plantStyles = {};
+  function plantStyle(fuel, mw) {
+    const name = PLANT_FUELS[fuel] || "other";
+    const size = PLANT_SIZES.find(([min]) => mw >= min)[1];
+    const key = `${name}:${size}`;
+    return plantStyles[key] || (plantStyles[key] = { color: PLANT_COLORS[name], size, far: true });
+  }
   const CELL_CARRIER_STYLE = { color: "#ffcf5a", size: 6, far: true };
 
   const AIRPORT_TYPE = { L: "LARGE AIRPORT", M: "MEDIUM AIRPORT", S: "SMALL AIRPORT", W: "SEAPLANE BASE" };
@@ -88,6 +118,7 @@
   for (const key of KEYS) st[key] = { on: false, loading: null, ready: false, error: "", count: null, built: "" };
   const air = { major: null, small: null, countries: {}, index: null, indexLoading: null, tiles: new Map(), smallShown: false, smallCount: 0, tileDeg: 15 };
   const mil = { coll: null, countries: {} };
+  const plant = { ov: null, near: null, index: null, indexLoading: null, tiles: new Map(), nearShown: false, nearCount: 0, total: 0, sources: [] };
   const cell = { ov: null, near: null, index: null, indexLoading: null, tiles: new Map(), nearShown: false, nearCount: 0, total: 0, source: "", types: CELL_TYPES };
   let lastShown = null;
 
@@ -165,6 +196,7 @@
     if (s.count == null) return "…";
     if (key === "airports" && air.smallShown && air.smallCount) return `${fmt(s.count)} + ${fmt(air.smallCount)}`;
     if (key === "celltowers" && cell.total) return fmt(cell.total);
+    if (key === "powerplants" && plant.nearShown && plant.nearCount) return `${fmt(s.count)} + ${fmt(plant.nearCount)}`;
     return fmt(s.count);
   }
 
@@ -185,6 +217,12 @@
           bits.push(cell.nearShown
             ? `${fmt(cell.nearCount)} sites loaded around this view, of ${fmt(cell.total)} in all`
             : `${fmt(s.count)} of ${fmt(cell.total)} sites shown at this distance. Zoom in to see every site`);
+        }
+        if (s.ready && key === "powerplants") {
+          bits.push(PLANT_FUELS.map((f) => `<span class="pp-key" style="--pp:${PLANT_COLORS[f]}"></span>${esc(PLANT_FUEL_LABEL[f])}`).join(" "));
+          bits.push(plant.nearShown
+            ? `${fmt(s.count)} plants of 50 MW and up + ${fmt(plant.nearCount)} smaller plants loaded nearby, of ${fmt(plant.total)} in all`
+            : `${fmt(s.count)} plants of 50 MW and up, of ${fmt(plant.total)} in all. Zoom in for smaller plants`);
         }
         if (s.built) bits.push(`Data from ${esc(s.built)}`);
         if (!s.ready && !s.error) bits.push("Loading…");
@@ -422,6 +460,74 @@
     render("celltowers");
   }
 
+  // ---------- GLOBAL POWER PLANTS ----------
+  function addPlantRows(coll, body) {
+    const rows = Array.isArray(body.rows) ? body.rows : [];
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i];
+      addPoint(coll, row[0], row[1], plantStyle(row[2], Number(row[3]) || 0), { __infra: "powerplants", row, body });
+    }
+    return rows.length;
+  }
+
+  async function loadPowerPlants() {
+    const body = await getJsonRetry(`${PLANT_URL}overview.json?v=${PLANT_V}`);
+    plant.near = newCollection();
+    plant.ov = newCollection();
+    st.powerplants.count = addPlantRows(plant.ov, body);
+    plant.total = Number(body.total) || 0;
+    plant.sources = body.sources || [];
+    st.powerplants.ready = true;
+  }
+
+  async function ensurePlantIndex() {
+    if (plant.index) return plant.index;
+    if (!plant.indexLoading) {
+      plant.indexLoading = getJsonRetry(`${PLANT_URL}index.json?v=${PLANT_V}`).then((body) => {
+        plant.index = body;
+        return body;
+      }).finally(() => { plant.indexLoading = null; });
+    }
+    return plant.indexLoading;
+  }
+
+  function loadPlantTile(key) {
+    if (plant.tiles.has(key)) return plant.tiles.get(key);
+    const job = getJsonRetry(`${PLANT_URL}${key}.json?v=${PLANT_V}`).then((body) => {
+      if (!plant.near || !plant.tiles.has(key)) return 0;
+      const n = addPlantRows(plant.near, body);
+      plant.nearCount += n;
+      cullSoon();
+      return n;
+    }).catch((error) => {
+      plant.tiles.delete(key);
+      throw error;
+    });
+    plant.tiles.set(key, job);
+    return job;
+  }
+
+  async function updatePowerPlants() {
+    if (!st.powerplants.on || !st.powerplants.ready || !plant.near) return;
+    const near = cameraHeight() < PLANT_NEAR_HEIGHT;
+    plant.nearShown = near;
+    plant.near.show = near && !hidden("powerplants");
+    cullSoon();
+    if (near) {
+      try {
+        const index = await ensurePlantIndex();
+        if (!st.powerplants.on) return;
+        const deg = Number(index.tile_deg) || 10;
+        const want = tileKeysInView(deg).filter((key) => index.tiles && index.tiles[key] && !plant.tiles.has(key)).slice(0, PLANT_MAX_TILES);
+        await Promise.all(want.map((key) => loadPlantTile(key)));
+        if (want.length) cullSoon();
+      } catch (error) {
+        st.powerplants.error = `Smaller plants: ${error && error.message ? error.message : String(error)}`;
+      }
+    }
+    render("powerplants");
+  }
+
   // ---------- horizon culling ----------
   // Points ignore depth so terrain never hides them; hide the far side instead.
   let cullAt = 0;
@@ -431,7 +537,7 @@
   function cullSoon() { cullDirty = true; }
 
   function collections() {
-    return [air.major, air.small, mil.coll, cell.ov, cell.near].filter((coll) => coll && coll.show);
+    return [air.major, air.small, mil.coll, cell.ov, cell.near, plant.ov, plant.near].filter((coll) => coll && coll.show);
   }
 
   function cull() {
@@ -489,6 +595,17 @@
         owner, carriers, asr: row[5] || "", place: (body.places && body.places[row[6]]) || "",
       };
     }
+    if (id.__infra === "powerplants") {
+      const body = id.body || {};
+      const fuel = PLANT_FUELS[row[2]] || "other";
+      const eia = row[8] === 1;
+      return {
+        infra: true, layer: "powerplants", kind: `${PLANT_FUEL_LABEL[fuel].toUpperCase()} POWER PLANT`,
+        name: row[4] || "Unnamed power plant", lat: row[0], lon: row[1], fuel, mw: row[3],
+        detail: (body.details && body.details[row[9]]) || "", owner: (body.owners && body.owners[row[5]]) || "",
+        place: (body.places && body.places[row[6]]) || "", year: row[7] || 0, eia,
+      };
+    }
     if (id.__infra === "airports") {
       const small = id.small;
       const ident = row[0];
@@ -525,9 +642,25 @@
     return html;
   }
 
+  function plantPopupHtml(item) {
+    // On-screen facts only. No links: the card never takes anyone off globalstatus.app.
+    const lines = [];
+    const fuel = PLANT_FUEL_LABEL[item.fuel] || "Other";
+    lines.push(`Fuel: ${item.detail && item.detail.toLowerCase() !== fuel.toLowerCase() ? `${fuel} (${item.detail})` : fuel}`);
+    if (item.mw != null && item.mw !== "") lines.push(`Capacity: ${fmt(item.mw)} MW`);
+    if (item.owner) lines.push(`${item.eia ? "Operator" : "Owner"}: ${item.owner}`);
+    if (item.place) lines.push(item.place);
+    if (item.year) lines.push(`${item.eia ? "First unit online" : "Commissioned"}: ${Math.round(item.year)}`);
+    lines.push(`Coordinates: ${Number(item.lat).toFixed(4)}, ${Number(item.lon).toFixed(4)}`);
+    let html = lines.map((line) => `<br>${esc(line)}`).join("");
+    html += `<br><i class="infra-caption">Source: ${esc(item.eia ? "U.S. Energy Information Administration (EIA-860M, October 2026)" : "World Resources Institute, Global Power Plant Database (CC BY 4.0)")}</i>`;
+    return html;
+  }
+
   function popupHtml(item, opts) {
     if (!(opts && opts.list)) lastShown = item; // the nearby list is not the open popup
     if (item.layer === "celltowers") return cellPopupHtml(item);
+    if (item.layer === "powerplants") return plantPopupHtml(item);
     const lines = [];
     let link = "";
     if (item.layer === "airports") {
@@ -570,10 +703,15 @@
       if (cell.ov) cell.ov.show = shown(key);
       if (cell.near) cell.near.show = shown(key) && cell.nearShown;
     }
+    if (key === "powerplants") {
+      if (plant.ov) plant.ov.show = shown(key);
+      if (plant.near) plant.near.show = shown(key) && plant.nearShown;
+    }
     if (!s.on) hidePopupFor(key);
     if (s.on && !s.ready && !s.loading) {
       s.error = "";
-      s.loading = (key === "airports" ? loadAirports() : key === "celltowers" ? loadCellTowers() : loadBases())
+      const loader = { airports: loadAirports, celltowers: loadCellTowers, powerplants: loadPowerPlants }[key] || loadBases;
+      s.loading = loader()
         .then(() => {
           if (key === "airports") {
             air.major.show = shown("airports");
@@ -581,6 +719,9 @@
           } else if (key === "celltowers") {
             cell.ov.show = shown("celltowers");
             updateCellTowers();
+          } else if (key === "powerplants") {
+            plant.ov.show = shown("powerplants");
+            updatePowerPlants();
           } else mil.coll.show = shown("bases");
           cullSoon();
           if (ctx && ctx.statusLive) ctx.statusLive();
@@ -591,6 +732,8 @@
       updateSmall();
     } else if (s.on && key === "celltowers") {
       updateCellTowers();
+    } else if (s.on && key === "powerplants") {
+      updatePowerPlants();
     }
     cullSoon();
     render(key);
@@ -608,6 +751,7 @@
       v.camera.moveEnd.addEventListener(() => {
         if (st.airports.on) updateSmall();
         if (st.celltowers.on) updateCellTowers();
+        if (st.powerplants.on) updatePowerPlants();
         cullSoon();
       });
       if (v.scene.morphComplete) v.scene.morphComplete.addEventListener(cullSoon);

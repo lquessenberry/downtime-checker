@@ -31,7 +31,7 @@
       credit: 'Volcano alerts: <a href="https://www.usgs.gov/programs/VHP" target="_blank" rel="noreferrer">USGS Volcano Hazards Program</a> (US volcanoes)',
     },
     disasters: {
-      label: "WORLD DISASTERS",
+      label: "GLOBAL DISASTERS",
       poll: 60 * 60 * 1000,
       credit: 'Disasters: <a href="https://www.gdacs.org/" target="_blank" rel="noreferrer">GDACS</a> (EC JRC / UN OCHA) and <a href="https://eonet.gsfc.nasa.gov/" target="_blank" rel="noreferrer">NASA EONET</a>',
     },
