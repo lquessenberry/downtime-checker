@@ -75,6 +75,10 @@ function gsa_http_routes()
     if ($path === '/api/internet-outages' && $method === 'GET') {
         json_out(200, gsa_ioda_snapshot());
     }
+    // RIPE Atlas probes that went offline, shown in the same two layers.
+    if ($path === '/api/internet-probes' && $method === 'GET') {
+        json_out(200, gsa_ripe_snapshot());
+    }
 
     // SPACE & WEATHER caches written by the */5 cron (poll-lib.php).
     if (preg_match('#^/api/space/(nws|hurricanes|wildfires|tsunami|rivers|coastal)$#', $path, $match) && $method === 'GET') {

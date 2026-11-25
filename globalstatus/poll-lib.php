@@ -2711,3 +2711,416 @@ function gsa_ioda_snapshot()
     $cached['ageSeconds'] = $age;
     return $cached;
 }
+
+// ---------- INTERNET OUTAGES: RIPE Atlas probes that went offline ----------
+// RIPE Atlas (RIPE NCC) test devices that dropped off in the last 24 hours. US
+// probes go in USA INTERNET OUTAGES, the rest in GLOBAL INTERNET OUTAGES, next
+// to the IODA state and country pins. data/ripe-atlas-cache.json is refreshed by
+// the */5 aircraft cron at most every 10 minutes (gsa_ripe_refresh); a visitor
+// request only refreshes a cache older than 20 minutes.
+//
+// Inputs, all public and keyless:
+//   measurement 7000 results  connect / disconnect events for every public probe
+//   /api/v2/probes/?id__in=   location, network and anchor flag for the ones kept
+//   ftp.ripe.net asnames      network names, cached for a day
+// Place names come from geo/world-cities.json (GeoNames, CC BY 4.0).
+const GSA_RIPE_MIN_OFFLINE = 1800;     // still offline: at least 30 minutes
+const GSA_RIPE_MIN_RECOVERED = 3600;   // back online: was out at least 1 hour
+const GSA_RIPE_FLAP_DROPS = 4;         // 4+ drops of 5+ minutes in 24h = flapping, skip
+const GSA_RIPE_FLAP_EVENTS = 12;       // or 12+ disconnects of any length
+
+function gsa_ripe_cache_file()
+{
+    global $dataDir;
+    return $dataDir . '/ripe-atlas-cache.json';
+}
+
+function gsa_ripe_cache_read()
+{
+    $file = gsa_ripe_cache_file();
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+function gsa_ripe_get($url, $timeout = 60)
+{
+    if (!function_exists('curl_init')) {
+        return null;
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, array(
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_ENCODING => '',
+        CURLOPT_HTTPHEADER => array(
+            'Accept: application/json, text/plain',
+            'User-Agent: GlobalStatusApp/1.0 (+https://globalstatus.app)',
+        ),
+    ));
+    $body = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    return ($body !== false && $code >= 200 && $code < 300) ? (string) $body : null;
+}
+
+// ASN => network name, from ftp.ripe.net/ripe/asnames/asn.txt, cached a day.
+// Lines look like "7922 COMCAST-7922 - Comcast Cable Communications, LLC, US".
+function gsa_ripe_asnames()
+{
+    global $dataDir;
+    $file = $dataDir . '/ripe-asnames.json';
+    $cached = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+    if (is_array($cached) && (time() - (int) ($cached['fetchedAt'] ?? 0)) < 86400 && !empty($cached['names'])) {
+        return $cached['names'];
+    }
+    $body = gsa_ripe_get('https://ftp.ripe.net/ripe/asnames/asn.txt', 60);
+    if ($body === null) {
+        return is_array($cached['names'] ?? null) ? $cached['names'] : array();
+    }
+    $names = array();
+    foreach (explode("\n", $body) as $line) {
+        if (!preg_match('/^(\d+)\s+(.+)$/', trim($line), $m)) {
+            continue;
+        }
+        $text = preg_replace('/,\s*[A-Z]{2}$/', '', trim($m[2]));
+        $pos = strpos($text, ' - ');
+        if ($pos !== false) {
+            $text = trim(substr($text, $pos + 3));
+        } elseif (preg_match('/^[A-Z0-9][A-Z0-9_.-]*\s+(.{3,})$/', $text, $mm)) {
+            // RIPE-region style "HANDLE Org Name": keep the org name.
+            $text = trim($mm[1]);
+        }
+        $names[$m[1]] = $text;
+    }
+    if ($names) {
+        gsa_atomic_write($file, json_encode(array('fetchedAt' => time(), 'names' => $names)));
+    }
+    return $names;
+}
+
+// Nearest GeoNames town (population 15,000+) to a point: array(name, region, km).
+function gsa_ripe_nearest_city($rows, $lat, $lon, $cc)
+{
+    $best = null;
+    $bestD = INF;
+    $cosLat = cos(deg2rad($lat));
+    // Rows are sorted by latitude; only look within about 3 degrees.
+    $lo = 0;
+    $hi = count($rows);
+    while ($lo < $hi) {
+        $mid = ($lo + $hi) >> 1;
+        if ($rows[$mid][0] < $lat - 3) {
+            $lo = $mid + 1;
+        } else {
+            $hi = $mid;
+        }
+    }
+    for ($i = $lo, $n = count($rows); $i < $n && $rows[$i][0] <= $lat + 3; $i++) {
+        $r = $rows[$i];
+        $dLat = $r[0] - $lat;
+        $dLon = ($r[1] - $lon) * $cosLat;
+        $d = $dLat * $dLat + $dLon * $dLon;
+        // Prefer a town in the probe's own country.
+        if ($r[3] !== $cc) {
+            $d *= 4;
+        }
+        if ($d < $bestD) {
+            $bestD = $d;
+            $best = $r;
+        }
+    }
+    if (!$best) {
+        return null;
+    }
+    $km = sqrt(pow($best[0] - $lat, 2) + pow(($best[1] - $lon) * $cosLat, 2)) * 111.2;
+    return array($best[2], $best[4], round($km), $best[3]);
+}
+
+// Walk one probe's events (oldest first) into offline spells: array(start, end|null).
+function gsa_ripe_spells($events)
+{
+    usort($events, function ($a, $b) {
+        if ($a[0] === $b[0]) {
+            return $a[1] === 'disconnect' ? -1 : 1;
+        }
+        return $a[0] <=> $b[0];
+    });
+    $spells = array();
+    $down = null;
+    foreach ($events as $ev) {
+        if ($ev[1] === 'disconnect') {
+            if ($down === null) {
+                $down = $ev[0];
+            }
+        } elseif ($ev[1] === 'connect' && $down !== null) {
+            $spells[] = array($down, $ev[0]);
+            $down = null;
+        }
+    }
+    if ($down !== null) {
+        $spells[] = array($down, null);
+    }
+    return $spells;
+}
+
+function gsa_ripe_build()
+{
+    global $root;
+    $until = time();
+    $from = $until - 86400;
+    // Two extra hours so a probe that dropped just before the window still pairs up.
+    $body = gsa_ripe_get('https://atlas.ripe.net/api/v2/measurements/7000/results/?format=json&start=' . ($from - 7200) . '&stop=' . $until, 90);
+    $rows = $body !== null ? json_decode($body, true) : null;
+    unset($body);
+    if (!is_array($rows)) {
+        return null;
+    }
+    $byProbe = array();
+    foreach ($rows as $row) {
+        $id = (int) ($row['prb_id'] ?? 0);
+        $event = (string) ($row['event'] ?? '');
+        if ($id <= 0 || ($event !== 'connect' && $event !== 'disconnect')) {
+            continue;
+        }
+        $byProbe[$id][] = array((int) ($row['timestamp'] ?? 0), $event, (int) ($row['asn'] ?? 0));
+    }
+    unset($rows);
+
+    $candidates = array();
+    $stats = array('probesWithEvents' => count($byProbe), 'flapping' => 0, 'anchors' => 0, 'noLocation' => 0, 'notPublic' => 0);
+    foreach ($byProbe as $id => $events) {
+        $spells = gsa_ripe_spells($events);
+        $drops5 = 0;
+        foreach ($spells as $s) {
+            if ((($s[1] ?? $until) - $s[0]) >= 300) {
+                $drops5++;
+            }
+        }
+        $pick = null;
+        foreach ($spells as $s) {
+            if ($s[0] < $from) {
+                continue;
+            }
+            $len = ($s[1] ?? $until) - $s[0];
+            if (($s[1] === null && $len >= GSA_RIPE_MIN_OFFLINE) || ($s[1] !== null && $len >= GSA_RIPE_MIN_RECOVERED)) {
+                $pick = $s;
+            }
+        }
+        if (!$pick) {
+            continue;
+        }
+        if ($drops5 >= GSA_RIPE_FLAP_DROPS || count($spells) >= GSA_RIPE_FLAP_EVENTS) {
+            $stats['flapping']++;
+            continue;
+        }
+        $asn = 0;
+        foreach ($events as $ev) {
+            if ($ev[2]) {
+                $asn = $ev[2];
+            }
+        }
+        $candidates[$id] = array('start' => $pick[0], 'end' => $pick[1], 'drops' => $drops5, 'asn' => $asn);
+    }
+    unset($byProbe);
+
+    // Probe details, 200 ids per request.
+    $meta = array();
+    $ids = array_keys($candidates);
+    foreach (array_chunk($ids, 200) as $chunk) {
+        $url = 'https://atlas.ripe.net/api/v2/probes/?page_size=500&fields=id,country_code,asn_v4,asn_v6,geometry,is_anchor,is_public,status,status_since,tags&id__in=' . implode(',', $chunk);
+        $page = gsa_ripe_get($url, 60);
+        $decoded = $page !== null ? json_decode($page, true) : null;
+        if (!is_array($decoded) || !isset($decoded['results'])) {
+            return null;
+        }
+        foreach ($decoded['results'] as $p) {
+            $meta[(int) $p['id']] = $p;
+        }
+    }
+
+    $cent = json_decode((string) @file_get_contents($root . '/api/internet-centroids.json'), true);
+    $countries = is_array($cent['countries'] ?? null) ? $cent['countries'] : array();
+    $cityPack = json_decode((string) @file_get_contents($root . '/geo/world-cities.json'), true);
+    $cities = is_array($cityPack['rows'] ?? null) ? $cityPack['rows'] : array();
+    $names = gsa_ripe_asnames();
+    $usCodes = array('US', 'PR', 'GU', 'VI', 'AS', 'MP', 'UM');
+
+    $us = array();
+    $global = array();
+    foreach ($candidates as $id => $c) {
+        $p = $meta[$id] ?? null;
+        if (!$p) {
+            continue;
+        }
+        if (empty($p['is_public'])) {
+            $stats['notPublic']++;
+            continue;
+        }
+        // Anchors sit in data centers: their drop-offs are rarely what people at home see.
+        if (!empty($p['is_anchor'])) {
+            $stats['anchors']++;
+            continue;
+        }
+        $tags = array();
+        foreach ((array) ($p['tags'] ?? array()) as $t) {
+            $tags[] = (string) ($t['slug'] ?? '');
+        }
+        $coords = $p['geometry']['coordinates'] ?? null;
+        // A location guessed only from the country puts the pin at the country middle: skip it.
+        if (!is_array($coords) || count($coords) < 2 || in_array('system-auto-geoip-country', $tags, true)) {
+            $stats['noLocation']++;
+            continue;
+        }
+        $lon = round((float) $coords[0], 3);
+        $lat = round((float) $coords[1], 3);
+        $cc = strtoupper((string) ($p['country_code'] ?? ''));
+        $status = (int) ($p['status']['id'] ?? 0);
+        $end = $c['end'];
+        // The events feed can lag: trust the probe's own status when it says it is back.
+        if ($end === null && $status === 1 && (int) ($p['status_since'] ?? 0) > $c['start']) {
+            $end = (int) $p['status_since'];
+            if ($end - $c['start'] < GSA_RIPE_MIN_RECOVERED) {
+                continue;
+            }
+        }
+        $asn = (int) ($p['asn_v4'] ?: ($p['asn_v6'] ?: $c['asn']));
+        $city = $cities ? gsa_ripe_nearest_city($cities, $lat, $lon, $cc) : null;
+        $countryName = $countries[$cc][2] ?? $cc;
+        if ($city && $city[2] <= 60) {
+            $near = $city[0] . ($city[1] !== '' ? ', ' . $city[1] : '');
+        } else {
+            $near = '';
+        }
+        $item = array(
+            'code' => 'ripe-' . $id,
+            'probe' => $id,
+            'lat' => $lat,
+            'lon' => $lon,
+            'cc' => $cc,
+            'country' => $countryName,
+            'near' => $near,
+            'nearKm' => $city && $near !== '' ? $city[2] : null,
+            'approx' => in_array('system-auto-geoip-city', $tags, true),
+            'asn' => $asn,
+            'network' => $asn ? ($names[(string) $asn] ?? '') : '',
+            'start' => $c['start'],
+            'end' => $end,
+            'ongoing' => $end === null,
+            'drops' => $c['drops'],
+        );
+        if (in_array($cc, $usCodes, true)) {
+            $us[] = $item;
+        } else {
+            $global[] = $item;
+        }
+    }
+    // How many other kept probes on the same network dropped within 15 minutes.
+    $all = array_merge($us, $global);
+    $sameNet = function (&$list) use ($all) {
+        foreach ($list as &$item) {
+            $n = 0;
+            foreach ($all as $other) {
+                if ($other['probe'] !== $item['probe'] && $item['asn'] && $other['asn'] === $item['asn'] && abs($other['start'] - $item['start']) <= 900) {
+                    $n++;
+                }
+            }
+            $item['sameNetwork'] = $n;
+        }
+        unset($item);
+        usort($list, function ($a, $b) {
+            if ($a['ongoing'] !== $b['ongoing']) {
+                return $a['ongoing'] ? -1 : 1;
+            }
+            return $b['start'] <=> $a['start'];
+        });
+    };
+    $sameNet($us);
+    $sameNet($global);
+    return array(
+        'source' => 'RIPE Atlas (RIPE NCC)',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z', $until),
+        'from' => $from,
+        'until' => $until,
+        'us' => $us,
+        'global' => $global,
+        'counts' => array(
+            'us' => count($us),
+            'global' => count($global),
+            'usOffline' => count(array_filter($us, function ($p) { return $p['ongoing']; })),
+            'globalOffline' => count(array_filter($global, function ($p) { return $p['ongoing']; })),
+        ),
+        'skipped' => $stats,
+    );
+}
+
+function gsa_ripe_refresh($opts = array())
+{
+    global $dataDir;
+    $maxAge = (int) ($opts['maxAge'] ?? 600);
+    $cached = gsa_ripe_cache_read();
+    if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+        return array('ok' => true, 'skipped' => true);
+    }
+    $lock = fopen($dataDir . '/ripe-atlas.lock', 'c');
+    if (!$lock) {
+        return array('ok' => false, 'error' => 'no lock file');
+    }
+    $wait = !empty($opts['wait']);
+    if (!flock($lock, $wait ? LOCK_EX : (LOCK_EX | LOCK_NB))) {
+        fclose($lock);
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        $cached = gsa_ripe_cache_read();
+        if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+            return array('ok' => true, 'skipped' => true);
+        }
+        $t0 = microtime(true);
+        $built = gsa_ripe_build();
+        if ($built === null) {
+            if ($cached) {
+                $cached['lastError'] = 'RIPE Atlas did not answer at ' . gmdate('H:i\Z');
+                $cached['lastErrorAt'] = time();
+                gsa_atomic_write(gsa_ripe_cache_file(), json_encode($cached));
+            }
+            return array('ok' => false, 'error' => 'RIPE Atlas did not answer');
+        }
+        $built['fetchedAt'] = time();
+        gsa_atomic_write(gsa_ripe_cache_file(), json_encode($built));
+        return array('ok' => true, 'us' => $built['counts']['us'], 'global' => $built['counts']['global'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function gsa_ripe_snapshot()
+{
+    $cached = gsa_ripe_cache_read();
+    $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    if ($age > 1200) {
+        gsa_ripe_refresh(array('maxAge' => 1200, 'wait' => !$cached));
+        $cached = gsa_ripe_cache_read();
+        $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    }
+    if (!$cached) {
+        return array(
+            'source' => 'RIPE Atlas (RIPE NCC)',
+            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+            'stale' => false,
+            'error' => 'RIPE Atlas did not answer. Try again in a few minutes.',
+            'us' => array(),
+            'global' => array(),
+            'counts' => array('us' => 0, 'global' => 0, 'usOffline' => 0, 'globalOffline' => 0),
+        );
+    }
+    unset($cached['fetchedAt'], $cached['lastErrorAt']);
+    $cached['stale'] = $age > 1800;
+    $cached['ageSeconds'] = $age;
+    return $cached;
+}
