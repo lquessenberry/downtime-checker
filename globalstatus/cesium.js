@@ -91,6 +91,9 @@ const state = {
     // FIREARMS (firearms.js): saved static pin layers, not a live feed.
     gunsusa: false,
     gunsworld: false,
+    // INTERNET OUTAGES (internet.js): live IODA (Georgia Tech) outage pins.
+    inetusa: false,
+    inetglobal: false,
     // MILITIAS (militias.js): saved static pin layers, not a live feed.
     militianational: false,
     militiastate: false,
@@ -122,6 +125,7 @@ const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rive
 const INFRA_KEYS = ["airports", "bases", "celltowers", "powerplants"];
 const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
 const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "militiainactive"];
+const INTERNET_KEYS = ["inetusa", "inetglobal"];
 const POWERLINES_KEYS = ["powerlines"];
 
 const COLORS = {
@@ -466,6 +470,13 @@ async function startGlobe() {
   }
   if (window.GsaFirearms) {
     window.GsaFirearms.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaInternet) {
+    window.GsaInternet.init({
       viewer: () => state.viewer,
       setCount,
       statusLive: () => statusLive(),
@@ -1263,6 +1274,10 @@ function sourceFor(layer) {
     const militiasSource = window.GsaMilitias.sourceFor(layer);
     if (militiasSource) return militiasSource;
   }
+  if (window.GsaInternet && window.GsaInternet.sourceFor) {
+    const internetSource = window.GsaInternet.sourceFor(layer);
+    if (internetSource) return internetSource;
+  }
   return null;
 }
 
@@ -1469,6 +1484,9 @@ function setLayer(layer, on) {
   if (MILITIAS_KEYS.includes(layer) && window.GsaMilitias) {
     window.GsaMilitias.setActive(layer, state.layers[layer]);
   }
+  if (INTERNET_KEYS.includes(layer) && window.GsaInternet) {
+    window.GsaInternet.setActive(layer, state.layers[layer]);
+  }
   if (POWERLINES_KEYS.includes(layer) && window.GsaPowerLines) {
     window.GsaPowerLines.setActive(layer, state.layers[layer]);
   }
@@ -1526,6 +1544,8 @@ const LAYER_LABEL = {
   powerplants: "GLOBAL POWER PLANTS",
   gunsusa: "USA GUN OWNERSHIP",
   gunsworld: "GLOBAL GUN OWNERSHIP",
+  inetusa: "USA INTERNET OUTAGES",
+  inetglobal: "GLOBAL INTERNET OUTAGES",
   militianational: "NATIONAL GROUPS",
   militiastate: "STATEWIDE GROUPS",
   militialocal: "LOCAL GROUPS",
@@ -1550,7 +1570,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -3098,6 +3118,12 @@ function cullAircraftHorizon() {
       if (firearmsSource) sources.push(firearmsSource);
     }
   }
+  if (window.GsaInternet && window.GsaInternet.KEYS) {
+    for (const key of window.GsaInternet.KEYS) {
+      const internetSource = window.GsaInternet.sourceFor(key);
+      if (internetSource) sources.push(internetSource);
+    }
+  }
   if (window.GsaMilitias && window.GsaMilitias.KEYS) {
     for (const key of window.GsaMilitias.KEYS) {
       const militiasSource = window.GsaMilitias.sourceFor(key);
@@ -3359,6 +3385,9 @@ function liveHtml(item, opts = {}) {
   }
   else if (item.militias && window.GsaMilitias) {
     extra = window.GsaMilitias.popupHtml(item, opts);
+  }
+  else if (item.internet && window.GsaInternet) {
+    extra = window.GsaInternet.popupHtml(item, opts);
   }
   else if (item.power && window.GsaPowerLines) {
     extra = window.GsaPowerLines.popupHtml(item, opts);
@@ -3759,6 +3788,7 @@ function statusLive(error) {
   if (window.GsaInfra) parts.push(...window.GsaInfra.statusParts());
   if (window.GsaFirearms) parts.push(...window.GsaFirearms.statusParts());
   if (window.GsaMilitias) parts.push(...window.GsaMilitias.statusParts());
+  if (window.GsaInternet) parts.push(...window.GsaInternet.statusParts());
   if (window.GsaPowerLines) parts.push(...window.GsaPowerLines.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));

@@ -71,6 +71,10 @@ function gsa_http_routes()
     if ($path === '/api/animal' && $method === 'GET') {
         json_out(200, animal_snapshot());
     }
+    // USA / GLOBAL INTERNET OUTAGES: IODA cache, refreshed by the */5 cron (poll-lib.php).
+    if ($path === '/api/internet-outages' && $method === 'GET') {
+        json_out(200, gsa_ioda_snapshot());
+    }
 
     // SPACE & WEATHER caches written by the */5 cron (poll-lib.php).
     if (preg_match('#^/api/space/(nws|hurricanes|wildfires|tsunami|rivers|coastal)$#', $path, $match) && $method === 'GET') {
