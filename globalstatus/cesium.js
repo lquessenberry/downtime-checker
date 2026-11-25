@@ -84,6 +84,8 @@ const state = {
     bases: false,
     // USA CELL TOWERS (infra.js): FCC tower records, point primitives in tiles.
     celltowers: false,
+    // GLOBAL POWER PLANTS (infra.js): WRI + EIA plants, point primitives in tiles.
+    powerplants: false,
     // USA POWER LINES (powerlines.js): HIFLD transmission lines, batched polylines.
     powerlines: false,
     // FIREARMS (firearms.js): saved static pin layers, not a live feed.
@@ -117,7 +119,7 @@ const state = {
 // SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
 const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
 // INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
-const INFRA_KEYS = ["airports", "bases", "celltowers"];
+const INFRA_KEYS = ["airports", "bases", "celltowers", "powerplants"];
 const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
 const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "militiainactive"];
 const POWERLINES_KEYS = ["powerlines"];
@@ -1239,7 +1241,7 @@ function setFeedMode(mode) {
   }
   const title = document.getElementById("feed-title");
   if (state.feedMode === "outages") title.textContent = `POWER OUTAGES ${state.outagePoints.length}`;
-  else if (state.feedMode === "hunger") title.textContent = `WORLD HUNGER ${state.hungerPoints.length}`;
+  else if (state.feedMode === "hunger") title.textContent = `GLOBAL HUNGER ${state.hungerPoints.length}`;
   else if (state.feedMode === "stream") title.textContent = `SCANNERS ${state.streamPoints.length}`;
   else if (state.feedMode === "conflicts") title.textContent = `CONFLICT TRACKER ${state.conflicts.length}`;
   else title.textContent = "LIVE RETURNS";
@@ -1497,7 +1499,7 @@ const LAYER_LABEL = {
   aircraft: "LIVE AIR TRAFFIC",
   ships: "MARITIME TRAFFIC",
   conflicts: "CONFLICT TRACKER",
-  hunger: "WORLD HUNGER",
+  hunger: "GLOBAL HUNGER",
   mesh: "MESH NODES",
   disease: "DISEASE OUTBREAK",
   animal: "ANIMAL DISEASE OUTBREAK",
@@ -1508,7 +1510,7 @@ const LAYER_LABEL = {
   sats: "SATELLITES",
   iss: "ISS POSITION",
   volcanoes: "VOLCANO ALERTS",
-  disasters: "WORLD DISASTERS",
+  disasters: "GLOBAL DISASTERS",
   radar: "WEATHER RADAR",
   nwsalerts: "US WEATHER ALERTS",
   aurora: "AURORA / SPACE WEATHER",
@@ -1521,8 +1523,9 @@ const LAYER_LABEL = {
   bases: "MILITARY BASES",
   celltowers: "USA CELL TOWERS",
   powerlines: "USA POWER LINES",
+  powerplants: "GLOBAL POWER PLANTS",
   gunsusa: "USA GUN OWNERSHIP",
-  gunsworld: "WORLD GUN OWNERSHIP",
+  gunsworld: "GLOBAL GUN OWNERSHIP",
   militianational: "NATIONAL GROUPS",
   militiastate: "STATEWIDE GROUPS",
   militialocal: "LOCAL GROUPS",
@@ -1547,7 +1550,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -1817,7 +1820,7 @@ function hungerRate(value) {
 async function loadHunger() {
   const response = await fetch("/api/hunger");
   const body = await response.json();
-  if (!response.ok) throw new Error(body.error || "World hunger failed");
+  if (!response.ok) throw new Error(body.error || "Global hunger failed");
   state.hungerPoints = Array.isArray(body.points) ? body.points : [];
   state.hungerMeta = body;
   setCount("hunger", state.hungerPoints.length);
@@ -1828,7 +1831,7 @@ async function loadHunger() {
     credit.innerHTML = `${state.hungerPoints.length} countries. <a href="https://www.fao.org/interactive/hunger-map/en/" target="_blank" rel="noopener noreferrer">FAO Hunger Map</a>. ${esc(note)}`;
   }
   renderHungerList();
-  layerStatus(body.stale ? "WORLD HUNGER CACHED" : "");
+  layerStatus(body.stale ? "GLOBAL HUNGER CACHED" : "");
 }
 
 function placeHungerMarkers() {
@@ -1872,7 +1875,7 @@ function renderHungerList() {
     list.append(row);
   }
   if (state.feedMode === "hunger") {
-    document.getElementById("feed-title").textContent = `WORLD HUNGER ${points.length}`;
+    document.getElementById("feed-title").textContent = `GLOBAL HUNGER ${points.length}`;
   }
 }
 

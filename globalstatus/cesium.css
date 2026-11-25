@@ -1382,6 +1382,8 @@ button:hover { border-color: #9fd4e2; }
 .swatch.infra-bases { background: #c58cff; border-radius: 50%; }
 .swatch.powerlines { background: linear-gradient(90deg, #35d08a 0 33%, #ffd24a 33% 66%, #ff4f4f 66%); height: 4px; border-radius: 2px; align-self: center; }
 .pl-key { display: inline-block; width: 12px; height: 3px; margin-right: 3px; vertical-align: middle; background: var(--pl); border-radius: 2px; }
+.swatch.infra-powerplants { background: conic-gradient(#ff8c2a 0 25%, #ffd83a 25% 50%, #2f8fff 50% 75%, #c86bff 75%); border-radius: 50%; }
+.pp-key { display: inline-block; width: 8px; height: 8px; margin-right: 3px; vertical-align: middle; background: var(--pp); border-radius: 50%; }
 .swatch.infra-celltowers { background: #3fd0c9; box-shadow: 0 0 0 2px #ffcf5a inset; border-radius: 50%; }
 .swatch.gunsusa { background: #d4a84b; }
 .swatch.gunsworld { background: #c45a2e; }
