@@ -2394,3 +2394,320 @@ function gsa_space_snapshot($name)
     $cached['stale'] = $ageSec === null || $ageSec > $meta['staleSec'] || !empty($cached['stale']);
     return $cached;
 }
+
+// ---------- INTERNET OUTAGES (IODA, Georgia Tech) ----------
+// USA INTERNET OUTAGES and GLOBAL INTERNET OUTAGES read data/ioda-cache.json.
+// The */5 aircraft cron refreshes it when it is at least 10 minutes old
+// (gsa_ioda_refresh); a visitor request only refreshes a cache older than
+// 20 minutes, so IODA sees at most a few calls an hour.
+function gsa_ioda_cache_file()
+{
+    global $dataDir;
+    return $dataDir . '/ioda-cache.json';
+}
+
+function gsa_ioda_cache_read()
+{
+    $file = gsa_ioda_cache_file();
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+function gsa_ioda_signal_label($source)
+{
+    $labels = array(
+        'bgp' => 'BGP (routing)',
+        'ping-slash24' => 'Active probing',
+        'merit-nt' => 'Telescope (darknet traffic)',
+        'gtr' => 'Google traffic',
+        'gtr-norm' => 'Google traffic',
+    );
+    return $labels[$source] ?? $source;
+}
+
+function gsa_ioda_severity($score)
+{
+    if ($score >= 100000) {
+        return 'high';
+    }
+    if ($score >= 5000) {
+        return 'medium';
+    }
+    return 'low';
+}
+
+// Fetch several IODA URLs at once. Returns decoded bodies keyed like $urls, or
+// null when any of them fails.
+function gsa_ioda_fetch_all($urls, $timeout = 50)
+{
+    if (!function_exists('curl_multi_init')) {
+        return null;
+    }
+    $multi = curl_multi_init();
+    $handles = array();
+    foreach ($urls as $key => $url) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, array(
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_HTTPHEADER => array(
+                'Accept: application/json',
+                'User-Agent: GlobalStatusApp/1.0 (+https://globalstatus.app)',
+            ),
+        ));
+        curl_multi_add_handle($multi, $ch);
+        $handles[$key] = $ch;
+    }
+    do {
+        $status = curl_multi_exec($multi, $running);
+        if ($running) {
+            curl_multi_select($multi, 1.0);
+        }
+    } while ($running && $status === CURLM_OK);
+    $out = array();
+    $ok = true;
+    foreach ($handles as $key => $ch) {
+        $body = curl_multi_getcontent($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_multi_remove_handle($multi, $ch);
+        curl_close($ch);
+        $decoded = ($body !== false && $code >= 200 && $code < 300) ? json_decode((string) $body, true) : null;
+        if (!is_array($decoded) || !empty($decoded['error']) || !isset($decoded['data']) || !is_array($decoded['data'])) {
+            $ok = false;
+            continue;
+        }
+        $out[$key] = $decoded['data'];
+    }
+    curl_multi_close($multi);
+    return $ok ? $out : null;
+}
+
+function gsa_ioda_places($events, $summary, $until, $centroid)
+{
+    $places = array();
+    foreach ($summary as $row) {
+        $entity = $row['entity'] ?? array();
+        $code = (string) ($entity['code'] ?? '');
+        if ($code === '') {
+            continue;
+        }
+        $places[$code] = array(
+            'code' => $code,
+            'name' => (string) ($entity['name'] ?? $code),
+            'score' => (float) ($row['scores']['overall'] ?? 0),
+            'events' => (int) ($row['event_cnt'] ?? 0),
+            'signals' => array(),
+        );
+    }
+    foreach ($events as $ev) {
+        $loc = (string) ($ev['location'] ?? '');
+        $code = substr($loc, strpos($loc, '/') + 1);
+        if ($code === '') {
+            continue;
+        }
+        if (!isset($places[$code])) {
+            $places[$code] = array('code' => $code, 'name' => (string) ($ev['location_name'] ?? $code), 'score' => 0.0, 'events' => 0, 'signals' => array());
+        }
+        $start = (int) ($ev['start'] ?? 0);
+        $end = $start + (int) ($ev['duration'] ?? 0);
+        $source = (string) ($ev['datasource'] ?? '');
+        $score = (float) ($ev['score'] ?? 0);
+        $sig = &$places[$code]['signals'][$source];
+        if (!isset($sig)) {
+            $sig = array('source' => $source, 'label' => gsa_ioda_signal_label($source), 'score' => 0.0, 'start' => $start, 'end' => $end);
+        }
+        $sig['score'] = max($sig['score'], $score);
+        $sig['start'] = min($sig['start'], $start);
+        $sig['end'] = max($sig['end'], $end);
+        unset($sig);
+    }
+    $out = array();
+    foreach ($places as $code => $place) {
+        $where = $centroid($place);
+        if (!$where) {
+            continue;
+        }
+        $signals = array_values($place['signals']);
+        $start = 0;
+        $end = 0;
+        $maxSignal = 0.0;
+        foreach ($signals as &$sig) {
+            $sig['ongoing'] = $sig['end'] >= $until - 900;
+            $sig['score'] = round($sig['score'], 1);
+            $start = $start ? min($start, $sig['start']) : $sig['start'];
+            $end = max($end, $sig['end']);
+            $maxSignal = max($maxSignal, $sig['score']);
+        }
+        unset($sig);
+        usort($signals, function ($a, $b) {
+            return $b['score'] <=> $a['score'];
+        });
+        $score = $place['score'] ?: $maxSignal;
+        $out[] = array(
+            'code' => $code,
+            'name' => $where[2] ?? $place['name'],
+            'lat' => $where[0],
+            'lon' => $where[1],
+            'score' => round($score, 1),
+            'severity' => gsa_ioda_severity($score),
+            'ongoing' => $signals ? $end >= $until - 900 : true,
+            'start' => $start ?: null,
+            'end' => $end ?: null,
+            'events' => max($place['events'], count($signals)),
+            'signals' => $signals,
+        );
+    }
+    usort($out, function ($a, $b) {
+        return $b['score'] <=> $a['score'];
+    });
+    return $out;
+}
+
+function gsa_ioda_build()
+{
+    global $root;
+    $until = time();
+    $from = $until - 86400;
+    $base = 'https://api.ioda.inetintel.cc.gatech.edu/v2/outages/';
+    $win = 'from=' . $from . '&until=' . $until;
+    $data = gsa_ioda_fetch_all(array(
+        'countrySummary' => $base . 'summary?entityType=country&' . $win . '&limit=500',
+        'countryEvents' => $base . 'events?entityType=country&' . $win . '&limit=3000',
+        'usSummary' => $base . 'summary?entityType=region&relatedTo=country/US&' . $win . '&limit=500',
+        'usEvents' => $base . 'events?entityType=region&relatedTo=country/US&' . $win . '&limit=3000',
+    ));
+    if ($data === null) {
+        return null;
+    }
+    $cent = json_decode((string) @file_get_contents($root . '/api/internet-centroids.json'), true);
+    $countries = is_array($cent['countries'] ?? null) ? $cent['countries'] : array();
+    $states = is_array($cent['states'] ?? null) ? $cent['states'] : array();
+    // US territories go with USA INTERNET OUTAGES, not the global layer.
+    $usCodes = array('US', 'PR', 'GU', 'VI', 'AS', 'MP', 'UM');
+    $usCountryEvents = array();
+    $usCountrySummary = array();
+    $globalEvents = array();
+    $globalSummary = array();
+    foreach ($data['countryEvents'] as $ev) {
+        $code = substr((string) ($ev['location'] ?? ''), 8);
+        if (in_array($code, $usCodes, true)) {
+            $usCountryEvents[] = $ev;
+        } else {
+            $globalEvents[] = $ev;
+        }
+    }
+    foreach ($data['countrySummary'] as $row) {
+        $code = (string) ($row['entity']['code'] ?? '');
+        if (in_array($code, $usCodes, true)) {
+            $usCountrySummary[] = $row;
+        } else {
+            $globalSummary[] = $row;
+        }
+    }
+    $countryAt = function ($place) use ($countries) {
+        $c = $countries[$place['code']] ?? null;
+        if (!$c) {
+            return null;
+        }
+        if ($place['code'] === 'US') {
+            return array(39.83, -98.58, 'United States (nationwide)');
+        }
+        return $c;
+    };
+    $stateAt = function ($place) use ($states) {
+        $s = $states[$place['name']] ?? null;
+        return $s ? array($s[0], $s[1], $place['name']) : null;
+    };
+    $us = array_merge(
+        gsa_ioda_places($data['usEvents'], $data['usSummary'], $until, $stateAt),
+        gsa_ioda_places($usCountryEvents, $usCountrySummary, $until, $countryAt)
+    );
+    usort($us, function ($a, $b) {
+        return $b['score'] <=> $a['score'];
+    });
+    $global = gsa_ioda_places($globalEvents, $globalSummary, $until, $countryAt);
+    return array(
+        'source' => 'IODA, Georgia Tech',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z', $until),
+        'from' => $from,
+        'until' => $until,
+        'us' => $us,
+        'global' => $global,
+        'counts' => array('us' => count($us), 'global' => count($global)),
+    );
+}
+
+// opts: force (ignore the 10-minute gate), maxAge (seconds).
+function gsa_ioda_refresh($opts = array())
+{
+    global $dataDir;
+    $maxAge = (int) ($opts['maxAge'] ?? 600);
+    $cached = gsa_ioda_cache_read();
+    if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+        return array('ok' => true, 'skipped' => true);
+    }
+    $lock = fopen($dataDir . '/ioda.lock', 'c');
+    if (!$lock) {
+        return array('ok' => false, 'error' => 'no lock file');
+    }
+    $wait = !empty($opts['wait']);
+    if (!flock($lock, $wait ? LOCK_EX : (LOCK_EX | LOCK_NB))) {
+        fclose($lock);
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        // Another request may have refreshed it while this one waited.
+        $cached = gsa_ioda_cache_read();
+        if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+            return array('ok' => true, 'skipped' => true);
+        }
+        $t0 = microtime(true);
+        $built = gsa_ioda_build();
+        if ($built === null) {
+            if ($cached) {
+                $cached['lastError'] = 'IODA did not answer at ' . gmdate('H:i\Z');
+                $cached['lastErrorAt'] = time();
+                gsa_atomic_write(gsa_ioda_cache_file(), json_encode($cached));
+            }
+            return array('ok' => false, 'error' => 'IODA did not answer');
+        }
+        $built['fetchedAt'] = time();
+        gsa_atomic_write(gsa_ioda_cache_file(), json_encode($built));
+        return array('ok' => true, 'us' => $built['counts']['us'], 'global' => $built['counts']['global'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function gsa_ioda_snapshot()
+{
+    $cached = gsa_ioda_cache_read();
+    $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    if ($age > 1200) {
+        // No cron refresh lately: refresh now. With no cache at all, wait for it.
+        gsa_ioda_refresh(array('maxAge' => 1200, 'wait' => !$cached));
+        $cached = gsa_ioda_cache_read();
+        $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    }
+    if (!$cached) {
+        return array(
+            'source' => 'IODA, Georgia Tech',
+            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+            'stale' => false,
+            'error' => 'IODA did not answer. Try again in a few minutes.',
+            'us' => array(),
+            'global' => array(),
+            'counts' => array('us' => 0, 'global' => 0),
+        );
+    }
+    unset($cached['fetchedAt'], $cached['lastErrorAt']);
+    $cached['stale'] = $age > 1800;
+    $cached['ageSeconds'] = $age;
+    return $cached;
+}
