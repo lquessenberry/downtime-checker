@@ -799,7 +799,7 @@ function fillGridTester(catalog) {
   const list = document.getElementById("grid-tester-list");
   if (!list || !catalog) return;
   state.catalogSearches = catalog.searches || [];
-  const icon = '<span class="welcome-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true" focusable="false"><circle cx="8" cy="15" r="1.6"/><path d="M8 15c5.2-.6 8.2-5.2 10.2-9.2M8 15c1.6-5.4 6.4-8 11-7.2M8 15c6.4.8 9.2 3.6 10.4 7.4"/></svg></span>';
+  const icon = '<span class="welcome-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true" focusable="false"><circle cx="12" cy="6.4" r="3.5"/><path d="M12 3.1v6.6M9.1 5.1h5.8M9.4 7.7h5.2M12 9.9v2M4.2 11.9h15.6M4.2 11.9v1.8M12 11.9v1.8M19.8 11.9v1.8M2.2 18.5h4.6M9.7 18.5h4.6M17.2 18.5h4.6"/><rect x="2.2" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="9.7" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="17.2" y="14.3" width="4.6" height="3.4" rx="0.7"/></svg></span>';
   const row = (item) => `<button type="button" class="welcome-row" data-grid-test="${esc(item.id)}">${icon}<span class="welcome-text"><strong>${esc(item.label)}</strong></span><span class="welcome-arrow" aria-hidden="true">→</span></button>`;
   const global = state.catalogSearches.filter((item) => item.group === "global");
   const us = state.catalogSearches.filter((item) => item.group === "us");

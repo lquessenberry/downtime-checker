@@ -1935,7 +1935,7 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 .welcome-row:hover, .welcome-row:focus-visible { outline: none; border-color: #9fd4e2; background: #163044; }
 .welcome-row.is-primary { border-color: #9fd4e2; background: #163044; }
 .welcome-row.is-primary:hover, .welcome-row.is-primary:focus-visible { border-color: #d7e6ea; background: #163044; }
-.welcome-icon { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; color: var(--dim); background: rgba(120, 190, 210, 0.08); border: 1px solid var(--line); border-radius: 4px; }
+.welcome-icon { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; color: var(--dim); background: rgba(120, 190, 210, 0.08); border: 1px solid var(--line); border-radius: 8px; }
 .welcome-row:hover .welcome-icon, .welcome-row:focus-visible .welcome-icon { color: var(--text); }
 .welcome-row.is-primary .welcome-icon { color: var(--text); background: rgba(120, 190, 210, 0.12); border-color: #9fd4e2; }
 .welcome-text { display: grid; gap: 3px; min-width: 0; }
