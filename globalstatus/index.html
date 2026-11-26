@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
     #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; background: #000; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
-    #boot-splash picture { position: relative; display: block; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
-    #boot-splash img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center center; display: block; background: #000; }
+    #boot-splash .boot-visual { position: relative; display: block; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
+    #boot-splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; background: #000; }
     @media (max-width: 800px) {
-      #boot-splash picture { flex: 0 0 auto; width: 100%; height: min(40vh, calc(100dvh - 200px)); }
-      #boot-splash img { object-position: center top; }
+      #boot-splash .boot-visual { flex: 0 0 auto; height: auto; }
+      #boot-splash video { position: static; width: 100%; height: auto; object-fit: contain; }
     }
     #boot-splash .boot-copy { flex: 0 0 auto; padding: 16px 14px 22px; background: #000; }
     #boot-splash .boot-title { margin: 0; font-size: clamp(20px, 4.2vw, 32px); font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; }
@@ -36,7 +36,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126m" />
+  <link rel="stylesheet" href="/cesium.css?v=20261126n" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -49,10 +49,11 @@
 </head>
 <body>
   <div id="boot-splash" class="boot-splash">
-    <picture>
-      <source media="(min-width: 801px)" srcset="/start-satellite-desk.webp?v=20261126m" type="image/webp" />
-      <img src="/start-satellite.gif?v=20261126m" alt="Satellite above the Earth" width="1920" height="800" />
-    </picture>
+    <div class="boot-visual">
+      <video autoplay muted loop playsinline preload="auto" width="736" height="416" aria-label="Satellite above the Earth">
+        <source src="/start-satellite.mp4?v=20261126n" type="video/mp4" />
+      </video>
+    </div>
     <div class="boot-copy">
       <p class="boot-title">Global Status</p>
       <div id="boot-log" class="boot-log" aria-live="polite"></div>
@@ -71,24 +72,33 @@
       var log = document.getElementById("boot-log");
       var reduce = false;
       try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
-      function paint(text) {
-        var prev = log.lastElementChild;
-        if (prev) prev.classList.remove("is-latest");
+      // Every line is in the layout from the start, hidden, so the picture
+      // does not jump as the lines appear one at a time.
+      var slots = lines.map(function (text) {
         var row = document.createElement("p");
-        row.className = "is-latest";
         row.textContent = text;
+        row.setAttribute("aria-hidden", "true");
+        row.style.visibility = "hidden";
         log.appendChild(row);
+        return row;
+      });
+      function reveal(index) {
+        if (index > 0) slots[index - 1].classList.remove("is-latest");
+        var row = slots[index];
+        row.style.visibility = "visible";
+        row.removeAttribute("aria-hidden");
+        row.classList.add("is-latest");
       }
       if (reduce) {
-        for (var n = 0; n < lines.length; n += 1) paint(lines[n]);
+        for (var n = 0; n < slots.length; n += 1) reveal(n);
         window.__bootLogDone = true;
         return;
       }
       var i = 0;
       function step() {
-        paint(lines[i]);
+        reveal(i);
         i += 1;
-        if (i < lines.length) window.setTimeout(step, 700);
+        if (i < slots.length) window.setTimeout(step, 700);
         else window.setTimeout(function () { window.__bootLogDone = true; }, 800);
       }
       window.setTimeout(step, 400);
@@ -111,7 +121,7 @@
     <button type="button" class="views-open" id="open-views" data-welcome-open aria-haspopup="dialog">QUICK VIEWS</button>
     <div class="clock" id="clock">00:00:00Z</div>
     <div class="mobile-nav">
-      <button type="button" id="open-menu" aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 20 8.2 12 12.2 4 8.2Z"/><path d="M4 12.2 12 16.2 20 12.2"/><path d="M4 16.2 12 20.2 20 16.2"/></svg></button>
+      <button type="button" id="open-menu" aria-label="All layers" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 20 8.2 12 12.2 4 8.2Z"/><path d="M4 12.2 12 16.2 20 12.2"/><path d="M4 16.2 12 20.2 20 16.2"/></svg></button>
       <button type="button" id="clear-layers" aria-label="Clear layers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 20 8.2 12 12.2 4 8.2Z"/><path d="M4 12.2 12 16.2 20 12.2"/><path d="M4 16.2 12 20.2 20 16.2"/><circle cx="12" cy="12" r="9"/><path d="M6.2 17.8 17.8 6.2"/></svg></button>
       <button type="button" id="open-list" aria-label="List"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7h11M9 12h11M9 17h11"/><path d="M4.5 7h.01M4.5 12h.01M4.5 17h.01"/></svg></button>
       <button type="button" id="open-views-mobile" data-welcome-open aria-haspopup="dialog" aria-label="Views"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2.1"/><path d="M12 3.2v2.4M12 18.4v2.4M3.2 12h2.4M18.4 12h2.4"/></svg></button>
@@ -134,7 +144,7 @@
       <div class="rail-head"><span>LAYERS</span></div>
       <details class="layer-group" id="group-simulators" data-layer-group="simulators">
         <summary class="layer-group-head"><span>SIMULATORS &amp; GAMES</span><em class="layer-group-count"></em></summary>
-        <button type="button" class="layer" data-layer-toggle="effects" aria-pressed="false"><span class="layer-name"><span class="swatch effects"></span> NUKE SIMULATOR</span><span class="layer-meta"><em data-count="effects">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="effects" aria-pressed="false"><span class="layer-name"><svg class="nuke-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.2v-4.6"/><path d="M4.8 15c.3-3.5 3.3-6.2 7.2-6.2s6.9 2.7 7.2 6.2"/><path d="M4.8 15c.7 1.7 2.3 2.8 4 2.8 1.3 0 2.3-.8 2.9-1.8.7 1 1.8 1.8 3.1 1.8 1.7 0 3.2-1.1 3.8-2.8"/><path d="M10.2 9c-.6-1.6.1-3.2 1.6-3.6 1-.3 2 .4 2.2 1.4"/></svg> NUKE SIMULATOR</span><span class="layer-meta"><em data-count="effects">—</em><span class="switch" aria-hidden="true"></span></span></button>
       </details>
       <details class="layer-group" id="group-transportation" data-layer-group="transportation">
         <summary class="layer-group-head"><span>TRANSPORTATION</span><em class="layer-group-count"></em></summary>
@@ -274,7 +284,7 @@
     <div id="effects-hud" class="effects-hud" hidden>
       <div class="effects-hud-head">
         <button type="button" id="effects-sound" class="effects-sound" aria-pressed="true">Sound on</button>
-        <h2>Nuke Simulator</h2>
+        <h2><svg class="nuke-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.2v-4.6"/><path d="M4.8 15c.3-3.5 3.3-6.2 7.2-6.2s6.9 2.7 7.2 6.2"/><path d="M4.8 15c.7 1.7 2.3 2.8 4 2.8 1.3 0 2.3-.8 2.9-1.8.7 1 1.8 1.8 3.1 1.8 1.7 0 3.2-1.1 3.8-2.8"/><path d="M10.2 9c-.6-1.6.1-3.2 1.6-3.6 1-.3 2 .4 2.2 1.4"/></svg> Nuke Simulator</h2>
         <button type="button" id="effects-hud-close" class="pin-card-close" aria-label="Close">×</button>
       </div>
       <p class="effects-lede" id="effects-lede">Tap the globe to choose ground zero, then pick a weapon or type a yield and press Launch Nuke.</p>
@@ -377,7 +387,7 @@
       </footer>
     </div>
     <div class="effects-reopen" id="effects-reopen">
-      <button type="button" id="open-effects-hud" hidden aria-label="Open simulator"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><path d="M17 15.5v4M15 17.5h4"/></svg></button>
+      <button type="button" id="open-effects-hud" hidden aria-label="Open simulator"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.2v-4.6"/><path d="M4.8 15c.3-3.5 3.3-6.2 7.2-6.2s6.9 2.7 7.2 6.2"/><path d="M4.8 15c.7 1.7 2.3 2.8 4 2.8 1.3 0 2.3-.8 2.9-1.8.7 1 1.8 1.8 3.1 1.8 1.7 0 3.2-1.1 3.8-2.8"/><path d="M10.2 9c-.6-1.6.1-3.2 1.6-3.6 1-.3 2 .4 2.2 1.4"/></svg></button>
       <button type="button" id="open-effects-results" hidden aria-label="Open blast area"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.2"/><circle cx="12" cy="12" r="5.4"/><circle cx="12" cy="12" r="8.6"/></svg></button>
       <button type="button" id="open-grid-tester" hidden aria-label="Open grid tester"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="1.6"/><path d="M8 15c5.2-.6 8.2-5.2 10.2-9.2M8 15c1.6-5.4 6.4-8 11-7.2M8 15c6.4.8 9.2 3.6 10.4 7.4"/></svg></button>
     </div>
@@ -555,7 +565,7 @@
       <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="swatch disease"></span> GLOBAL DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="swatch animal"></span> GLOBAL ANIMAL DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="swatch amfm"></span> GLOBAL AM FM TOWERS <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="effects" aria-pressed="false"><span class="swatch effects"></span> NUKE SIMULATOR <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="effects" aria-pressed="false"><svg class="nuke-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.2v-4.6"/><path d="M4.8 15c.3-3.5 3.3-6.2 7.2-6.2s6.9 2.7 7.2 6.2"/><path d="M4.8 15c.7 1.7 2.3 2.8 4 2.8 1.3 0 2.3-.8 2.9-1.8.7 1 1.8 1.8 3.1 1.8 1.7 0 3.2-1.1 3.8-2.8"/><path d="M10.2 9c-.6-1.6.1-3.2 1.6-3.6 1-.3 2 .4 2.2 1.4"/></svg> NUKE SIMULATOR <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="daynight" aria-pressed="false"><span class="swatch daynight"></span> DAY / NIGHT <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="sats" aria-pressed="false"><span class="swatch sats"></span> SATELLITES <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="swatch quakes"></span> GLOBAL EARTHQUAKES <span class="switch" aria-hidden="true"></span></button>
@@ -603,7 +613,7 @@
   <script src="/powerlines.js?v=20261124n"></script>
   <script src="/geocoder.js?v=20261124l"></script>
   <script src="/nearby.js?v=20261126l"></script>
-  <script src="/welcome.js?v=20261126l"></script>
-  <script src="/cesium.js?v=20261126l"></script>
+  <script src="/welcome.js?v=20261126n"></script>
+  <script src="/cesium.js?v=20261126n"></script>
 </body>
 </html>
