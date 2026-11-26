@@ -90,6 +90,7 @@ const state = {
     police: false,
     sheriff: false,
     fire: false,
+    hospitals: false,
     // USA POWER LINES (powerlines.js): HIFLD transmission lines, batched polylines.
     powerlines: false,
     // FIREARMS (firearms.js): saved static pin layers, not a live feed.
@@ -128,7 +129,7 @@ const state = {
 // SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
 const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
 // INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
-const INFRA_KEYS = ["airports", "bases", "celltowers", "powerplants", "police", "sheriff", "fire"];
+const INFRA_KEYS = ["airports", "bases", "celltowers", "powerplants", "police", "sheriff", "fire", "hospitals"];
 const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
 const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "militiainactive"];
 const INTERNET_KEYS = ["inetusa", "inetglobal"];
@@ -1566,6 +1567,7 @@ const LAYER_LABEL = {
   police: "USA POLICE DEPARTMENTS",
   sheriff: "USA SHERIFF DEPARTMENTS",
   fire: "USA FIRE DEPARTMENTS",
+  hospitals: "USA HOSPITALS & TRAUMA CENTERS",
   gunsusa: "USA GUN OWNERSHIP",
   gunsworld: "GLOBAL GUN OWNERSHIP",
   inetusa: "USA INTERNET OUTAGES",
@@ -1595,7 +1597,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
