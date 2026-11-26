@@ -115,6 +115,9 @@ const state = {
     militiastate: false,
     militialocal: false,
     militiainactive: false,
+    // PARANORMAL (paranormal.js): UFO reports and Bigfoot sightings.
+    ufo: false,
+    bigfoot: false,
   },
   openKind: "",
   openId: "",
@@ -147,6 +150,7 @@ const TFR_KEYS = ["tfr"];
 const DELAYS_KEYS = ["delays"];
 const AIRQUALITY_KEYS = ["airquality"];
 const POWERLINES_KEYS = ["powerlines"];
+const PARANORMAL_KEYS = ["ufo", "bigfoot"];
 
 const COLORS = {
   up: Cesium.Color.fromCssColorString("#3dff9a"),
@@ -583,6 +587,13 @@ async function startGlobe() {
       statusLive: () => statusLive(),
     });
   }
+  if (window.GsaParanormal) {
+    window.GsaParanormal.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   state.mapReady = true;
   viewer.camera.setView({
@@ -625,6 +636,13 @@ async function startGlobe() {
       if (viewer.selectedEntity) viewer.selectedEntity = undefined;
       closeMapPopups();
       window.GsaPowerLines.open(powerHit, showLive);
+      return;
+    }
+    const paranormalHit = window.GsaParanormal && window.GsaParanormal.pick(click.position);
+    if (paranormalHit) {
+      if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+      closeMapPopups();
+      showLive(paranormalHit);
       return;
     }
     if (pickedMapPin(click.position)) return;
@@ -1673,6 +1691,7 @@ const US_LAYERS = new Set([
   "tfr", "delays", "nwsalerts", "rivers", "coastal", "outages", "inetusa", "stream",
   "celltowers", "powerlines", "police", "sheriff", "fire", "hospitals", "airquality",
   "gunsusa", "ccw", "militianational", "militiastate", "militialocal", "militiainactive",
+  "bigfoot",
 ]);
 
 function flyOverview(rect) {
@@ -1802,6 +1821,9 @@ function setLayer(layer, on, options) {
   if (POWERLINES_KEYS.includes(layer) && window.GsaPowerLines) {
     window.GsaPowerLines.setActive(layer, state.layers[layer]);
   }
+  if (PARANORMAL_KEYS.includes(layer) && window.GsaParanormal) {
+    window.GsaParanormal.setActive(layer, state.layers[layer]);
+  }
   if ((layer === "quakes" || layer === "sats") && window.GsaSpaceWeather && window.GsaSpaceWeather.renderGroupCount) {
     window.GsaSpaceWeather.renderGroupCount();
   }
@@ -1872,6 +1894,8 @@ const LAYER_LABEL = {
   militiastate: "STATEWIDE GROUPS",
   militialocal: "LOCAL GROUPS",
   militiainactive: "INACTIVE GROUPS",
+  ufo: "UFO SIGHTINGS",
+  bigfoot: "BIGFOOT SIGHTINGS",
 };
 
 function setupLegendScroll() {
@@ -1892,7 +1916,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "delays", "conflicts", "hunger", "mesh", "disease", "animal", "airquality", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "ccw", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "delays", "conflicts", "hunger", "mesh", "disease", "animal", "airquality", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "ccw", "militianational", "militiastate", "militialocal", "militiainactive", "ufo", "bigfoot"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -3813,6 +3837,9 @@ function liveHtml(item, opts = {}) {
   }
   else if (item.power && window.GsaPowerLines) {
     extra = window.GsaPowerLines.popupHtml(item, opts);
+  }
+  else if (item.paranormal && window.GsaParanormal) {
+    extra = window.GsaParanormal.popupHtml(item, opts);
   }
   else if (item.layer === "quakes") {
     const mag = item.mag != null ? `Magnitude ${Number(item.mag).toFixed(1)}` : "";

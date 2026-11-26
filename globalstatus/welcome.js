@@ -42,6 +42,7 @@
     target: '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.4"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4" stroke-linecap="round"/>',
     group: '<circle cx="8.5" cy="8.6" r="2.6"/><circle cx="16" cy="9.6" r="2.2"/><path d="M3.5 19c.4-3.2 2.4-5 5-5s4.6 1.8 5 5M13.2 14.6c.8-.5 1.7-.8 2.8-.8 2.2 0 3.9 1.6 4.3 4.6" stroke-linecap="round"/>',
     compass: '<circle cx="12" cy="12" r="9"/><path d="m15.6 8.4-2.2 5-5 2.2 2.2-5z" stroke-linejoin="round"/>',
+    spark: '<path d="M12 2.6 14.1 8.8h6.5l-5.3 3.9 2 6.3L12 15.2 6.7 19l2-6.3L3.4 8.8h6.5z" stroke-linejoin="round"/>',
     web: '<circle cx="12" cy="6.4" r="3.5"/><path d="M12 3.1v6.6M9.1 5.1h5.8M9.4 7.7h5.2M12 9.9v2M4.2 11.9h15.6M4.2 11.9v1.8M12 11.9v1.8M19.8 11.9v1.8M2.2 18.5h4.6M9.7 18.5h4.6M17.2 18.5h4.6"/><rect x="2.2" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="9.7" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="17.2" y="14.3" width="4.6" height="3.4" rx="0.7"/>',
   };
   // group: the sidebar <details> id whose layers the row turns on (read from the page,
@@ -68,6 +69,7 @@
     { id: "health", group: "group-health", title: "HEALTH & HUMANITARIAN", sub: "Disease and animal outbreaks, hunger and US air quality", view: VIEW_WORLD, icon: I.health },
     { id: "firearms", group: "group-firearms", title: "FIREARMS", sub: "USA and global gun ownership and carry reciprocity", view: VIEW_US, icon: I.target },
     { id: "militias", group: "group-militias", title: "MILITIAS", sub: "National, statewide, local and inactive groups", view: VIEW_US, icon: I.group },
+    { id: "paranormal", group: "group-paranormal", title: "PARANORMAL", sub: "UFO reports and Bigfoot sightings", view: VIEW_WORLD, icon: I.spark },
     {
       id: "manual",
       title: "EXPLORE MANUALLY",
