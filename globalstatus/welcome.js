@@ -29,7 +29,7 @@
   var VIEW_US = [-127, 22, -65, 51];
   var VIEW_WORLD = [-168, -48, 150, 72]; // the site's normal startup framing
   var I = {
-    nuke: '<circle cx="12" cy="12" r="2.2" fill="currentColor"/><circle cx="12" cy="12" r="5.6"/><circle cx="12" cy="12" r="9.2" stroke-dasharray="2.4 2.2"/>',
+    nuke: '<path d="M12 21.2v-4.6"/><path d="M4.8 15c.3-3.5 3.3-6.2 7.2-6.2s6.9 2.7 7.2 6.2"/><path d="M4.8 15c.7 1.7 2.3 2.8 4 2.8 1.3 0 2.3-.8 2.9-1.8.7 1 1.8 1.8 3.1 1.8 1.7 0 3.2-1.1 3.8-2.8"/><path d="M10.2 9c-.6-1.6.1-3.2 1.6-3.6 1-.3 2 .4 2.2 1.4"/>',
     plane: '<path d="M21 15.5 13.5 11V5a1.5 1.5 0 0 0-3 0v6L3 15.5v2l7.5-2.3v3.6L8.5 20.3v1.2l3.5-.9 3.5.9v-1.2l-2-1.5v-3.6l7.5 2.3z" stroke-linejoin="round"/>',
     space: '<circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="9.5" ry="3.6" transform="rotate(-25 12 12)"/><circle cx="19.3" cy="7.4" r="1" fill="currentColor"/>',
     cloud: '<path d="M7 17.5h10.2a4 4 0 0 0 .4-8 5.6 5.6 0 0 0-10.8 1.6A3.3 3.3 0 0 0 7 17.5z" stroke-linejoin="round"/><path d="m12.5 18.5-1.6 3.2" stroke-linecap="round"/>',
