@@ -3124,3 +3124,320 @@ function gsa_ripe_snapshot()
     $cached['ageSeconds'] = $age;
     return $cached;
 }
+
+// ---------- FAA TFR (temporary flight restrictions) ----------
+// TRANSPORTATION > FAA TFR reads data/tfr-cache.json. The */5 aircraft cron
+// refreshes it when it is at least 10 minutes old (gsa_tfr_refresh); a visitor
+// request only refreshes a cache older than 20 minutes. Sources, all public
+// FAA feeds behind tfr.faa.gov/tfr3:
+//   tfrapi/getTfrList                  every published TFR (id, type, facility, state)
+//   geoserver/TFR/ows  V_TFR_LOC (WFS) the drawn areas, polygons in EPSG:4326
+//   download/detail_<n>_<seq>.xml      per-NOTAM details: times, altitudes, text
+// Detail XML is fetched again only when a TFR's modification time changes.
+function gsa_tfr_cache_file()
+{
+    global $dataDir;
+    return $dataDir . '/tfr-cache.json';
+}
+
+function gsa_tfr_cache_read()
+{
+    $file = gsa_tfr_cache_file();
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+// Fetch URLs at once; returns raw bodies keyed like $urls (null for a failure).
+function gsa_tfr_fetch($urls, $timeout = 40, $batch = 8)
+{
+    $out = array();
+    if (!function_exists('curl_multi_init')) {
+        return $out;
+    }
+    foreach (array_chunk($urls, $batch, true) as $chunk) {
+        $multi = curl_multi_init();
+        $handles = array();
+        foreach ($chunk as $key => $url) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, array(
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_TIMEOUT => $timeout,
+                CURLOPT_ENCODING => '',
+                CURLOPT_HTTPHEADER => array('User-Agent: GlobalStatusApp/1.0 (+https://globalstatus.app)'),
+            ));
+            curl_multi_add_handle($multi, $ch);
+            $handles[$key] = $ch;
+        }
+        do {
+            $status = curl_multi_exec($multi, $running);
+            if ($running) {
+                curl_multi_select($multi, 1.0);
+            }
+        } while ($running && $status === CURLM_OK);
+        foreach ($handles as $key => $ch) {
+            $body = curl_multi_getcontent($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_multi_remove_handle($multi, $ch);
+            curl_close($ch);
+            $out[$key] = ($body !== false && $code >= 200 && $code < 300) ? (string) $body : null;
+        }
+        curl_multi_close($multi);
+    }
+    return $out;
+}
+
+function gsa_tfr_tag($xml, $tag)
+{
+    return preg_match('#<' . $tag . '>(.*?)</' . $tag . '>#s', $xml, $m) ? trim(html_entity_decode($m[1], ENT_QUOTES | ENT_XML1, 'UTF-8')) : '';
+}
+
+// FAA XML times are UTC without a zone: "2026-11-26T20:30:00".
+function gsa_tfr_time($text)
+{
+    if ($text === '') {
+        return null;
+    }
+    $t = strtotime($text . ' UTC');
+    return $t === false ? null : $t;
+}
+
+// One altitude: HEI = above ground, ALT = above sea level, STD / FL = flight level.
+function gsa_tfr_alt($code, $val, $uom)
+{
+    if ($val === '') {
+        return '';
+    }
+    $n = (int) $val;
+    if (strtoupper($uom) === 'FL' || strtoupper($code) === 'STD') {
+        return 'FL' . str_pad((string) $n, 3, '0', STR_PAD_LEFT);
+    }
+    if ($n === 0 && strtoupper($code) === 'HEI') {
+        return 'Surface';
+    }
+    return number_format($n) . ' ft ' . (strtoupper($code) === 'HEI' ? 'AGL' : 'MSL');
+}
+
+function gsa_tfr_parse_detail($xml)
+{
+    $not = preg_match('#<Not>(.*?)<TfrNot>#s', $xml, $m) ? $m[1] : $xml;
+    $areas = array();
+    if (preg_match_all('#<aseTFRArea>(.*?)</aseTFRArea>#s', $xml, $mm)) {
+        foreach ($mm[1] as $a) {
+            $areas[] = array(
+                'name' => gsa_tfr_tag($a, 'txtName'),
+                'floor' => gsa_tfr_alt(gsa_tfr_tag($a, 'codeDistVerLower'), gsa_tfr_tag($a, 'valDistVerLower'), gsa_tfr_tag($a, 'uomDistVerLower')),
+                'ceiling' => gsa_tfr_alt(gsa_tfr_tag($a, 'codeDistVerUpper'), gsa_tfr_tag($a, 'valDistVerUpper'), gsa_tfr_tag($a, 'uomDistVerUpper')),
+                'start' => gsa_tfr_time(gsa_tfr_tag($a, 'dateEffective')),
+                'end' => gsa_tfr_time(gsa_tfr_tag($a, 'dateExpire')),
+            );
+        }
+    }
+    $text = gsa_tfr_tag($xml, 'txtDescrUSNS') ?: gsa_tfr_tag($xml, 'txtDescrTraditional');
+    if (strlen($text) > 3000) {
+        $text = substr($text, 0, 3000) . '…';
+    }
+    $reg = preg_match('#<TfrNot>\s*<codeType>([^<]+)</codeType>#', $xml, $r) ? trim($r[1]) : '';
+    return array(
+        'start' => gsa_tfr_time(gsa_tfr_tag($not, 'dateEffective')),
+        'end' => gsa_tfr_time(gsa_tfr_tag($not, 'dateExpire')),
+        'issued' => gsa_tfr_time(gsa_tfr_tag($not, 'dateIssued')),
+        'zone' => gsa_tfr_tag($not, 'codeTimeZone'),
+        'city' => gsa_tfr_tag($not, 'txtNameCity'),
+        'stateName' => gsa_tfr_tag($not, 'txtNameUSState'),
+        'name' => gsa_tfr_tag($not, 'txtLocalName'),
+        'regulation' => $reg !== '' ? '14 CFR ' . $reg : '',
+        'areas' => $areas,
+        'text' => $text,
+    );
+}
+
+function gsa_tfr_build($previous)
+{
+    $base = 'https://tfr.faa.gov/';
+    $got = gsa_tfr_fetch(array(
+        'list' => $base . 'tfrapi/getTfrList',
+        'wfs' => $base . 'geoserver/TFR/ows?service=WFS&version=1.1.0&request=GetFeature&typeName=TFR:V_TFR_LOC&outputFormat=application/json&srsname=EPSG:4326',
+    ), 45);
+    $list = json_decode((string) ($got['list'] ?? ''), true);
+    $wfs = json_decode((string) ($got['wfs'] ?? ''), true);
+    if (!is_array($list) || !is_array($wfs) || !isset($wfs['features'])) {
+        return null;
+    }
+    // Shapes by NOTAM id ("6/2481-1-FDC-F" -> "6/2481").
+    $shapes = array();
+    foreach ($wfs['features'] as $f) {
+        $key = (string) ($f['properties']['NOTAM_KEY'] ?? '');
+        $id = strtok($key, '-');
+        $geom = $f['geometry'] ?? null;
+        if ($id === '' || !is_array($geom)) {
+            continue;
+        }
+        $polys = $geom['type'] === 'MultiPolygon' ? $geom['coordinates'] : ($geom['type'] === 'Polygon' ? array($geom['coordinates']) : array());
+        foreach ($polys as $poly) {
+            $ring = array();
+            foreach ((array) ($poly[0] ?? array()) as $pt) {
+                $ring[] = array(round((float) $pt[0], 5), round((float) $pt[1], 5));
+            }
+            if (count($ring) >= 3) {
+                $shapes[$id][] = $ring;
+            }
+        }
+    }
+    // Details, reusing the last copy when the TFR has not changed.
+    $prevDetails = array();
+    foreach ((array) ($previous['tfrs'] ?? array()) as $t) {
+        if (!empty($t['detail']) && isset($t['mod'])) {
+            $prevDetails[$t['id'] . '@' . $t['mod']] = $t['detail'];
+        }
+    }
+    foreach ((array) ($previous['textOnly'] ?? array()) as $t) {
+        if (!empty($t['detail']) && isset($t['mod'])) {
+            $prevDetails[$t['id'] . '@' . $t['mod']] = $t['detail'];
+        }
+    }
+    $need = array();
+    foreach ($list as $row) {
+        $id = (string) ($row['notam_id'] ?? '');
+        $mod = (string) ($row['mod_abs_time'] ?? '');
+        if ($id !== '' && !isset($prevDetails[$id . '@' . $mod])) {
+            $need[$id] = $base . 'download/detail_' . str_replace('/', '_', $id) . '.xml';
+        }
+    }
+    $fresh = $need ? gsa_tfr_fetch($need, 30, 8) : array();
+    $tfrs = array();
+    $textOnly = array();
+    $now = time();
+    foreach ($list as $row) {
+        $id = (string) ($row['notam_id'] ?? '');
+        if ($id === '') {
+            continue;
+        }
+        $mod = (string) ($row['mod_abs_time'] ?? '');
+        $detail = $prevDetails[$id . '@' . $mod] ?? null;
+        if ($detail === null && !empty($fresh[$id])) {
+            $detail = gsa_tfr_parse_detail($fresh[$id]);
+        }
+        $item = array(
+            'id' => $id,
+            'type' => strtoupper(trim((string) ($row['type'] ?? ''))) ?: 'OTHER',
+            'facility' => trim((string) ($row['facility'] ?? '')),
+            'state' => trim((string) ($row['state'] ?? '')),
+            'title' => trim((string) ($row['description'] ?? '')),
+            'mod' => $mod,
+            'detail' => $detail,
+        );
+        $start = $detail['start'] ?? null;
+        $end = $detail['end'] ?? null;
+        $item['status'] = ($start && $start > $now) ? 'upcoming' : (($end && $end < $now) ? 'expired' : 'active');
+        if (isset($shapes[$id])) {
+            $item['areas'] = $shapes[$id];
+            // Center: mean of the largest ring's points.
+            $big = $shapes[$id][0];
+            foreach ($shapes[$id] as $ring) {
+                if (count($ring) > count($big)) {
+                    $big = $ring;
+                }
+            }
+            $sx = 0.0;
+            $sy = 0.0;
+            foreach ($big as $pt) {
+                $sx += $pt[0];
+                $sy += $pt[1];
+            }
+            $item['lon'] = round($sx / count($big), 5);
+            $item['lat'] = round($sy / count($big), 5);
+            $tfrs[] = $item;
+        } else {
+            $textOnly[] = $item;
+        }
+    }
+    $byType = array();
+    $active = 0;
+    foreach ($tfrs as $t) {
+        $byType[$t['type']] = ($byType[$t['type']] ?? 0) + 1;
+        if ($t['status'] === 'active') {
+            $active++;
+        }
+    }
+    arsort($byType);
+    return array(
+        'source' => 'FAA, tfr.faa.gov',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z', $now),
+        'tfrs' => $tfrs,
+        'textOnly' => $textOnly,
+        'counts' => array('mapped' => count($tfrs), 'active' => $active, 'upcoming' => count($tfrs) - $active, 'textOnly' => count($textOnly), 'byType' => $byType),
+        'detailFetched' => count($need),
+    );
+}
+
+function gsa_tfr_refresh($opts = array())
+{
+    global $dataDir;
+    $maxAge = (int) ($opts['maxAge'] ?? 600);
+    $cached = gsa_tfr_cache_read();
+    if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+        return array('ok' => true, 'skipped' => true);
+    }
+    $lock = fopen($dataDir . '/tfr.lock', 'c');
+    if (!$lock) {
+        return array('ok' => false, 'error' => 'no lock file');
+    }
+    $wait = !empty($opts['wait']);
+    if (!flock($lock, $wait ? LOCK_EX : (LOCK_EX | LOCK_NB))) {
+        fclose($lock);
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        $cached = gsa_tfr_cache_read();
+        if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+            return array('ok' => true, 'skipped' => true);
+        }
+        $t0 = microtime(true);
+        $built = gsa_tfr_build($cached);
+        if ($built === null) {
+            if ($cached) {
+                $cached['lastError'] = 'The FAA TFR feed did not answer at ' . gmdate('H:i\Z');
+                $cached['lastErrorAt'] = time();
+                gsa_atomic_write(gsa_tfr_cache_file(), json_encode($cached));
+            }
+            return array('ok' => false, 'error' => 'FAA TFR feed did not answer');
+        }
+        $built['fetchedAt'] = time();
+        gsa_atomic_write(gsa_tfr_cache_file(), json_encode($built));
+        return array('ok' => true, 'mapped' => $built['counts']['mapped'], 'details' => $built['detailFetched'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function gsa_tfr_snapshot()
+{
+    $cached = gsa_tfr_cache_read();
+    $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    if ($age > 1200) {
+        gsa_tfr_refresh(array('maxAge' => 1200, 'wait' => !$cached));
+        $cached = gsa_tfr_cache_read();
+        $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    }
+    if (!$cached) {
+        return array(
+            'source' => 'FAA, tfr.faa.gov',
+            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+            'stale' => false,
+            'error' => 'The FAA TFR feed did not answer. Try again in a few minutes.',
+            'tfrs' => array(),
+            'textOnly' => array(),
+            'counts' => array('mapped' => 0, 'active' => 0, 'upcoming' => 0, 'textOnly' => 0, 'byType' => array()),
+        );
+    }
+    unset($cached['fetchedAt'], $cached['lastErrorAt'], $cached['detailFetched']);
+    $cached['stale'] = $age > 1800;
+    $cached['ageSeconds'] = $age;
+    return $cached;
+}

@@ -1745,3 +1745,6 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 .swatch.infra-police { background: #2f6bff; box-shadow: 0 0 0 2px #ffffff inset; border-radius: 50%; }
 .swatch.infra-fire { background: #e8261c; box-shadow: 0 0 0 2px #ffffff inset; border-radius: 50%; }
 .swatch.infra-sheriff { background: #ffc233; box-shadow: 0 0 0 2px #1b2350 inset; border-radius: 50%; }
+/* FAA TFR (tfr.js): restricted-area swatch and the NOTAM text block in the card. */
+.swatch.tfr { background: rgba(255, 77, 77, 0.3); border: 2px solid #ff4d4d; border-radius: 2px; }
+.tfr-text { display: block; white-space: pre-wrap; word-break: break-word; font-size: 0.92em; opacity: 0.88; }

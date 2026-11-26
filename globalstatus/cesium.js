@@ -98,6 +98,8 @@ const state = {
     // INTERNET OUTAGES (internet.js): live IODA (Georgia Tech) outage pins.
     inetusa: false,
     inetglobal: false,
+    // FAA TFR (tfr.js): live FAA temporary flight restriction areas.
+    tfr: false,
     // MILITIAS (militias.js): saved static pin layers, not a live feed.
     militianational: false,
     militiastate: false,
@@ -130,6 +132,7 @@ const INFRA_KEYS = ["airports", "bases", "celltowers", "powerplants", "police", 
 const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
 const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "militiainactive"];
 const INTERNET_KEYS = ["inetusa", "inetglobal"];
+const TFR_KEYS = ["tfr"];
 const POWERLINES_KEYS = ["powerlines"];
 
 const COLORS = {
@@ -481,6 +484,13 @@ async function startGlobe() {
   }
   if (window.GsaInternet) {
     window.GsaInternet.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaTfr) {
+    window.GsaTfr.init({
       viewer: () => state.viewer,
       setCount,
       statusLive: () => statusLive(),
@@ -1282,6 +1292,10 @@ function sourceFor(layer) {
     const internetSource = window.GsaInternet.sourceFor(layer);
     if (internetSource) return internetSource;
   }
+  if (window.GsaTfr && window.GsaTfr.sourceFor) {
+    const tfrSource = window.GsaTfr.sourceFor(layer);
+    if (tfrSource) return tfrSource;
+  }
   return null;
 }
 
@@ -1491,6 +1505,9 @@ function setLayer(layer, on) {
   if (INTERNET_KEYS.includes(layer) && window.GsaInternet) {
     window.GsaInternet.setActive(layer, state.layers[layer]);
   }
+  if (TFR_KEYS.includes(layer) && window.GsaTfr) {
+    window.GsaTfr.setActive(layer, state.layers[layer]);
+  }
   if (POWERLINES_KEYS.includes(layer) && window.GsaPowerLines) {
     window.GsaPowerLines.setActive(layer, state.layers[layer]);
   }
@@ -1553,6 +1570,7 @@ const LAYER_LABEL = {
   gunsworld: "GLOBAL GUN OWNERSHIP",
   inetusa: "USA INTERNET OUTAGES",
   inetglobal: "GLOBAL INTERNET OUTAGES",
+  tfr: "FAA TFR",
   militianational: "NATIONAL GROUPS",
   militiastate: "STATEWIDE GROUPS",
   militialocal: "LOCAL GROUPS",
@@ -1577,7 +1595,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -3131,6 +3149,13 @@ function cullAircraftHorizon() {
       if (internetSource) sources.push(internetSource);
     }
   }
+  // FAA TFR center pins (and their flat areas, which carry the same center).
+  if (window.GsaTfr && window.GsaTfr.KEYS) {
+    for (const key of window.GsaTfr.KEYS) {
+      const tfrSource = window.GsaTfr.sourceFor(key);
+      if (tfrSource) sources.push(tfrSource);
+    }
+  }
   if (window.GsaMilitias && window.GsaMilitias.KEYS) {
     for (const key of window.GsaMilitias.KEYS) {
       const militiasSource = window.GsaMilitias.sourceFor(key);
@@ -3395,6 +3420,9 @@ function liveHtml(item, opts = {}) {
   }
   else if (item.internet && window.GsaInternet) {
     extra = window.GsaInternet.popupHtml(item, opts);
+  }
+  else if (item.tfr && window.GsaTfr) {
+    extra = window.GsaTfr.popupHtml(item, opts);
   }
   else if (item.power && window.GsaPowerLines) {
     extra = window.GsaPowerLines.popupHtml(item, opts);
@@ -3796,6 +3824,7 @@ function statusLive(error) {
   if (window.GsaFirearms) parts.push(...window.GsaFirearms.statusParts());
   if (window.GsaMilitias) parts.push(...window.GsaMilitias.statusParts());
   if (window.GsaInternet) parts.push(...window.GsaInternet.statusParts());
+  if (window.GsaTfr) parts.push(...window.GsaTfr.statusParts());
   if (window.GsaPowerLines) parts.push(...window.GsaPowerLines.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
