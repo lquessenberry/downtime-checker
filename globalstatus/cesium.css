@@ -1014,8 +1014,6 @@ button:hover { border-color: #9fd4e2; }
     border-radius: 8px;
   }
   .mobile-nav svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-  #open-menu .icon-layers { display: none; }
-  #open-menu .icon-reset { display: block; }
   #reset-mobile { display: none; }
   .rail, .feed-col {
     display: none;
@@ -2084,7 +2082,6 @@ body.welcome-open #open-grid-tester { display: none !important; }
   }
   .mobile-nav button.is-on { border-color: #9fd4e2; }
   .mobile-nav svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-  #open-menu .icon-reset { display: none; }
   .rail, .feed-col {
     display: none;
     position: fixed;
