@@ -9,6 +9,7 @@
 //   php poll-runner.php ioda [--force-ioda]
 //   php poll-runner.php ripe [--force-ripe]
 //   php poll-runner.php tfr [--force-tfr]
+//   php poll-runner.php delays [--force-delays]
 //   php poll-runner.php grid --slice=40     (test: first 40 sites only, never published)
 //
 // World Grid: one full pass is saved to data/scan-cache.json. Visitors'
@@ -25,7 +26,8 @@
 // Internet outages: the same */5 cron refreshes the IODA (Georgia Tech) cache
 // when it is at least 10 minutes old (gsa_ioda_refresh), and the RIPE Atlas
 // probe cache on the same 10-minute gate (gsa_ripe_refresh), and the FAA TFR
-// cache on the same gate (gsa_tfr_refresh).
+// cache on the same gate (gsa_tfr_refresh), and the FAA NAS Status flight delays
+// cache about every 5 minutes (gsa_fd_refresh).
 
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
@@ -55,6 +57,8 @@ $forceIoda = false;
 $skipIoda = false;
 $forceRipe = false;
 $forceTfr = false;
+$forceDelays = false;
+$skipDelays = false;
 $skipTfr = false;
 $skipRipe = false;
 foreach ($argv as $arg) {
@@ -82,6 +86,10 @@ foreach ($argv as $arg) {
         $GLOBALS['GSA_SPACE_MOCK_TSUNAMI'] = substr($arg, 15);
     } elseif (strpos($arg, '--mock-coops=') === 0) {
         $GLOBALS['GSA_SPACE_MOCK_COOPS'] = substr($arg, 13);
+    } elseif ($arg === '--force-delays') {
+        $forceDelays = true;
+    } elseif ($arg === '--skip-delays') {
+        $skipDelays = true;
     } elseif ($arg === '--force-tfr') {
         $forceTfr = true;
     } elseif ($arg === '--skip-tfr') {
@@ -200,6 +208,28 @@ function runner_tfr($force)
     return $info;
 }
 
+// FAA NAS Status flight delays. A failure never changes the aircraft job's exit code.
+function runner_delays($force)
+{
+    $t0 = microtime(true);
+    try {
+        $info = gsa_fd_refresh(array('force' => $force));
+    } catch (Throwable $e) {
+        $info = array('ok' => false, 'error' => $e->getMessage());
+    }
+    $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+    if (empty($info['busy']) && empty($info['skipped'])) {
+        gsa_poll_status_note('delays', $info);
+    }
+    return $info;
+}
+
+if ($job === 'delays') {
+    $info = runner_delays($forceDelays);
+    runner_print(array('delays' => $info));
+    exit(!empty($info['ok']) ? 0 : 2);
+}
+
 if ($job === 'tfr') {
     $info = runner_tfr($forceTfr);
     runner_print(array('tfr' => $info));
@@ -269,6 +299,9 @@ if ($job === 'aircraft') {
     if (!$skipTfr) {
         $out['tfr'] = runner_tfr($forceTfr);
     }
+    if (!$skipDelays) {
+        $out['delays'] = runner_delays($forceDelays);
+    }
     runner_print($out);
     $airOk = !empty($info['ok']) || !empty($info['busy']) || !empty($info['skipped']);
     $jamOk = $skipJam || !empty($out['jamming']['ok']) || !empty($out['jamming']['busy']) || !empty($out['jamming']['skipped']);
@@ -276,7 +309,7 @@ if ($job === 'aircraft') {
 }
 
 if ($job !== 'grid') {
-    fwrite(STDERR, "Unknown job: $job (use grid, aircraft, jamming, space, ioda, ripe, tfr, or status)\n");
+    fwrite(STDERR, "Unknown job: $job (use grid, aircraft, jamming, space, ioda, ripe, tfr, delays, or status)\n");
     exit(1);
 }
 

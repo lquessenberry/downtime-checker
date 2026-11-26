@@ -3441,3 +3441,382 @@ function gsa_tfr_snapshot()
     $cached['ageSeconds'] = $age;
     return $cached;
 }
+
+// ---------- FAA NAS Status (flight delays) ----------
+// TRANSPORTATION > FLIGHT DELAYS reads data/flight-delays-cache.json. The */5 aircraft
+// cron refreshes it when it is at least ~5 minutes old (gsa_fd_refresh); a visitor
+// request only refreshes a cache older than 10 minutes, and it is flagged stale after
+// 20 minutes. Sources, both public FAA feeds behind nasstatus.faa.gov:
+//   api/airport-events               JSON, one object per airport with an event (ground
+//                                    stops, ground delay programs, arrival / departure
+//                                    delays, closures, deicing, NOTAM notices) + coordinates
+//   api/airport-status-information   the classic XML: airspace flow programs, and a second
+//                                    source for ground stops and delays the JSON lacks
+// Names, cities and states come from geo/us-airports.json (OurAirports) when needed.
+function gsa_fd_cache_file()
+{
+    global $dataDir;
+    return $dataDir . '/flight-delays-cache.json';
+}
+
+function gsa_fd_cache_read()
+{
+    $file = gsa_fd_cache_file();
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+// "3 hours and 34 minutes", "16 minutes", "15", 214.0 -> minutes (null when unknown).
+function gsa_fd_minutes($v)
+{
+    if ($v === null || $v === '') {
+        return null;
+    }
+    if (is_int($v) || is_float($v) || preg_match('/^\s*\d+(\.\d+)?\s*$/', (string) $v)) {
+        return (int) round((float) $v);
+    }
+    $s = strtolower((string) $v);
+    $m = 0;
+    $hit = false;
+    if (preg_match('/(\d+)\s*hour/', $s, $h)) {
+        $m += 60 * (int) $h[1];
+        $hit = true;
+    }
+    if (preg_match('/(\d+)\s*min/', $s, $mm)) {
+        $m += (int) $mm[1];
+        $hit = true;
+    }
+    return $hit ? $m : null;
+}
+
+function gsa_fd_time($v)
+{
+    if (!is_string($v) || $v === '') {
+        return null;
+    }
+    $t = strtotime($v);
+    return $t === false ? null : $t;
+}
+
+function gsa_fd_str($v)
+{
+    return is_string($v) ? trim($v) : (is_numeric($v) ? (string) $v : '');
+}
+
+function gsa_fd_xml_tag($xml, $tag)
+{
+    return preg_match('#<' . $tag . '(?:\s[^>]*)?>(.*?)</' . $tag . '>#s', $xml, $m) ? trim(html_entity_decode($m[1], ENT_QUOTES | ENT_XML1, 'UTF-8')) : '';
+}
+
+// One normalized event list per airport from the JSON feed.
+function gsa_fd_events_json($a)
+{
+    $ev = array();
+    $gs = $a['groundStop'] ?? null;
+    if (is_array($gs)) {
+        $ev[] = array(
+            'kind' => 'groundstop',
+            'reason' => gsa_fd_str($gs['impactingCondition'] ?? ($gs['reason'] ?? '')),
+            'start' => gsa_fd_time($gs['startTime'] ?? null),
+            'end' => gsa_fd_time($gs['endTime'] ?? null),
+            'updated' => gsa_fd_time($gs['updatedAt'] ?? ($gs['sourceTimeStamp'] ?? null)),
+            'center' => gsa_fd_str($gs['center'] ?? ''),
+            'scope' => gsa_fd_str($gs['departureScope'] ?? ''),
+            'avg' => gsa_fd_minutes($gs['avgDelay'] ?? null),
+            'max' => gsa_fd_minutes($gs['maxDelay'] ?? null),
+        );
+    }
+    $gd = $a['groundDelay'] ?? null;
+    if (is_array($gd)) {
+        $ev[] = array(
+            'kind' => 'gdp',
+            'reason' => gsa_fd_str($gd['impactingCondition'] ?? ($gd['reason'] ?? '')),
+            'avg' => gsa_fd_minutes($gd['avgDelay'] ?? null),
+            'max' => gsa_fd_minutes($gd['maxDelay'] ?? null),
+            'start' => gsa_fd_time($gd['startTime'] ?? null),
+            'end' => gsa_fd_time($gd['endTime'] ?? null),
+            'updated' => gsa_fd_time($gd['updatedAt'] ?? ($gd['sourceTimeStamp'] ?? null)),
+            'center' => gsa_fd_str($gd['center'] ?? ''),
+            'scope' => gsa_fd_str($gd['departureScope'] ?? ''),
+        );
+    }
+    foreach (array('arrivalDelay' => 'arrival', 'departureDelay' => 'departure') as $field => $kind) {
+        $d = $a[$field] ?? null;
+        if (!is_array($d)) {
+            continue;
+        }
+        $ad = is_array($d['arrivalDeparture'] ?? null) ? $d['arrivalDeparture'] : array();
+        $ev[] = array(
+            'kind' => $kind,
+            'reason' => gsa_fd_str($d['reason'] ?? ''),
+            'min' => gsa_fd_minutes($ad['min'] ?? null),
+            'max' => gsa_fd_minutes($ad['max'] ?? ($d['maxDelay'] ?? null)),
+            'avg' => gsa_fd_minutes($d['averageDelay'] ?? null),
+            'trend' => gsa_fd_str($ad['trend'] ?? ($d['trend'] ?? '')),
+            'updated' => gsa_fd_time($d['updateTime'] ?? ($d['updatedAt'] ?? null)),
+        );
+    }
+    $cl = $a['airportClosure'] ?? null;
+    if (is_array($cl)) {
+        $ev[] = array(
+            'kind' => 'closure',
+            'reason' => gsa_fd_str($cl['text'] ?? ''),
+            'text' => gsa_fd_str($cl['simpleText'] ?? ''),
+            'start' => gsa_fd_time($cl['startTime'] ?? null),
+            'end' => gsa_fd_time($cl['endTime'] ?? null),
+            'updated' => gsa_fd_time($cl['updatedAt'] ?? null),
+            'daily' => preg_match('/\bDLY\s+(\d{4})-(\d{4})\b/', (string) ($cl['text'] ?? ($cl['simpleText'] ?? '')), $dm) ? array($dm[1], $dm[2]) : null,
+        );
+    }
+    $de = $a['deicing'] ?? null;
+    if (is_array($de)) {
+        $ev[] = array(
+            'kind' => 'deicing',
+            'reason' => 'Deicing in progress',
+            'start' => gsa_fd_time($de['eventTime'] ?? null),
+            'end' => gsa_fd_time($de['expTime'] ?? null),
+            'updated' => gsa_fd_time($de['updatedAt'] ?? null),
+        );
+    }
+    $ff = $a['freeForm'] ?? null;
+    if (is_array($ff)) {
+        $ev[] = array(
+            'kind' => 'notice',
+            'reason' => gsa_fd_str($ff['text'] ?? ''),
+            'text' => gsa_fd_str($ff['simpleText'] ?? ''),
+            'start' => gsa_fd_time($ff['startTime'] ?? null),
+            'end' => gsa_fd_time($ff['endTime'] ?? null),
+            'updated' => gsa_fd_time($ff['updatedAt'] ?? null),
+        );
+    }
+    return $ev;
+}
+
+// Ground stops, ground delays and arrival / departure delays from the XML, keyed by airport,
+// plus airspace flow programs (no single airport).
+function gsa_fd_events_xml($xml)
+{
+    $by = array();
+    $afp = array();
+    if (!preg_match_all('#<Delay_type>(.*?)</Delay_type>#s', $xml, $types)) {
+        return array($by, $afp);
+    }
+    foreach ($types[1] as $block) {
+        $name = strtolower(gsa_fd_xml_tag($block, 'Name'));
+        if (strpos($name, 'airspace flow') !== false) {
+            if (preg_match_all('#<Airspace_Flow>(.*?)</Airspace_Flow>#s', $block, $mm)) {
+                foreach ($mm[1] as $r) {
+                    $afp[] = array(
+                        'element' => gsa_fd_xml_tag($r, 'CTL_Element'),
+                        'reason' => gsa_fd_xml_tag($r, 'Reason'),
+                        'avg' => gsa_fd_minutes(gsa_fd_xml_tag($r, 'Avg')),
+                        'start' => gsa_fd_xml_tag($r, 'AFP_StartTime'),
+                        'end' => gsa_fd_xml_tag($r, 'AFP_EndTime'),
+                    );
+                }
+            }
+            continue;
+        }
+        if (strpos($name, 'ground stop') !== false) {
+            $kind = 'groundstop';
+        } elseif (strpos($name, 'ground delay') !== false) {
+            $kind = 'gdp';
+        } elseif (strpos($name, 'arrival/departure') !== false) {
+            $kind = 'arrdep';
+        } else {
+            continue; // closures come from the JSON, with real times
+        }
+        if (!preg_match_all('#<(Program|Ground_Delay|Delay)>(.*?)</\1>#s', $block, $mm)) {
+            continue;
+        }
+        foreach ($mm[2] as $r) {
+            $arpt = strtoupper(gsa_fd_xml_tag($r, 'ARPT'));
+            if ($arpt === '') {
+                continue;
+            }
+            if ($kind === 'arrdep') {
+                $type = preg_match('#<Arrival_Departure\s+Type="([^"]+)"#', $r, $t) ? strtolower($t[1]) : 'departure';
+                $by[$arpt][] = array(
+                    'kind' => strpos($type, 'arr') === 0 ? 'arrival' : 'departure',
+                    'reason' => gsa_fd_xml_tag($r, 'Reason'),
+                    'min' => gsa_fd_minutes(gsa_fd_xml_tag($r, 'Min')),
+                    'max' => gsa_fd_minutes(gsa_fd_xml_tag($r, 'Max')),
+                    'trend' => gsa_fd_xml_tag($r, 'Trend'),
+                );
+            } else {
+                $by[$arpt][] = array(
+                    'kind' => $kind,
+                    'reason' => gsa_fd_xml_tag($r, 'Reason'),
+                    'avg' => gsa_fd_minutes(gsa_fd_xml_tag($r, 'Avg')),
+                    'max' => gsa_fd_minutes(gsa_fd_xml_tag($r, 'Max')),
+                    'endText' => gsa_fd_xml_tag($r, 'End_Time'),
+                );
+            }
+        }
+    }
+    return array($by, $afp);
+}
+
+function gsa_fd_airports()
+{
+    static $map = null;
+    if ($map === null) {
+        $file = __DIR__ . '/geo/us-airports.json';
+        $body = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+        $map = is_array($body) && isset($body['airports']) ? $body['airports'] : array();
+    }
+    return $map;
+}
+
+// $base is only changed by local tests that serve saved FAA files.
+function gsa_fd_build($base = 'https://nasstatus.faa.gov/api/')
+{
+    $got = gsa_tfr_fetch(array('events' => $base . 'airport-events', 'xml' => $base . 'airport-status-information'), 30);
+    $events = json_decode((string) ($got['events'] ?? ''), true);
+    $xml = (string) ($got['xml'] ?? '');
+    $xmlOk = strpos($xml, '<AIRPORT_STATUS_INFORMATION') !== false;
+    if (!is_array($events) && !$xmlOk) {
+        return null;
+    }
+    list($xmlBy, $afp) = $xmlOk ? gsa_fd_events_xml($xml) : array(array(), array());
+    $feedTime = $xmlOk ? gsa_fd_time(preg_replace('/\s+GMT$/', ' UTC', gsa_fd_xml_tag($xml, 'Update_Time'))) : null;
+    $lookup = gsa_fd_airports();
+    $airports = array();
+    foreach ((is_array($events) ? $events : array()) as $a) {
+        $id = strtoupper(gsa_fd_str($a['airportId'] ?? ''));
+        if ($id === '') {
+            continue;
+        }
+        $airports[$id] = array('code' => $id, 'name' => gsa_fd_str($a['airportLongName'] ?? ''), 'lat' => is_numeric($a['latitude'] ?? null) ? (float) $a['latitude'] : null,
+            'lon' => is_numeric($a['longitude'] ?? null) ? (float) $a['longitude'] : null, 'events' => gsa_fd_events_json($a));
+        $cfg = $a['airportConfig'] ?? null;
+        if (is_array($cfg)) {
+            $airports[$id]['config'] = array('arr' => gsa_fd_str($cfg['arrivalRunwayConfig'] ?? ''), 'dep' => gsa_fd_str($cfg['departureRunwayConfig'] ?? ''), 'rate' => is_numeric($cfg['arrivalRate'] ?? null) ? (int) $cfg['arrivalRate'] : null);
+        }
+    }
+    // XML events the JSON does not already carry (same airport and kind).
+    foreach ($xmlBy as $id => $list) {
+        if (!isset($airports[$id])) {
+            $airports[$id] = array('code' => $id, 'name' => '', 'lat' => null, 'lon' => null, 'events' => array());
+        }
+        $have = array();
+        foreach ($airports[$id]['events'] as $e) {
+            $have[$e['kind']] = true;
+        }
+        foreach ($list as $e) {
+            if (empty($have[$e['kind']])) {
+                $airports[$id]['events'][] = $e;
+            }
+        }
+    }
+    $rank = array('closure' => 6, 'groundstop' => 5, 'gdp' => 4, 'arrival' => 3, 'departure' => 3, 'deicing' => 2, 'notice' => 1);
+    $out = array();
+    $noLocation = array();
+    $counts = array('closure' => 0, 'groundstop' => 0, 'gdp' => 0, 'arrival' => 0, 'departure' => 0, 'deicing' => 0, 'notice' => 0);
+    foreach ($airports as $id => $a) {
+        if (!$a['events']) {
+            continue;
+        }
+        $k = $lookup[$id] ?? null;
+        if ($a['lat'] === null && $k) {
+            $a['lat'] = (float) $k[3];
+            $a['lon'] = (float) $k[4];
+        }
+        $a['name'] = $a['name'] !== '' ? $a['name'] : ($k ? $k[0] : '');
+        $a['city'] = $k ? $k[1] : '';
+        $a['state'] = $k ? $k[2] : '';
+        usort($a['events'], function ($x, $y) use ($rank) {
+            return ($rank[$y['kind']] ?? 0) - ($rank[$x['kind']] ?? 0);
+        });
+        $a['top'] = $a['events'][0]['kind'];
+        foreach ($a['events'] as $e) {
+            $counts[$e['kind']] = ($counts[$e['kind']] ?? 0) + 1;
+        }
+        if ($a['lat'] === null || $a['lon'] === null) {
+            $noLocation[] = $a;
+            continue;
+        }
+        $out[] = $a;
+    }
+    usort($out, function ($x, $y) use ($rank) {
+        return ($rank[$y['top']] ?? 0) - ($rank[$x['top']] ?? 0) ?: strcmp($x['code'], $y['code']);
+    });
+    $delayed = 0;
+    foreach (array_merge($out, $noLocation) as $a) {
+        if ($a['top'] !== 'notice') {
+            $delayed++;
+        }
+    }
+    return array(
+        'source' => 'FAA National Airspace System Status (nasstatus.faa.gov)',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'feedUpdated' => $feedTime ? gmdate('Y-m-d\TH:i:s\Z', $feedTime) : null,
+        'airports' => $out,
+        'noLocation' => $noLocation,
+        'afp' => $afp,
+        'counts' => array('airports' => count($out) + count($noLocation), 'withDelays' => $delayed, 'events' => $counts, 'afp' => count($afp)),
+        'feeds' => array('json' => is_array($events), 'xml' => $xmlOk),
+    );
+}
+
+function gsa_fd_refresh($opts = array())
+{
+    global $dataDir;
+    $maxAge = (int) ($opts['maxAge'] ?? 270);
+    $cached = gsa_fd_cache_read();
+    if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+        return array('ok' => true, 'skipped' => true);
+    }
+    $lock = fopen($dataDir . '/flight-delays.lock', 'c');
+    if (!$lock) {
+        return array('ok' => false, 'error' => 'no lock file');
+    }
+    if (!flock($lock, !empty($opts['wait']) ? LOCK_EX : (LOCK_EX | LOCK_NB))) {
+        fclose($lock);
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        $cached = gsa_fd_cache_read();
+        if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+            return array('ok' => true, 'skipped' => true);
+        }
+        $t0 = microtime(true);
+        $built = gsa_fd_build();
+        if ($built === null) {
+            if ($cached) {
+                $cached['lastError'] = 'The FAA NAS Status feed did not answer at ' . gmdate('H:i\Z');
+                gsa_atomic_write(gsa_fd_cache_file(), json_encode($cached));
+            }
+            return array('ok' => false, 'error' => 'FAA NAS Status feed did not answer');
+        }
+        $built['fetchedAt'] = time();
+        gsa_atomic_write(gsa_fd_cache_file(), json_encode($built));
+        return array('ok' => true, 'airports' => $built['counts']['airports'], 'delayed' => $built['counts']['withDelays'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function gsa_fd_snapshot()
+{
+    $cached = gsa_fd_cache_read();
+    $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    if ($age > 600) {
+        gsa_fd_refresh(array('maxAge' => 600, 'wait' => !$cached));
+        $cached = gsa_fd_cache_read();
+        $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    }
+    if (!$cached) {
+        return array('source' => 'FAA National Airspace System Status (nasstatus.faa.gov)', 'updated' => gmdate('Y-m-d\TH:i:s\Z'), 'stale' => false,
+            'error' => 'The FAA NAS Status feed did not answer. Try again in a few minutes.', 'airports' => array(), 'noLocation' => array(), 'afp' => array(),
+            'counts' => array('airports' => 0, 'withDelays' => 0, 'events' => array(), 'afp' => 0));
+    }
+    unset($cached['fetchedAt']);
+    $cached['stale'] = $age > 1200;
+    $cached['ageSeconds'] = $age;
+    return $cached;
+}

@@ -75,6 +75,10 @@ function gsa_http_routes()
     if ($path === '/api/internet-outages' && $method === 'GET') {
         json_out(200, gsa_ioda_snapshot());
     }
+    // TRANSPORTATION > FLIGHT DELAYS: FAA NAS Status cache (*/5 cron).
+    if ($path === '/api/flight-delays' && $method === 'GET') {
+        json_out(200, gsa_fd_snapshot());
+    }
     // TRANSPORTATION > FAA TFR: FAA temporary flight restrictions cache (*/5 cron).
     if ($path === '/api/faa-tfr' && $method === 'GET') {
         json_out(200, gsa_tfr_snapshot());
