@@ -109,6 +109,7 @@ function gsa_http_routes()
         '/api/hunger' => 'api/hunger.json',
         '/api/guns-usa' => 'api/guns-usa.json',
         '/api/guns-world' => 'api/guns-world.json',
+        '/api/ccw-reciprocity' => 'api/ccw-reciprocity.json',
         '/api/militias' => 'api/militias.json',
         '/api/radio' => 'api/radio.json',
         '/api/streams' => 'api/streams.json',

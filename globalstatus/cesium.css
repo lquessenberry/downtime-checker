@@ -1756,3 +1756,16 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 
 /* USA AIR QUALITY (airquality.js): AQI green to maroon, with a smoke-gray ring. */
 .swatch.airquality { background: conic-gradient(#00e400 0 33%, #ffff00 0 55%, #ff7e00 0 75%, #ff0000 0 88%, #8f3f97 0); box-shadow: 0 0 0 2px #9a9a9a inset; border-radius: 50%; }
+
+/* USA CONCEALED CARRY RECIPROCITY (ccw.js): state colors, permit-state banner and card badge. */
+.swatch.ccw { background: linear-gradient(90deg, #2f7bff 0 25%, #1fae4b 0 50%, #f2b233 0 75%, #e5383b 0); border-radius: 2px; }
+.ccw-select { max-width: 100%; margin: 4px 0; padding: 4px 6px; background: #10131c; color: var(--fg, #e8ecf4); border: 1px solid #3a4152; border-radius: 4px; font: inherit; font-size: 12px; }
+.ccw-banner { position: absolute; top: 12px; right: 12px; z-index: 4; max-width: 340px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 10px; background: rgba(12, 15, 22, 0.88); border: 1px solid #2f7bff; border-radius: 6px; color: #e8ecf4; font-size: 12px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
+.ccw-banner[hidden] { display: none; }
+.ccw-banner .ccw-select { flex: 1 1 160px; margin: 0; }
+.ccw-badge { display: inline-block; margin: 2px 0; padding: 2px 8px; border-radius: 10px; background: var(--ccw); color: #0b0d12; font-weight: 700; }
+@media (max-width: 800px) {
+  .ccw-banner { top: 8px; left: 8px; right: 60px; max-width: none; }
+  /* The pin card already fills the phone screen, so the banner steps aside while it is open. */
+  .stage:has(#selected:not([hidden])) .ccw-banner { display: none; }
+}
