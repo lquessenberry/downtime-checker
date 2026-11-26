@@ -1,9 +1,9 @@
 // First launch "Choose your first view" picker (GS-47).
 // NUKE SIMULATOR comes first, then one row for every sidebar layer category except
 // SIMULATORS & GAMES (its only layer is the Nuke Simulator), then EXPLORE MANUALLY.
-// A category row turns on every layer in that sidebar group, opens the group in the
-// menu, and flies the camera to a matching top-down view. "Don't show this again" is
-// kept in localStorage; QUICK VIEWS / VIEWS in the top bar reopens the picker.
+// A category row opens that category. Each layer has an on/off switch. Turning a
+// layer on or off leaves the picker open; only the close control dismisses it.
+// "Don't show this again" is kept in localStorage; QUICK VIEWS / VIEWS reopens it.
 // Fresh launches open like God's Eye View: the Aerial photo map, a dive from about
 // 24,000 km down to a low view over downtown Austin. The picker opens when that dive
 // lands. A slow circle then keeps the globe moving until the visitor picks, closes,
@@ -143,16 +143,22 @@
     if (!box) return null;
     var list = box.querySelector("[data-welcome-list]");
     var row = function (p, i) {
-      return '<button type="button" class="welcome-row' + (i === 0 ? " is-primary" : "") + '" data-welcome-preset="' + p.id + '">' +
+      var switched = p.layers && p.layers.length;
+      var tail = switched
+        ? '<span class="switch" aria-hidden="true"></span>'
+        : '<span class="welcome-arrow" aria-hidden="true">→</span>';
+      return '<button type="button" class="welcome-row' + (i === 0 ? " is-primary" : "") + '" data-welcome-preset="' + p.id + '"' +
+        (switched ? ' aria-pressed="false"' : '') + '>' +
         '<span class="welcome-icon">' + svg(p.icon) + "</span>" +
         '<span class="welcome-text"><strong>' + p.title.replace(/&/g, "&amp;") + "</strong><em>" + p.sub + "</em></span>" +
-        '<span class="welcome-arrow" aria-hidden="true">→</span></button>';
+        tail + "</button>";
     };
     var cat = function (p) {
       var choices = layerChoices(p);
       var items = choices.map(function (item) {
-        return '<button type="button" data-welcome-layer="' + item.key + '" data-welcome-preset="' + p.id + '">' +
-          item.name.replace(/&/g, "&amp;") + "</button>";
+        return '<button type="button" data-welcome-layer="' + item.key + '" data-welcome-preset="' + p.id + '" aria-pressed="false">' +
+          '<span class="welcome-layer-name">' + item.name.replace(/&/g, "&amp;") + "</span>" +
+          '<span class="switch" aria-hidden="true"></span></button>';
       }).join("");
       return '<div class="welcome-cat">' +
         '<button type="button" class="welcome-row is-category" data-welcome-toggle="' + p.id + '" aria-expanded="false">' +
@@ -218,7 +224,10 @@
       box.classList.remove("is-entering");
     }
     document.body.classList.add("welcome-open");
-    var dock = Boolean(opts && opts.dock) && !(typeof hooks.phone === "function" && hooks.phone());
+    // Desktop keeps the picker on the left. A phone keeps the centered popup.
+    // It stays until the close control. Layer switches do not dismiss it.
+    var phone = typeof hooks.phone === "function" && hooks.phone();
+    var dock = !phone && !(opts && opts.dock === false);
     box.classList.toggle("is-docked", dock);
     var home = box.querySelector("[data-welcome-home]");
     var grid = document.getElementById("grid-tester");
@@ -233,6 +242,7 @@
     if (opts && opts.spin) startSpin();
     if (typeof hooks.syncGridTester === "function") hooks.syncGridTester();
     if (typeof hooks.syncLayers === "function") hooks.syncLayers();
+    syncSwitches();
   }
 
   function close() {
@@ -272,47 +282,61 @@
     button.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
+  function layerOn(key) {
+    var side = document.querySelector('[data-layer-toggle="' + key + '"]');
+    return Boolean(side && side.getAttribute("aria-pressed") === "true");
+  }
+
+  // Mirror the sidebar switches. The picker stays open either way.
+  function syncSwitches() {
+    if (!box) return;
+    var layers = box.querySelectorAll("[data-welcome-layer]");
+    for (var i = 0; i < layers.length; i += 1) {
+      var on = layerOn(layers[i].dataset.welcomeLayer);
+      layers[i].classList.toggle("on", on);
+      layers[i].setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    var rows = box.querySelectorAll(".welcome-row[data-welcome-preset]");
+    for (var r = 0; r < rows.length; r += 1) {
+      if (!rows[r].querySelector(".switch")) continue;
+      var preset = PRESETS.filter(function (p) { return p.id === rows[r].dataset.welcomePreset; })[0];
+      var keys = preset ? presetLayers(preset) : [];
+      var allOn = keys.length > 0;
+      for (var k = 0; k < keys.length; k += 1) {
+        if (!layerOn(keys[k])) allOn = false;
+      }
+      rows[r].classList.toggle("on", allOn);
+      rows[r].setAttribute("aria-pressed", allOn ? "true" : "false");
+    }
+  }
+
   function chooseLayer(presetId, key) {
     var preset = PRESETS.filter(function (p) { return p.id === presetId; })[0];
     stopSpin();
-    close();
-    if (hooks.setLayer && key) hooks.setLayer(key, true);
+    if (hooks.setLayer && key) hooks.setLayer(key, !layerOn(key));
     var group = preset && preset.group && document.getElementById(preset.group);
     if (group) group.open = true;
-    flyPreset(preset);
     var host = document.getElementById("cesium");
     if (host && preset) host.dataset.welcomePreset = preset.id + ":" + key;
-  }
-
-  function flyPreset(preset) {
-    var v = viewer();
-    if (!preset || !preset.view || !v || !root.Cesium) return;
-    var phone = typeof hooks.phone === "function" && hooks.phone();
-    var r = phone && preset.phoneView ? preset.phoneView : preset.view;
-    v.camera.cancelFlight();
-    v.camera.flyTo({
-      destination: root.Cesium.Rectangle.fromDegrees(r[0], r[1], r[2], r[3]),
-      orientation: { heading: 0, pitch: -root.Cesium.Math.PI_OVER_TWO, roll: 0 },
-      duration: intro.landed ? 2.8 : 2.2,
-    });
+    syncSwitches();
   }
 
   function choose(id) {
     var preset = PRESETS.filter(function (p) { return p.id === id; })[0];
     stopSpin();
-    close();
-    if (!preset) return;
-    if (preset.group) return;
+    if (!preset || preset.group) return;
     var keys = presetLayers(preset);
+    if (!keys.length) return;
+    var turnOn = false;
     for (var i = 0; i < keys.length; i += 1) {
-      if (hooks.setLayer) hooks.setLayer(keys[i], true);
+      if (!layerOn(keys[i])) turnOn = true;
     }
-    // Open the category in the menu so its layers can be switched one by one.
-    var group = preset.group && document.getElementById(preset.group);
-    if (group) group.open = true;
-    flyPreset(preset);
+    for (var j = 0; j < keys.length; j += 1) {
+      if (hooks.setLayer) hooks.setLayer(keys[j], turnOn);
+    }
     var host = document.getElementById("cesium");
     if (host) host.dataset.welcomePreset = preset.id;
+    syncSwitches();
   }
 
   // Camera position for the aerial view at a given heading: behind the target along the
@@ -533,6 +557,7 @@
       return { phase: intro.phase, startedAt: intro.startedAt, endedAt: intro.endedAt, fromKm: intro.fromKm, toKm: intro.toKm, seconds: INTRO.seconds, landed: intro.landed, city: INTRO.target.name, pitch: INTRO.pitch, altM: INTRO.altM };
     },
     stopSpin: stopSpin,
+    syncSwitches: syncSwitches,
     releaseCamera: releaseCamera,
     presets: function () { return PRESETS.map(function (p) { return { id: p.id, title: p.title, group: p.group || "", layers: presetLayers(p) }; }); },
     storeKey: STORE_KEY,

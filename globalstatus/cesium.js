@@ -6,7 +6,7 @@ const state = {
   up: 0,
   down: 0,
   startedAt: 0,
-  heading: "AWAITING TASKING",
+  heading: "",
   filter: "all",
   selected: null,
   viewer: null,
@@ -483,6 +483,7 @@ async function startGlobe() {
   }
   viewer.scene.preRender.addEventListener(cullAircraftHorizon);
   viewer.scene.preRender.addEventListener(keepFlatMapIntact);
+  viewer.scene.preRender.addEventListener(placeCreditBehindGlobe);
   viewer.camera.moveEnd.addEventListener(() => {
     if (state.layers.ships) scheduleShips();
   });
@@ -763,6 +764,13 @@ function syncUsTests() {
 function syncLayersButton() {
   const btn = document.getElementById("open-menu");
   if (!btn) return;
+  if (phoneLayout()) {
+    btn.classList.remove("is-on");
+    btn.setAttribute("aria-pressed", "false");
+    btn.setAttribute("aria-label", "Reset map");
+    return;
+  }
+  btn.setAttribute("aria-label", "Layers");
   const on = Boolean(window.GsaWelcome && window.GsaWelcome.isOpen && window.GsaWelcome.isOpen());
   btn.classList.toggle("is-on", on);
   btn.setAttribute("aria-pressed", on ? "true" : "false");
@@ -905,6 +913,10 @@ function hookUi() {
   document.getElementById("close-menu").addEventListener("click", () => setPanel(""));
   document.getElementById("close-list").addEventListener("click", () => setPanel(""));
   document.getElementById("open-menu").addEventListener("click", () => {
+    if (phoneLayout()) {
+      resetMap();
+      return;
+    }
     setPanel("");
     if (!window.GsaWelcome) return;
     const dock = !phoneLayout();
@@ -930,6 +942,7 @@ function hookUi() {
     tuneQuality(state.basemap || "natural");
     restyleArcs();
     syncGridTesterButton();
+    syncLayersButton();
     if (!phoneLayout()) {
       setGridResultsOpen(false);
     } else syncGridResultsButton();
@@ -1059,9 +1072,8 @@ function replayScan(snap) {
   state.up = 0;
   state.down = 0;
   state.startedAt = Date.now();
-  state.heading = snap.heading || "GRID";
   state.selected = null;
-  document.getElementById("heading").textContent = state.heading.toUpperCase();
+  paintHeading(snap.heading || "GRID");
   document.getElementById("btn-stop").hidden = false;
   if (state.scanSource) state.scanSource.show = true;
   setFeedMode("returns");
@@ -1141,9 +1153,8 @@ function connectEvents() {
       state.up = 0;
       state.down = 0;
       state.startedAt = Date.now();
-      state.heading = event.heading;
       state.selected = null;
-      document.getElementById("heading").textContent = event.heading.toUpperCase();
+      paintHeading(event.heading);
       document.getElementById("btn-stop").hidden = false;
       if (state.scanSource) state.scanSource.show = true;
       setFeedMode("returns");
@@ -1199,8 +1210,7 @@ function applySnapshot(snap) {
   state.done = snap.done || 0;
   state.up = snap.up || 0;
   state.down = snap.down || 0;
-  state.heading = snap.heading || state.heading;
-  document.getElementById("heading").textContent = (state.heading || "AWAITING TASKING").toUpperCase();
+  paintHeading(snap.heading || state.heading);
   document.getElementById("btn-stop").hidden = !snap.running;
   for (const result of state.results) {
     if (result) upsertPoint(result);
@@ -1437,6 +1447,16 @@ function updateHud() {
   setCount("scan", state.results.filter(Boolean).length);
 }
 
+function paintHeading(text) {
+  const heading = document.getElementById("heading");
+  const value = String(text || "").trim();
+  const idle = !value || value.toUpperCase() === "AWAITING TASKING";
+  state.heading = idle ? "" : value;
+  if (!heading) return;
+  heading.textContent = idle ? "" : state.heading.toUpperCase();
+  heading.hidden = idle;
+}
+
 function setStatus(text) {
   const track = document.getElementById("status-track");
   if (track) track.textContent = text;
@@ -1525,11 +1545,9 @@ function resetMap() {
   state.up = 0;
   state.down = 0;
   state.selected = null;
-  state.heading = "AWAITING TASKING";
+  paintHeading("");
   const stop = document.getElementById("btn-stop");
   if (stop) stop.hidden = true;
-  const heading = document.getElementById("heading");
-  if (heading) heading.textContent = "AWAITING TASKING";
   const grid = document.getElementById("grid-status");
   if (grid) {
     grid.textContent = "Choose a test";
@@ -1802,6 +1820,7 @@ function setLayer(layer, on, options) {
     loadHunger().catch((error) => statusLive(error.message || String(error)));
   }
   syncMobilePick(layer);
+  if (window.GsaWelcome && window.GsaWelcome.syncSwitches) window.GsaWelcome.syncSwitches();
   if (state.mapReady && fly && state.layers[layer] && !wasOn) flyLayerOverview(layer);
 }
 
@@ -1887,6 +1906,66 @@ function syncMobilePick(just) {
   }
   line.hidden = false;
   line.textContent = on.map((key) => LAYER_LABEL[key] || key).join(" · ");
+}
+
+// Screen disk of the 3D globe, in canvas pixels. Credit text uses it as a mask
+// so the line is visible in the space beside the earth and hidden across it.
+function globeScreenDisk(viewer) {
+  const C = window.Cesium;
+  const scene = viewer.scene;
+  if (!C || scene.mode !== C.SceneMode.SCENE3D) return null;
+  const camera = scene.camera;
+  const radius = scene.globe.ellipsoid.maximumRadius;
+  const cam = camera.positionWC;
+  const dist = C.Cartesian3.magnitude(cam);
+  if (!(dist > radius + 1000)) return null;
+  const center = C.SceneTransforms.worldToWindowCoordinates(scene, C.Cartesian3.ZERO);
+  if (!center) return null;
+  const dist2 = dist * dist;
+  const side = new C.Cartesian3();
+  C.Cartesian3.cross(cam, camera.upWC, side);
+  if (C.Cartesian3.magnitudeSquared(side) < 1) C.Cartesian3.cross(cam, camera.rightWC, side);
+  if (C.Cartesian3.magnitudeSquared(side) < 1) return null;
+  C.Cartesian3.normalize(side, side);
+  const along = C.Cartesian3.multiplyByScalar(cam, (radius * radius) / dist2, new C.Cartesian3());
+  const perp = (radius / dist) * Math.sqrt(dist2 - radius * radius);
+  const limb = C.Cartesian3.add(along, C.Cartesian3.multiplyByScalar(side, perp, new C.Cartesian3()), new C.Cartesian3());
+  const edge = C.SceneTransforms.worldToWindowCoordinates(scene, limb);
+  if (!edge) return null;
+  const px = Math.hypot(edge.x - center.x, edge.y - center.y);
+  if (!(px > 2)) return null;
+  return { x: center.x, y: center.y, r: px };
+}
+
+let creditMaskAt = 0;
+function placeCreditBehindGlobe() {
+  const now = performance.now();
+  if (now - creditMaskAt < 80) return;
+  creditMaskAt = now;
+  const viewer = state.viewer;
+  if (!viewer) return;
+  const lines = document.querySelectorAll(".ship-credit, .air-credit, .jam-credit, .sw-credit, .infra-credit");
+  let visible = false;
+  for (const el of lines) {
+    if (!el.hidden) visible = true;
+  }
+  if (!visible) return;
+  const disk = globeScreenDisk(viewer);
+  const canvas = viewer.scene.canvas.getBoundingClientRect();
+  for (const el of lines) {
+    if (el.hidden || el.getClientRects().length === 0 || !disk) {
+      el.classList.remove("is-behind-globe");
+      el.style.removeProperty("--globe-x");
+      el.style.removeProperty("--globe-y");
+      el.style.removeProperty("--globe-r");
+      continue;
+    }
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty("--globe-x", `${(canvas.left + disk.x - rect.left).toFixed(1)}px`);
+    el.style.setProperty("--globe-y", `${(canvas.top + disk.y - rect.top).toFixed(1)}px`);
+    el.style.setProperty("--globe-r", `${disk.r.toFixed(1)}px`);
+    el.classList.add("is-behind-globe");
+  }
 }
 
 function syncTrafficBars() {

@@ -6,7 +6,7 @@
   <style>
     #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; background: #000; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
     #boot-splash .boot-visual { position: relative; display: block; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
-    #boot-splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center top; display: block; background: #000; }
+    #boot-splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center bottom; display: block; background: #000; }
     @media (max-width: 800px) {
       #boot-splash .boot-visual { flex: 0 0 auto; height: auto; }
       #boot-splash video { position: static; width: 100%; height: auto; object-fit: contain; }
@@ -36,7 +36,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126q" />
+  <link rel="stylesheet" href="/cesium.css?v=20261126r" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -121,7 +121,7 @@
     <button type="button" class="views-open" id="open-views" data-welcome-open aria-haspopup="dialog">QUICK VIEWS</button>
     <div class="clock" id="clock">00:00:00Z</div>
     <div class="mobile-nav">
-      <button type="button" id="open-menu" aria-label="Layers" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 20 8.2 12 12.2 4 8.2Z"/><path d="M4 12.2 12 16.2 20 12.2"/><path d="M4 16.2 12 20.2 20 16.2"/></svg></button>
+      <button type="button" id="open-menu" aria-label="Layers" aria-pressed="false"><svg class="icon-layers" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 20 8.2 12 12.2 4 8.2Z"/><path d="M4 12.2 12 16.2 20 12.2"/><path d="M4 16.2 12 20.2 20 16.2"/></svg><svg class="icon-reset" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.2-5.5"/><path d="M20 4.5V9h-4.5"/></svg></button>
       <button type="button" id="clear-layers" aria-label="Clear layers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 20 8.2 12 12.2 4 8.2Z"/><path d="M4 12.2 12 16.2 20 12.2"/><path d="M4 16.2 12 20.2 20 16.2"/><circle cx="12" cy="12" r="9"/><path d="M6.2 17.8 17.8 6.2"/></svg></button>
       <button type="button" id="open-list" aria-label="List"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7h11M9 12h11M9 17h11"/><path d="M4.5 7h.01M4.5 12h.01M4.5 17h.01"/></svg></button>
       <button type="button" id="open-views-mobile" data-welcome-open aria-haspopup="dialog" aria-label="Views"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2.1"/><path d="M12 3.2v2.4M12 18.4v2.4M3.2 12h2.4M18.4 12h2.4"/></svg></button>
@@ -393,7 +393,7 @@
     </div>
     <div class="stage-stack">
       <div class="stage-meta">
-        <div id="heading">AWAITING TASKING</div>
+        <div id="heading" hidden></div>
         <div id="hint">DRAG OR PINCH · SCROLL ZOOMS · MAP CONTROLS AT BOTTOM RIGHT</div>
       </div>
       <div class="traffic-switch" hidden role="group" aria-label="Which traffic filters">
@@ -613,7 +613,7 @@
   <script src="/powerlines.js?v=20261124n"></script>
   <script src="/geocoder.js?v=20261124l"></script>
   <script src="/nearby.js?v=20261126l"></script>
-  <script src="/welcome.js?v=20261126q"></script>
-  <script src="/cesium.js?v=20261126q"></script>
+  <script src="/welcome.js?v=20261126r"></script>
+  <script src="/cesium.js?v=20261126r"></script>
 </body>
 </html>
