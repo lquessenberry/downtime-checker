@@ -5,8 +5,9 @@
 // menu, and flies the camera to a matching top-down view. "Don't show this again" is
 // kept in localStorage; QUICK VIEWS / VIEWS in the top bar reopens the picker.
 // Fresh launches open like God's Eye View: the Aerial photo map, a dive from about
-// 24,000 km down to a low view over downtown Austin, the picker fading in as it lands,
-// then a slow circle over the city until the visitor picks, closes, or touches the map.
+// 24,000 km down to a low view over downtown Austin. The picker opens when that dive
+// lands. A slow circle then keeps the globe moving until the visitor picks, closes,
+// or touches the map.
 (function (root) {
   "use strict";
 
@@ -20,8 +21,7 @@
     pitch: -62, // degrees below the horizon
     altM: 650, // camera height above the ground in meters
     seconds: 3.4,
-    popupAt: 0.82, // fraction of the flight when the picker starts to fade in
-    orbitDegPerSec: 1.4, // slow circle over the city after landing
+    orbitDegPerSec: 1.4, // slow circle over the city after the picker opens
     basemap: "satellite", // Aerial photo (Esri World Imagery), like God's Eye View
   };
 
@@ -404,21 +404,30 @@
     if (!isOpen()) open({ spin: false, noFocus: true });
   }
 
+  function showSpace() {
+    var v = viewer();
+    var C = root.Cesium;
+    if (!v || !C) return false;
+    var f = INTRO.from;
+    v.camera.cancelFlight();
+    v.camera.setView({
+      destination: C.Cartesian3.fromDegrees(f.lon, f.lat, f.km * 1000),
+      orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
+    });
+    return true;
+  }
+
   function playIntro() {
     document.body.classList.add("welcome-open");
     var v = viewer();
     var C = root.Cesium;
-    if (!v || !C) { open({ spin: false, noFocus: true }); return; }
+    if (!v || !C || !showSpace()) { open({ spin: false, noFocus: true }); return; }
     // Open on the Aerial photo map like God's Eye View. Lighting, atmosphere, terrain
     // and layers stay on the site's normal defaults (no layers on).
     if (typeof hooks.setBasemap === "function" && INTRO.basemap) {
       try { hooks.setBasemap(INTRO.basemap); } catch (e) { /* keep the current map */ }
     }
     var f = INTRO.from;
-    v.camera.setView({
-      destination: C.Cartesian3.fromDegrees(f.lon, f.lat, f.km * 1000),
-      orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
-    });
     intro.phase = "flying";
     intro.startedAt = root.performance.now();
     intro.fromKm = f.km;
@@ -444,11 +453,34 @@
         document.body.classList.remove("welcome-intro");
       },
     });
-    // Fade the picker in near the end of the dive; the slow circle starts once it lands.
-    intro.timer = root.setTimeout(function () {
-      intro.timer = 0;
-      if (intro.phase === "flying" && !isOpen()) open({ spin: false, fade: true, noFocus: true });
-    }, INTRO.seconds * INTRO.popupAt * 1000);
+  }
+
+  // The splash covers the globe. Hold the dive until that picture is gone so the
+  // zoom is on screen, then open the picker only when the dive lands.
+  function whenSplashClear(fn) {
+    var fired = false;
+    function go() {
+      if (fired) return;
+      fired = true;
+      fn();
+    }
+    var splash = document.getElementById("boot-splash");
+    if (!splash) { go(); return; }
+    root.setTimeout(go, 12000);
+    function check() {
+      if (fired) return;
+      var node = document.getElementById("boot-splash");
+      if (!node) { go(); return; }
+      if (node.classList.contains("is-done") || node.dataset.done === "1") {
+        node.addEventListener("transitionend", function (event) {
+          if (event.propertyName === "opacity") go();
+        });
+        root.setTimeout(go, 800);
+        return;
+      }
+      root.setTimeout(check, 150);
+    }
+    check();
   }
 
   function shouldShowOnLoad() {
@@ -479,8 +511,15 @@
     }
     watchGlobe(viewer());
     if (!shouldShowOnLoad()) return;
-    if (reducedMotion()) open({ spin: false, noFocus: true });
-    else playIntro();
+    if (reducedMotion()) {
+      whenSplashClear(function () { open({ spin: false, noFocus: true }); });
+      return;
+    }
+    if (typeof hooks.setBasemap === "function" && INTRO.basemap) {
+      try { hooks.setBasemap(INTRO.basemap); } catch (e) { /* keep the current map */ }
+    }
+    showSpace();
+    whenSplashClear(playIntro);
   }
 
   root.GsaWelcome = {
