@@ -211,40 +211,64 @@ function esc(value) {
   })[ch]);
 }
 
+function dismissBootSplash() {
+  const splash = document.getElementById("boot-splash");
+  if (!splash || splash.dataset.done === "1") return;
+  splash.dataset.done = "1";
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const shownAt = window.__bootShown || performance.now();
+  const wait = reduce ? 0 : Math.max(0, 1400 - (performance.now() - shownAt));
+  window.setTimeout(() => {
+    splash.classList.add("is-done");
+    const remove = () => { if (splash.parentNode) splash.remove(); };
+    if (reduce) remove();
+    else {
+      splash.addEventListener("transitionend", remove, { once: true });
+      window.setTimeout(remove, 1000);
+    }
+  }, wait);
+}
+
 async function boot() {
-  const [catalog] = await Promise.all([
-    fetch("/api/catalog").then((response) => response.json()),
-    startGlobe(),
-  ]);
-  renderSearches(catalog);
-  fillCountries(catalog.countries);
-  hookUi();
-  // LOCK & SCAN replays the server's scheduled pass (#34), so the page no
-  // longer holds the /api/events stream open. connectEvents() is kept for
-  // debugging a live pass.
-  tickClock();
-  setInterval(syncCheckedNote, 30000);
-  Promise.allSettled([
-    loadOutages(),
-    loadHunger(),
-    loadStreams(),
-    loadConflicts(),
-    pollLiveFeeds(),
-  ]).then((results) => {
-    const failed = results.find((result) => result.status === "rejected");
-    if (failed) statusLive(failed.reason?.message || String(failed.reason));
-    else statusLive();
-  });
-  setInterval(() => {
-    if (!document.hidden) pollAircraft().catch((error) => statusLive(error.message || String(error)));
-  }, 45000);
-  setInterval(() => {
-    if (!document.hidden) pollJamming().catch((error) => statusLive(error.message || String(error)));
-  }, 60000);
-  setInterval(tickAircraft, 1000);
-  setInterval(() => {
-    loadOutages().catch((error) => statusLive(error.message || String(error)));
-  }, 180000);
+  try {
+    const [catalog] = await Promise.all([
+      fetch("/api/catalog").then((response) => response.json()),
+      startGlobe(),
+    ]);
+    renderSearches(catalog);
+    fillCountries(catalog.countries);
+    hookUi();
+    // LOCK & SCAN replays the server's scheduled pass (#34), so the page no
+    // longer holds the /api/events stream open. connectEvents() is kept for
+    // debugging a live pass.
+    tickClock();
+    setInterval(syncCheckedNote, 30000);
+    Promise.allSettled([
+      loadOutages(),
+      loadHunger(),
+      loadStreams(),
+      loadConflicts(),
+      pollLiveFeeds(),
+    ]).then((results) => {
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed) statusLive(failed.reason?.message || String(failed.reason));
+      else statusLive();
+    });
+    setInterval(() => {
+      if (!document.hidden) pollAircraft().catch((error) => statusLive(error.message || String(error)));
+    }, 45000);
+    setInterval(() => {
+      if (!document.hidden) pollJamming().catch((error) => statusLive(error.message || String(error)));
+    }, 60000);
+    setInterval(tickAircraft, 1000);
+    setInterval(() => {
+      loadOutages().catch((error) => statusLive(error.message || String(error)));
+    }, 180000);
+  } catch (error) {
+    const line = document.getElementById("boot-status");
+    if (line) line.textContent = "The globe did not open. Refresh the page.";
+    throw error;
+  }
 }
 
 function phoneLayout() {
@@ -559,6 +583,7 @@ async function startGlobe() {
       closePanels: () => setPanel(""),
     });
   }
+  dismissBootSplash();
   // Do not pin a hardcoded city. Place the blue hub only after a fresh lookup.
   if (window.GsaSearch && window.GsaSearch.locateStartup) {
     window.GsaSearch.locateStartup().then((info) => {
