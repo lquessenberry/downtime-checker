@@ -31,6 +31,8 @@
 // cache about every 5 minutes (gsa_fd_refresh).
 // USA AIR QUALITY: the same */5 cron refreshes the EPA AirNow monitors and NOAA HMS
 // smoke plumes about every 15 minutes (gsa_aq_refresh); AirNow updates hourly.
+// Power outages: the same */5 cron refreshes the US, United Kingdom, Canada, and
+// Australia outage caches when they are at least 10 minutes old. No new cron.
 
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
@@ -335,6 +337,11 @@ if ($job === 'aircraft') {
     }
     if (!$skipAq) {
         $out['airquality'] = runner_aq($forceAq);
+    }
+    try {
+        $out['outages'] = outages_regions_refresh();
+    } catch (Throwable $e) {
+        $out['outages'] = array('ok' => false, 'error' => 'refresh failed');
     }
     runner_print($out);
     $airOk = !empty($info['ok']) || !empty($info['busy']) || !empty($info['skipped']);

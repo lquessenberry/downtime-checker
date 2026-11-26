@@ -197,6 +197,12 @@
       <details class="layer-group" id="group-power-comms" data-layer-group="power-comms">
         <summary class="layer-group-head"><span>POWER &amp; COMMUNICATIONS</span><em class="layer-group-count"></em></summary>
         <button type="button" class="layer" data-layer-toggle="outages" aria-pressed="false"><span class="layer-name"><span class="swatch outage"></span> POWER OUTAGES</span><span class="layer-meta"><em data-count="outages">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="ukout" aria-pressed="false"><span class="layer-name"><span class="swatch outage"></span> UNITED KINGDOM POWER OUTAGES</span><span class="layer-meta"><em data-count="ukout">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-outage-note="ukout" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="caout" aria-pressed="false"><span class="layer-name"><span class="swatch outage"></span> CANADA POWER OUTAGES</span><span class="layer-meta"><em data-count="caout">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-outage-note="caout" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="auout" aria-pressed="false"><span class="layer-name"><span class="swatch outage"></span> AUSTRALIA POWER OUTAGES</span><span class="layer-meta"><em data-count="auout">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-outage-note="auout" hidden></p>
         <button type="button" class="layer" data-layer-toggle="inetusa" aria-pressed="false"><span class="layer-name"><span class="swatch inet-usa"></span> USA INTERNET OUTAGES</span><span class="layer-meta"><em data-count="inetusa">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-internet-note="inetusa" hidden></p>
         <button type="button" class="layer" data-layer-toggle="inetglobal" aria-pressed="false"><span class="layer-name"><span class="swatch inet-global"></span> GLOBAL INTERNET OUTAGES</span><span class="layer-meta"><em data-count="inetglobal">—</em><span class="switch" aria-hidden="true"></span></span></button>
@@ -514,7 +520,7 @@
       </div>
     </div>
     <div id="outages-pane">
-      <p class="layer-credit" id="outage-credit">US pins are counties from utilities that report to DOE/ORNL ODIN, not every US outage. United Kingdom pins are unplanned outages from UK Power Networks, Northern Powergrid, and National Grid Electricity Distribution. SP Energy Networks, Electricity North West, Northern Ireland Electricity, and SSEN are not included. Canada pins are Hydro-Québec unplanned outages only. Australia, Ireland, New Zealand, and South Africa do not publish an open live location feed that can be pinned.</p>
+      <p class="layer-credit" id="outage-credit">US pins are counties from utilities that report to DOE/ORNL ODIN, not every US outage. poweroutage.us requires a key. massoutage.com, poweroutagetracker.com, and outagemap.org do not publish a public coordinate feed.</p>
       <label class="sdr-filter-wrap">
         <input id="outage-filter" type="search" placeholder="Place, region, or utility" autocomplete="off" />
       </label>
@@ -558,6 +564,9 @@
     <div id="mobile-pick" class="mobile-pick" hidden></div>
     <div class="legend">
       <button type="button" class="layer" data-layer-toggle="outages" aria-pressed="false"><span class="swatch outage"></span> POWER OUTAGES <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="ukout" aria-pressed="false"><span class="swatch outage"></span> UNITED KINGDOM POWER OUTAGES <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="caout" aria-pressed="false"><span class="swatch outage"></span> CANADA POWER OUTAGES <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="auout" aria-pressed="false"><span class="swatch outage"></span> AUSTRALIA POWER OUTAGES <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="stream" aria-pressed="false"><span class="swatch stream"></span> SCANNERS <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="jamming" aria-pressed="false"><span class="swatch jam"></span> GLOBAL JAMMED GPS SIGNALS <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="aircraft" aria-pressed="false"><span class="swatch air"></span> LIVE AIR TRAFFIC <span class="switch" aria-hidden="true"></span></button>
@@ -618,6 +627,6 @@
   <script src="/geocoder.js?v=20261126s"></script>
   <script src="/nearby.js?v=20261126l"></script>
   <script src="/welcome.js?v=20261126t"></script>
-  <script src="/cesium.js?v=20261126v"></script>
+  <script src="/cesium.js?v=20261126x"></script>
 </body>
 </html>

@@ -14,6 +14,9 @@ const state = {
   arcs: new Map(),
   origin: null,
   outageSource: null,
+  ukOutSource: null,
+  caOutSource: null,
+  auOutSource: null,
   hungerSource: null,
   streamSource: null,
   conflictSource: null,
@@ -25,6 +28,11 @@ const state = {
   catalogSearches: [],
   outagePoints: [],
   outageMeta: null,
+  regionOut: {
+    ukout: { api: "/api/outages-uk", points: [], meta: null },
+    caout: { api: "/api/outages-ca", points: [], meta: null },
+    auout: { api: "/api/outages-au", points: [], meta: null },
+  },
   hungerPoints: [],
   hungerMeta: null,
   streamPoints: [],
@@ -57,6 +65,9 @@ const state = {
   },
   layers: {
     outages: false,
+    ukout: false,
+    caout: false,
+    auout: false,
     hunger: false,
     stream: false,
     jamming: false,
@@ -121,6 +132,7 @@ const state = {
   },
   openKind: "",
   openId: "",
+  openLayer: "",
   feedMode: "outages",
   airFilter: "all",
   aircraftFeed: [],
@@ -269,8 +281,14 @@ async function boot() {
     }, 60000);
     setInterval(tickAircraft, 1000);
     setInterval(() => {
+      if (document.hidden) return;
       loadOutages().catch((error) => statusLive(error.message || String(error)));
-    }, 180000);
+      for (const key of ["ukout", "caout", "auout"]) {
+        if (state.regionOut[key].meta) {
+          loadRegionOutages(key).catch((error) => statusLive(error.message || String(error)));
+        }
+      }
+    }, 600000);
   } catch (error) {
     const log = document.getElementById("boot-log");
     if (log && !log.querySelector("[data-boot-error]")) {
@@ -470,12 +488,18 @@ async function startGlobe() {
   const basemapSelect = document.getElementById("basemap");
   if (basemapSelect) basemapSelect.value = startupMap;
   state.outageSource = new Cesium.CustomDataSource("outages");
+  state.ukOutSource = new Cesium.CustomDataSource("ukout");
+  state.caOutSource = new Cesium.CustomDataSource("caout");
+  state.auOutSource = new Cesium.CustomDataSource("auout");
   state.hungerSource = new Cesium.CustomDataSource("hunger");
   state.streamSource = new Cesium.CustomDataSource("hpdb-streams");
   state.conflictSource = new Cesium.CustomDataSource("conflicts");
   state.scanSource = new Cesium.CustomDataSource("scan");
   state.scanSource.show = true;
   viewer.dataSources.add(state.outageSource);
+  viewer.dataSources.add(state.ukOutSource);
+  viewer.dataSources.add(state.caOutSource);
+  viewer.dataSources.add(state.auOutSource);
   viewer.dataSources.add(state.hungerSource);
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
@@ -1495,7 +1519,7 @@ function setFeedMode(mode) {
     button.classList.toggle("on", button.dataset.feed === state.feedMode);
   }
   const title = document.getElementById("feed-title");
-  if (state.feedMode === "outages") title.textContent = `POWER OUTAGES ${state.outagePoints.length}`;
+  if (state.feedMode === "outages") title.textContent = `POWER OUTAGES ${outageListPoints().length}`;
   else if (state.feedMode === "hunger") title.textContent = `GLOBAL HUNGER ${state.hungerPoints.length}`;
   else if (state.feedMode === "stream") title.textContent = `SCANNERS ${state.streamPoints.length}`;
   else if (state.feedMode === "conflicts") title.textContent = `CONFLICT TRACKER ${state.conflicts.length}`;
@@ -1505,6 +1529,9 @@ function setFeedMode(mode) {
 
 function sourceFor(layer) {
   if (layer === "outages") return state.outageSource;
+  if (layer === "ukout") return state.ukOutSource;
+  if (layer === "caout") return state.caOutSource;
+  if (layer === "auout") return state.auOutSource;
   if (layer === "hunger") return state.hungerSource;
   if (layer === "conflicts") return state.conflictSource;
   if (layer === "stream") return state.streamSource;
@@ -1680,6 +1707,9 @@ function clearLayers() {
 }
 
 const VIEW_US = [-127, 22, -65, 51];
+const VIEW_UK = [-9, 49.5, 2.5, 61];
+const VIEW_CA = [-141, 41, -52, 72];
+const VIEW_AU = [112, -44, 154, -10];
 const VIEW_WORLD = [-168, -48, 150, 72];
 const VIEW_NUKE = [-128, 18, -62, 54];
 const VIEW_NUKE_PHONE = [-132, -8, -60, 56];
@@ -1704,6 +1734,9 @@ function flyOverview(rect) {
 
 function layerOverview(layer) {
   if (layer === "effects") return phoneLayout() ? VIEW_NUKE_PHONE : VIEW_NUKE;
+  if (layer === "ukout") return VIEW_UK;
+  if (layer === "caout") return VIEW_CA;
+  if (layer === "auout") return VIEW_AU;
   if (US_LAYERS.has(layer)) return VIEW_US;
   return VIEW_WORLD;
 }
@@ -1734,7 +1767,9 @@ function setLayer(layer, on, options) {
   const source = sourceFor(layer);
   if (source) source.show = state.layers[layer];
   if (layer === "conflicts" && !state.layers.conflicts) closeConflict();
-  if (layer === "outages" && !state.layers.outages) hideOutageCard();
+  if ((layer === "outages" || layer === "ukout" || layer === "caout" || layer === "auout") && !state.layers[layer]) {
+    if (state.openKind === "outage" && (state.openLayer === layer || (layer === "outages" && !state.openLayer))) hideOutageCard();
+  }
   if (layer === "hunger" && !state.layers.hunger) hideHungerCard();
   for (const button of document.querySelectorAll(`[data-layer-toggle="${layer}"]`)) {
     button.classList.toggle("on", layerShown(layer));
@@ -1834,6 +1869,10 @@ function setLayer(layer, on, options) {
   if (layer === "outages" && state.layers.outages && !state.outageMeta) {
     loadOutages().catch((error) => statusLive(error.message || String(error)));
   }
+  if ((layer === "ukout" || layer === "caout" || layer === "auout") && state.layers[layer] && !state.regionOut[layer].meta) {
+    loadRegionOutages(layer).catch((error) => statusLive(error.message || String(error)));
+  }
+  if (layer === "ukout" || layer === "caout" || layer === "auout") paintRegionOutageNote(layer);
   if (layer === "hunger" && state.layers.hunger && !state.hungerMeta) {
     loadHunger().catch((error) => statusLive(error.message || String(error)));
   }
@@ -1844,6 +1883,9 @@ function setLayer(layer, on, options) {
 
 const LAYER_LABEL = {
   outages: "POWER OUTAGES",
+  ukout: "UNITED KINGDOM POWER OUTAGES",
+  caout: "CANADA POWER OUTAGES",
+  auout: "AUSTRALIA POWER OUTAGES",
   stream: "SCANNERS",
   jamming: "GLOBAL JAMMED GPS SIGNALS",
   aircraft: "LIVE AIR TRAFFIC",
@@ -1912,7 +1954,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "delays", "conflicts", "hunger", "mesh", "disease", "animal", "airquality", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "ccw", "militianational", "militiastate", "militialocal", "militiainactive", "ufo", "bigfoot"];
+  const order = ["outages", "ukout", "caout", "auout", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "delays", "conflicts", "hunger", "mesh", "disease", "animal", "airquality", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "ccw", "militianational", "militiastate", "militialocal", "militiainactive", "ufo", "bigfoot"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -2034,11 +2076,40 @@ function outageColor(customers) {
   return "#f6c27a";
 }
 
+function outageListPoints() {
+  const rows = state.outagePoints.map((point) => Object.assign({ layer: "outages" }, point));
+  for (const key of ["ukout", "caout", "auout"]) {
+    const pack = state.regionOut[key];
+    if (!pack || !pack.meta || !state.layers[key]) continue;
+    for (const point of pack.points) rows.push(Object.assign({ layer: key }, point));
+  }
+  return rows;
+}
+
+function paintRegionOutageNote(key) {
+  const note = document.querySelector(`[data-outage-note="${key}"]`);
+  const pack = state.regionOut[key];
+  if (!note || !pack) return;
+  if (!layerShown(key) || !pack.meta) {
+    note.hidden = true;
+    note.textContent = "";
+    return;
+  }
+  const body = pack.meta;
+  const failed = (body.feeds || []).filter((feed) => feed && feed.ok === false).map((feed) => feed.name);
+  const bits = [];
+  if (body.note) bits.push(body.note);
+  if (failed.length) bits.push(`Temporarily unavailable: ${failed.join(", ")}.`);
+  if (body.error && !failed.length) bits.push(body.error);
+  note.hidden = bits.length === 0;
+  note.textContent = bits.join(" ");
+}
+
 async function loadOutages() {
   const response = await fetch("/api/outages");
   const body = await response.json();
   if (!response.ok) throw new Error(body.error || "Power outages failed");
-  state.outagePoints = Array.isArray(body.points) ? body.points : [];
+  state.outagePoints = (Array.isArray(body.points) ? body.points : []).map((point) => Object.assign({ layer: "outages" }, point));
   state.outageMeta = body;
   setCount("outages", state.outagePoints.length);
   placeOutageMarkers();
@@ -2050,7 +2121,23 @@ async function loadOutages() {
     credit.textContent = `${stale}${outageCustomers(body.customers)} customers across ${state.outagePoints.length} pins. ${note}${when}`;
   }
   renderOutageList();
-  layerStatus(body.stale ? "OUTAGES CACHED" : "");
+  layerStatus(body.stale ? "OUTAGES CACHED" : (body.error ? "US OUTAGES UNAVAILABLE" : ""));
+}
+
+async function loadRegionOutages(key) {
+  const pack = state.regionOut[key];
+  if (!pack) return;
+  const response = await fetch(pack.api);
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "Power outages failed");
+  pack.points = (Array.isArray(body.points) ? body.points : []).map((point) => Object.assign({ layer: key }, point));
+  pack.meta = body;
+  setCount(key, pack.points.length);
+  placeRegionOutageMarkers(key);
+  paintRegionOutageNote(key);
+  renderOutageList();
+  if (body.error) layerStatus(`${LAYER_LABEL[key] || "OUTAGES"} UNAVAILABLE`);
+  else if (body.stale) layerStatus("OUTAGES CACHED");
 }
 
 function placeOutageMarkers() {
@@ -2069,6 +2156,23 @@ function placeOutageMarkers() {
   }
   const host = document.getElementById("cesium");
   if (host) host.dataset.outages = String(source.entities.values.length);
+}
+
+function placeRegionOutageMarkers(key) {
+  const pack = state.regionOut[key];
+  const source = sourceFor(key);
+  if (!state.viewer || !pack || !source) return;
+  source.entities.removeAll();
+  source.show = Boolean(state.layers[key]);
+  for (const point of pack.points) {
+    if (point.lat == null || point.lon == null) continue;
+    const entity = source.entities.add({
+      name: outagePlace(point),
+      position: Cesium.Cartesian3.fromDegrees(Number(point.lon), Number(point.lat), 0),
+      point: markerPoint(outageColor(point.customers)),
+    });
+    entity._outage = point;
+  }
 }
 
 async function loadConflicts() {
@@ -2137,10 +2241,10 @@ function renderOutageList() {
   const list = document.getElementById("outage-list");
   if (!list) return;
   const query = (document.getElementById("outage-filter").value || "").trim().toLowerCase();
-  const points = state.outagePoints
+  const points = outageListPoints()
     .filter((point) => {
       if (!query) return true;
-      const hay = `${point.name} ${point.state} ${point.country || ""} ${(point.utilities || []).join(" ")} ${point.source || ""}`.toLowerCase();
+      const hay = `${point.name} ${point.state} ${point.country || ""} ${(point.utilities || []).join(" ")} ${point.source || ""} ${point.detail || ""} ${point.ref || ""}`.toLowerCase();
       return hay.includes(query);
     })
     .slice()
@@ -2150,9 +2254,10 @@ function renderOutageList() {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "sdr-row";
-    if (state.openKind === "outage" && point.id === state.openId) row.classList.add("on");
+    if (state.openKind === "outage" && point.id === state.openId && point.layer === state.openLayer) row.classList.add("on");
     const utils = (point.utilities || []).slice(0, 2).join(", ");
-    row.innerHTML = `<div class="name">${esc(outagePlace(point))}</div><div class="host">${outageCustomers(point.customers)} customers${utils ? " · " + esc(utils) : ""}</div>`;
+    const count = Number(point.customers) > 0 ? `${outageCustomers(point.customers)} customers` : "Customers not reported";
+    row.innerHTML = `<div class="name">${esc(outagePlace(point))}</div><div class="host">${esc(count)}${utils ? " · " + esc(utils) : ""}</div>`;
     row.addEventListener("click", () => openOutage(point, { fly: true }));
     list.append(row);
   }
@@ -2161,10 +2266,13 @@ function renderOutageList() {
   }
 }
 
-function findOutageEntity(id) {
-  if (!state.outageSource) return null;
-  for (const entity of state.outageSource.entities.values) {
-    if (entity._outage && entity._outage.id === id) return entity;
+function findOutageEntity(id, layer) {
+  const sources = layer ? [sourceFor(layer)] : [state.outageSource, state.ukOutSource, state.caOutSource, state.auOutSource];
+  for (const source of sources) {
+    if (!source) continue;
+    for (const entity of source.entities.values) {
+      if (entity._outage && entity._outage.id === id) return entity;
+    }
   }
   return null;
 }
@@ -2175,15 +2283,24 @@ function hideOutageCard() {
   if (state.openKind === "outage") {
     state.openKind = "";
     state.openId = "";
+    state.openLayer = "";
     renderOutageList();
   }
 }
 
-// Outage card text (also listed in the nearby card's pin list).
+// Outage card text (also listed in the nearby card's pin list). No links leave the site.
 function outageText(point) {
+  const n = Number(point.customers) || 0;
+  const customers = n > 0 ? `${outageCustomers(n)} customers out` : "Customer count not reported";
   const utils = (point.utilities || []).join(", ");
   const sourceName = point.source || "DOE/ORNL ODIN";
-  return `${outageCustomers(point.customers)} customers out${utils ? " · " + utils : ""}${sourceName !== utils ? " · " + sourceName : ""}`;
+  const bits = [customers];
+  if (utils && utils !== sourceName) bits.push(utils);
+  if (sourceName) bits.push(sourceName);
+  if (point.detail) bits.push(point.detail);
+  if (point.etr) bits.push(`Estimated restoration ${point.etr}`);
+  if (point.ref) bits.push(`Reference ${point.ref}`);
+  return bits.join(" · ").replace(/https?:\/\/\S+/gi, "").replace(/\btel:\S+/gi, "");
 }
 
 function openOutage(point, options = {}) {
@@ -2192,9 +2309,11 @@ function openOutage(point, options = {}) {
   closeAircraft();
   closePin();
   hideHungerCard();
+  const key = point.layer && state.layers[point.layer] !== undefined ? point.layer : "outages";
   state.openKind = "outage";
   state.openId = point.id;
-  if (state.layers.outages === false) setLayer("outages", true);
+  state.openLayer = key;
+  if (state.layers[key] === false) setLayer(key, true, { fly: false });
   setFeedMode("outages");
   const selected = document.getElementById("selected");
   if (selected) selected.hidden = true;
@@ -2207,7 +2326,7 @@ function openOutage(point, options = {}) {
     card.hidden = false;
   }
   renderOutageList();
-  const entity = findOutageEntity(point.id);
+  const entity = findOutageEntity(point.id, key);
   if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
     state.viewer.selectedEntity = entity;
   }
@@ -3508,6 +3627,9 @@ function cullAircraftHorizon() {
     state.live.coastal.source,
     state.live.tsunami.source,
     state.outageSource,
+    state.ukOutSource,
+    state.caOutSource,
+    state.auOutSource,
     state.hungerSource,
   ];
   // FIREARMS use the same depth-test-off point markers. Without this cull,
