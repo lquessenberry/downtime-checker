@@ -3,11 +3,19 @@
 // set of existing layers and flies the camera to a matching view. "Don't show this
 // again" is kept in localStorage; the VIEWS button in the top bar reopens the picker.
 // The globe stops turning the moment the visitor picks, closes, or touches the globe.
+// Fresh launches open with a short fly-in from deep space; the picker fades in as it lands.
 (function (root) {
   "use strict";
 
   var STORE_KEY = "gsa_welcome_dismissed";
   var SPIN_DEG_PER_SEC = 2.4; // one turn in about 2.5 minutes
+  // Opening fly-in: from deep space over the eastern Atlantic down to the Americas.
+  var INTRO = {
+    from: { lon: 5, lat: 28, km: 32000 },
+    to: { lon: -48, lat: 18, km: 16000 },
+    seconds: 2.5,
+    popupAt: 0.8, // fraction of the flight when the picker starts to fade in
+  };
 
   // [west, south, east, north] in degrees for each view.
   var VIEW_US = [-127, 22, -65, 51];
@@ -70,6 +78,7 @@
   var spinFrame = 0;
   var spinLast = 0;
   var lastFocus = null;
+  var intro = { phase: "none", startedAt: 0, endedAt: 0, timer: 0, fromKm: 0, toKm: 0 };
 
   function storeGet() {
     try { return root.localStorage.getItem(STORE_KEY) === "1"; } catch (e) { return false; }
@@ -119,6 +128,11 @@
     check.checked = storeGet();
     lastFocus = document.activeElement;
     box.hidden = false;
+    if (opts && opts.fade && !reducedMotion()) {
+      box.classList.add("is-entering");
+      void box.offsetWidth; // start the fade from the hidden state
+      box.classList.remove("is-entering");
+    }
     document.body.classList.add("welcome-open");
     box.querySelector(".welcome-card").scrollTop = 0;
     var first = box.querySelector(".welcome-row");
@@ -130,6 +144,7 @@
 
   function close() {
     stopSpin();
+    endIntro("closed");
     if (!box || box.hidden) return;
     box.hidden = true;
     document.body.classList.remove("welcome-open");
@@ -197,13 +212,70 @@
   function watchGlobe(v) {
     var canvas = v && v.scene && v.scene.canvas;
     if (!canvas) return;
+    var handBack = function () {
+      stopSpin();
+      if (intro.phase === "flying") interruptIntro();
+    };
     ["pointerdown", "mousedown", "touchstart", "wheel"].forEach(function (type) {
-      canvas.addEventListener(type, stopSpin, { capture: true, passive: true });
+      canvas.addEventListener(type, handBack, { capture: true, passive: true });
     });
     root.addEventListener("keydown", function (event) {
       if (event.key === "Escape" && isOpen()) { close(); return; }
-      if (/^Arrow|^[+\-=wasdqe]$/i.test(event.key) && !isOpen()) stopSpin();
+      if (/^Arrow|^[+\-=wasdqe]$/i.test(event.key) && !isOpen()) handBack();
     });
+  }
+
+  function endIntro(phase) {
+    if (intro.timer) root.clearTimeout(intro.timer);
+    intro.timer = 0;
+    if (intro.phase === "flying") {
+      intro.phase = phase || "done";
+      intro.endedAt = root.performance.now();
+    }
+  }
+
+  // A tap, drag or wheel during the fly-in stops the camera where it is and shows the
+  // picker at once, without the spin, so nothing moves under the visitor's hand.
+  function interruptIntro() {
+    var v = viewer();
+    if (v) v.camera.cancelFlight();
+    endIntro("interrupted");
+    if (!isOpen()) open({ spin: false, noFocus: true });
+  }
+
+  function playIntro() {
+    var v = viewer();
+    var C = root.Cesium;
+    if (!v || !C) { open({ spin: true, noFocus: true }); return; }
+    var f = INTRO.from;
+    var t = INTRO.to;
+    v.camera.setView({ destination: C.Cartesian3.fromDegrees(f.lon, f.lat, f.km * 1000) });
+    intro.phase = "flying";
+    intro.startedAt = root.performance.now();
+    intro.fromKm = f.km;
+    intro.toKm = t.km;
+    document.body.classList.add("welcome-intro");
+    v.camera.flyTo({
+      destination: C.Cartesian3.fromDegrees(t.lon, t.lat, t.km * 1000),
+      duration: INTRO.seconds,
+      maximumHeight: f.km * 1000,
+      easingFunction: C.EasingFunction.CUBIC_IN_OUT,
+      complete: function () {
+        if (intro.phase !== "flying") return;
+        endIntro("done");
+        document.body.classList.remove("welcome-intro");
+        if (!isOpen()) open({ spin: true, fade: true, noFocus: true });
+        else startSpin();
+      },
+      cancel: function () {
+        document.body.classList.remove("welcome-intro");
+      },
+    });
+    // Fade the picker in near the end of the glide; the spin starts once the camera lands.
+    intro.timer = root.setTimeout(function () {
+      intro.timer = 0;
+      if (intro.phase === "flying" && !isOpen()) open({ spin: false, fade: true, noFocus: true });
+    }, INTRO.seconds * INTRO.popupAt * 1000);
   }
 
   function shouldShowOnLoad() {
@@ -229,7 +301,9 @@
       });
     }
     watchGlobe(viewer());
-    if (shouldShowOnLoad()) open({ spin: true, noFocus: true });
+    if (!shouldShowOnLoad()) return;
+    if (reducedMotion()) open({ spin: false, noFocus: true });
+    else playIntro();
   }
 
   root.GsaWelcome = {
@@ -239,6 +313,9 @@
     choose: choose,
     isOpen: isOpen,
     isSpinning: function () { return spinning; },
+    introState: function () {
+      return { phase: intro.phase, startedAt: intro.startedAt, endedAt: intro.endedAt, fromKm: intro.fromKm, toKm: intro.toKm, seconds: INTRO.seconds };
+    },
     stopSpin: stopSpin,
     presets: PRESETS.map(function (p) { return { id: p.id, title: p.title, layers: p.layers.slice() }; }),
     storeKey: STORE_KEY,
