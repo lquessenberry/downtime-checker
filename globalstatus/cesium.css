@@ -1872,7 +1872,7 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 /* Boot splash. The same rules are inlined in index.html so the screen is black before this file arrives. */
 #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; background: #000; color: var(--text); font-family: var(--font); text-align: center; }
 #boot-splash .boot-visual { position: relative; display: block; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
-#boot-splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; background: #000; }
+#boot-splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center top; display: block; background: #000; }
 @media (max-width: 800px) {
   #boot-splash .boot-visual { flex: 0 0 auto; height: auto; }
   #boot-splash video { position: static; width: 100%; height: auto; object-fit: contain; }
