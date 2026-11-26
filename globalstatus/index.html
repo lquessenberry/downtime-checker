@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <style>
+    #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; margin: 0; padding: 24px 16px; background: #070b10; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
+    #boot-splash img { width: min(86vw, 560px); height: auto; display: block; }
+    #boot-splash .boot-title { margin: 4px 0 0; font-size: clamp(20px, 4.2vw, 32px); font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; }
+    #boot-splash .boot-status { margin: 0; color: #7f97a1; font-size: 13px; letter-spacing: 0.12em; }
+    #boot-splash.is-done { opacity: 0; pointer-events: none; transition: opacity 0.7s ease; }
+    @media (prefers-reduced-motion: reduce) { #boot-splash.is-done { transition: none; } }
+  </style>
   <!-- Phone numbers in cards stay plain text: no automatic tel: links on phones. -->
   <meta name="format-detection" content="telephone=no, address=no, email=no" />
   <title>Global Status App</title>
@@ -20,9 +28,10 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126i" />
+  <link rel="stylesheet" href="/cesium.css?v=20261126j" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
+    window.__bootShown = performance.now();
     try {
       var welcomeOff = localStorage.getItem("gsa_welcome_dismissed") === "1";
       var skipWelcome = location.search.indexOf("welcome=0") !== -1;
@@ -32,6 +41,11 @@
   <script src="/vendor/cesium/Cesium.js"></script>
 </head>
 <body>
+  <div id="boot-splash" class="boot-splash">
+    <img src="/start-satellite.png?v=20261126j" alt="Satellite above the Earth" width="480" height="270" />
+    <p class="boot-title">Global Status</p>
+    <p id="boot-status" class="boot-status">Opening the globe…</p>
+  </div>
   <header class="hud-top">
     <div class="brand">
       <div class="pulse-dot" id="link-dot"></div>
@@ -534,6 +548,6 @@
   <script src="/geocoder.js?v=20261124l"></script>
   <script src="/nearby.js?v=20261124k"></script>
   <script src="/welcome.js?v=20261126i"></script>
-  <script src="/cesium.js?v=20261126i"></script>
+  <script src="/cesium.js?v=20261126j"></script>
 </body>
 </html>

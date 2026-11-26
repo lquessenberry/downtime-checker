@@ -1850,6 +1850,14 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
   .stage:has(#selected:not([hidden])) .ccw-banner { display: none; }
 }
 
+/* Boot splash. The same rules are inlined in index.html so the screen is dark before this file arrives. */
+#boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; margin: 0; padding: 24px 16px; background: #070b10; color: var(--text); font-family: var(--font); text-align: center; }
+#boot-splash img { width: min(86vw, 560px); height: auto; display: block; }
+#boot-splash .boot-title { margin: 4px 0 0; font-size: clamp(20px, 4.2vw, 32px); font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text); }
+#boot-splash .boot-status { margin: 0; color: var(--dim); font-size: 13px; letter-spacing: 0.12em; }
+#boot-splash.is-done { opacity: 0; pointer-events: none; transition: opacity 0.7s ease; }
+@media (prefers-reduced-motion: reduce) { #boot-splash.is-done { transition: none; } }
+
 /* First launch "Choose your first view" picker (welcome.js).
    Site palette only, no green: --panel, --line, --text, --dim, #101820 controls,
    #9fd4e2 hover / selected borders and #163044 selected fills, 4px corners. */
