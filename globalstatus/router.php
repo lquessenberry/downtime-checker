@@ -75,6 +75,10 @@ function gsa_http_routes()
     if ($path === '/api/internet-outages' && $method === 'GET') {
         json_out(200, gsa_ioda_snapshot());
     }
+    // HEALTH & HUMANITARIAN > USA AIR QUALITY: EPA AirNow + NOAA HMS smoke cache (*/5 cron, ~15 min gate).
+    if ($path === '/api/air-quality' && $method === 'GET') {
+        json_out(200, gsa_aq_snapshot());
+    }
     // TRANSPORTATION > FLIGHT DELAYS: FAA NAS Status cache (*/5 cron).
     if ($path === '/api/flight-delays' && $method === 'GET') {
         json_out(200, gsa_fd_snapshot());
