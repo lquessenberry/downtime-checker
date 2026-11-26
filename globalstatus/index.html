@@ -6,9 +6,8 @@
   <!-- Phone numbers in cards stay plain text: no automatic tel: links on phones. -->
   <meta name="format-detection" content="telephone=no, address=no, email=no" />
   <title>Global Status App</title>
-  <link rel="icon" href="/favicon.ico" sizes="any" />
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" href="/favicon.png?v=20261126h" type="image/png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20261126h" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#070b10" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -21,7 +20,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126g" />
+  <link rel="stylesheet" href="/cesium.css?v=20261126h" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -51,6 +50,7 @@
     <div class="clock" id="clock">00:00:00Z</div>
     <div class="mobile-nav">
       <button type="button" id="open-menu" aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 20 8.2 12 12.2 4 8.2Z"/><path d="M4 12.2 12 16.2 20 12.2"/><path d="M4 16.2 12 20.2 20 16.2"/></svg></button>
+      <button type="button" id="clear-layers" aria-label="Clear layers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 20 8.2 12 12.2 4 8.2Z"/><path d="M4 12.2 12 16.2 20 12.2"/><path d="M4 16.2 12 20.2 20 16.2"/><circle cx="12" cy="12" r="9"/><path d="M6.2 17.8 17.8 6.2"/></svg></button>
       <button type="button" id="open-list" aria-label="List"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7h11M9 12h11M9 17h11"/><path d="M4.5 7h.01M4.5 12h.01M4.5 17h.01"/></svg></button>
       <button type="button" id="open-views-mobile" data-welcome-open aria-haspopup="dialog" aria-label="Views"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2.1"/><path d="M12 3.2v2.4M12 18.4v2.4M3.2 12h2.4M18.4 12h2.4"/></svg></button>
       <button type="button" id="reset-mobile" aria-label="Reset map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.2-5.5"/><path d="M20 4.5V9h-4.5"/></svg></button>
@@ -197,7 +197,7 @@
         <button type="button" class="welcome-close" data-welcome-close aria-label="Close">×</button>
         <p class="welcome-kicker">GLOBAL STATUS · FIRST LAUNCH</p>
         <h2 id="welcome-title">Choose your first view</h2>
-        <p class="welcome-sub">Start with the Nuke Simulator or turn on a whole category. Switch single layers later from the menu.</p>
+        <p class="welcome-sub">Start with the Nuke Simulator, or open a category and choose one layer.</p>
         <div class="welcome-list" data-welcome-list></div>
         <label class="welcome-dismiss"><input type="checkbox" data-welcome-dismiss /> Don’t show this again</label>
       </div>
@@ -529,7 +529,7 @@
   <script src="/powerlines.js?v=20261124n"></script>
   <script src="/geocoder.js?v=20261124l"></script>
   <script src="/nearby.js?v=20261124k"></script>
-  <script src="/welcome.js?v=20261126g"></script>
-  <script src="/cesium.js?v=20261126f"></script>
+  <script src="/welcome.js?v=20261126h"></script>
+  <script src="/cesium.js?v=20261126h"></script>
 </body>
 </html>
