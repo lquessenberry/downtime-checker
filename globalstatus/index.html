@@ -19,7 +19,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261125a" />
+  <link rel="stylesheet" href="/cesium.css?v=20261125b" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -126,6 +126,15 @@
         <p class="sw-note" data-infra-note="powerplants" hidden></p>
         <button type="button" class="layer" data-layer-toggle="mesh" aria-pressed="false"><span class="layer-name"><span class="swatch mesh"></span> MESH NODES</span><span class="layer-meta"><em data-count="mesh">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="jamming" aria-pressed="false"><span class="layer-name"><span class="swatch jam"></span> JAMMED GPS SIGNALS</span><span class="layer-meta"><em data-count="jamming">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      </details>
+      <details class="layer-group" id="group-emergency" data-layer-group="emergency">
+        <summary class="layer-group-head"><span>EMERGENCY SERVICES</span><em class="layer-group-count"></em></summary>
+        <button type="button" class="layer" data-layer-toggle="police" aria-pressed="false"><span class="layer-name"><span class="swatch infra-police"></span> USA POLICE DEPARTMENTS</span><span class="layer-meta"><em data-count="police">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-infra-note="police" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="sheriff" aria-pressed="false"><span class="layer-name"><span class="swatch infra-sheriff"></span> USA SHERIFF DEPARTMENTS</span><span class="layer-meta"><em data-count="sheriff">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-infra-note="sheriff" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="fire" aria-pressed="false"><span class="layer-name"><span class="swatch infra-fire"></span> USA FIRE DEPARTMENTS</span><span class="layer-meta"><em data-count="fire">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-infra-note="fire" hidden></p>
       </details>
       <details class="layer-group" id="group-conflict-military" data-layer-group="conflict-military">
         <summary class="layer-group-head"><span>CONFLICT &amp; MILITARY</span><em class="layer-group-count"></em></summary>
@@ -479,13 +488,13 @@
   <script src="/quakes.js"></script>
   <script src="/sats.js"></script>
   <script src="/spaceweather.js?v=20261124p"></script>
-  <script src="/infra.js?v=20261124p"></script>
+  <script src="/infra.js?v=20261125b"></script>
   <script src="/firearms.js?v=20261124p"></script>
   <script src="/militias.js?v=20261124k"></script>
   <script src="/internet.js?v=20261125a"></script>
   <script src="/powerlines.js?v=20261124n"></script>
   <script src="/geocoder.js?v=20261124l"></script>
   <script src="/nearby.js?v=20261124k"></script>
-  <script src="/cesium.js?v=20261125a"></script>
+  <script src="/cesium.js?v=20261125b"></script>
 </body>
 </html>
