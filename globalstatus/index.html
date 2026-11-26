@@ -4,10 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
-    #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; margin: 0; padding: 24px 16px; background: #070b10; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
-    #boot-splash img { width: min(86vw, 560px); height: auto; display: block; }
-    #boot-splash .boot-title { margin: 4px 0 0; font-size: clamp(20px, 4.2vw, 32px); font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; }
-    #boot-splash .boot-status { margin: 0; color: #7f97a1; font-size: 13px; letter-spacing: 0.12em; }
+    #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: center; margin: 0; padding: 0; background: #000; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
+    #boot-splash img { width: 100%; height: clamp(180px, 56.25vw, calc(100dvh - 230px)); object-fit: cover; object-position: center center; display: block; background: #000; }
+    #boot-splash .boot-copy { flex: 0 0 auto; padding: 16px 14px 22px; background: #000; }
+    #boot-splash .boot-title { margin: 0; font-size: clamp(20px, 4.2vw, 32px); font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; }
+    #boot-splash .boot-log { width: min(100%, 720px); margin: 14px auto 0; text-align: left; }
+    #boot-splash .boot-log p { margin: 0; color: #7f97a1; font-size: clamp(11px, 2.7vw, 14px); line-height: 1.55; letter-spacing: 0.02em; }
+    #boot-splash .boot-log p.is-latest { color: #d7e6ea; }
     #boot-splash.is-done { opacity: 0; pointer-events: none; transition: opacity 0.7s ease; }
     @media (prefers-reduced-motion: reduce) { #boot-splash.is-done { transition: none; } }
   </style>
@@ -28,10 +31,9 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126j" />
+  <link rel="stylesheet" href="/cesium.css?v=20261126k" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
-    window.__bootShown = performance.now();
     try {
       var welcomeOff = localStorage.getItem("gsa_welcome_dismissed") === "1";
       var skipWelcome = location.search.indexOf("welcome=0") !== -1;
@@ -42,10 +44,48 @@
 </head>
 <body>
   <div id="boot-splash" class="boot-splash">
-    <img src="/start-satellite.png?v=20261126j" alt="Satellite above the Earth" width="480" height="270" />
-    <p class="boot-title">Global Status</p>
-    <p id="boot-status" class="boot-status">Opening the globe…</p>
+    <img src="/start-satellite.gif?v=20261126k" alt="Satellite above the Earth" width="480" height="270" />
+    <div class="boot-copy">
+      <p class="boot-title">Global Status</p>
+      <div id="boot-log" class="boot-log" aria-live="polite"></div>
+    </div>
   </div>
+  <script>
+    (function () {
+      var lines = [
+        "> AUTHENTICATING OPERATOR SESSION...",
+        "> CLEARANCE GRANTED — GLOBAL MONITORING NODE",
+        "> OPENING SATELLITE DOWNLINK FEEDS...",
+        "> LIVE ADS-B AIR TRAFFIC LAYER ONLINE",
+        "> MARITIME AIS / POWER GRID / OUTAGE OVERLAYS SYNCING",
+        "> ALL SENSOR LAYERS ACTIVE — GLOBE READY"
+      ];
+      var log = document.getElementById("boot-log");
+      var reduce = false;
+      try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+      function paint(text) {
+        var prev = log.lastElementChild;
+        if (prev) prev.classList.remove("is-latest");
+        var row = document.createElement("p");
+        row.className = "is-latest";
+        row.textContent = text;
+        log.appendChild(row);
+      }
+      if (reduce) {
+        for (var n = 0; n < lines.length; n += 1) paint(lines[n]);
+        window.__bootLogDone = true;
+        return;
+      }
+      var i = 0;
+      function step() {
+        paint(lines[i]);
+        i += 1;
+        if (i < lines.length) window.setTimeout(step, 700);
+        else window.setTimeout(function () { window.__bootLogDone = true; }, 800);
+      }
+      window.setTimeout(step, 400);
+    })();
+  </script>
   <header class="hud-top">
     <div class="brand">
       <div class="pulse-dot" id="link-dot"></div>
@@ -399,7 +439,7 @@
     <p class="ship-credit" hidden><span class="ship-credit-track">Positions from <a href="https://openwaters.io/ais/#license" target="_blank" rel="noreferrer">Open Waters AIS</a></span></p>
     <p class="sw-credit" hidden><span class="sw-credit-track"></span></p>
     <p class="infra-credit" hidden><span class="infra-credit-track"></span></p>
-    <div class="view-settings" id="view-settings">
+    <div class="view-settings is-closed" id="view-settings">
       <div class="view-head">
         <span>VIEW</span>
         <button type="button" id="close-view">CLOSE</button>
@@ -429,7 +469,7 @@
         </select>
       </label>
     </div>
-    <button type="button" id="open-view" class="view-reopen" hidden>VIEW</button>
+    <button type="button" id="open-view" class="view-reopen" aria-pressed="false" aria-label="View"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="3.4" ry="8"/><path d="M4.2 12h15.6M5.6 8.4h12.8M5.6 15.6h12.8"/></svg></button>
     <button type="button" id="open-grid-results" class="grid-results-open" hidden>VIEW GRID RESULTS</button>
   </main>
 
@@ -548,6 +588,6 @@
   <script src="/geocoder.js?v=20261124l"></script>
   <script src="/nearby.js?v=20261124k"></script>
   <script src="/welcome.js?v=20261126i"></script>
-  <script src="/cesium.js?v=20261126j"></script>
+  <script src="/cesium.js?v=20261126k"></script>
 </body>
 </html>
