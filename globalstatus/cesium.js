@@ -780,7 +780,13 @@ function syncUsTests() {
 }
 
 function syncLayersButton() {
-  const btn = document.getElementById("open-menu");
+  const arrow = document.getElementById("open-menu");
+  if (arrow) {
+    arrow.classList.remove("is-on");
+    arrow.setAttribute("aria-pressed", "false");
+    arrow.setAttribute("aria-label", "Reset map");
+  }
+  const btn = document.getElementById("open-categories");
   if (!btn) return;
   btn.setAttribute("aria-label", "Layers");
   const on = Boolean(window.GsaWelcome && window.GsaWelcome.isOpen && window.GsaWelcome.isOpen());
@@ -924,7 +930,8 @@ function hookUi() {
   });
   document.getElementById("close-menu").addEventListener("click", () => setPanel(""));
   document.getElementById("close-list").addEventListener("click", () => setPanel(""));
-  document.getElementById("open-menu").addEventListener("click", () => {
+  document.getElementById("open-menu").addEventListener("click", resetMap);
+  document.getElementById("open-categories").addEventListener("click", () => {
     setPanel("");
     if (!window.GsaWelcome) return;
     const dock = !phoneLayout();
@@ -940,7 +947,6 @@ function hookUi() {
     }
     window.GsaWelcome.open({ spin: false, dock: dock });
   });
-  document.getElementById("clear-layers").addEventListener("click", clearLayers);
   document.getElementById("open-list").addEventListener("click", () => {
     const open = document.querySelector(".feed-col").classList.contains("is-open");
     setPanel(open ? "" : "list");
