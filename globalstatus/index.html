@@ -36,7 +36,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126s" />
+  <link rel="stylesheet" href="/cesium.css?v=20261126t" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -256,6 +256,13 @@
         <p class="sw-note" data-militias-note="militialocal" hidden></p>
         <button type="button" class="layer" data-layer-toggle="militiainactive" aria-pressed="false"><span class="layer-name"><span class="swatch militiainactive"></span> INACTIVE GROUPS</span><span class="layer-meta"><em data-count="militiainactive">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-militias-note="militiainactive" hidden></p>
+      </details>
+      <details class="layer-group" id="group-paranormal" data-layer-group="paranormal">
+        <summary class="layer-group-head"><span>PARANORMAL</span><em class="layer-group-count"></em></summary>
+        <button type="button" class="layer" data-layer-toggle="ufo" aria-pressed="false"><span class="layer-name"><span class="swatch ufo"></span> UFO SIGHTINGS</span><span class="layer-meta"><em data-count="ufo">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-paranormal-note="ufo" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="bigfoot" aria-pressed="false"><span class="layer-name"><span class="swatch bigfoot"></span> BIGFOOT SIGHTINGS</span><span class="layer-meta"><em data-count="bigfoot">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-paranormal-note="bigfoot" hidden></p>
       </details>
       <button type="button" id="btn-reset" class="reset-map">RESET MAP</button>
     </div>
@@ -607,9 +614,10 @@
   <script src="/delays.js?v=20261125e"></script>
   <script src="/airquality.js?v=20261125f"></script>
   <script src="/powerlines.js?v=20261124n"></script>
+  <script src="/paranormal.js?v=20261126t"></script>
   <script src="/geocoder.js?v=20261126s"></script>
   <script src="/nearby.js?v=20261126l"></script>
-  <script src="/welcome.js?v=20261126r"></script>
-  <script src="/cesium.js?v=20261126r"></script>
+  <script src="/welcome.js?v=20261126t"></script>
+  <script src="/cesium.js?v=20261126t"></script>
 </body>
 </html>
