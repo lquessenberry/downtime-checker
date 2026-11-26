@@ -371,7 +371,7 @@
   function showOnMap(key, i) {
     const p = run.pins[key] && run.pins[key][i];
     if (!p) return;
-    if (!state.layers[key] && typeof setLayer === "function") setLayer(key, true);
+    if (!state.layers[key] && typeof setLayer === "function") setLayer(key, true, { fly: false });
     if (p.infra && root.GsaInfra) {
       if (root.gsShowLive) root.gsShowLive(root.GsaInfra.itemFor(p.infra));
       if (root.gsShowPinOnMap) root.gsShowPinOnMap(null, p.lat, p.lon);
@@ -461,7 +461,7 @@
   function enableAuto(k) {
     run.autoOn.add(k);
     setMode(k, run.showAll ? null : "circle");
-    setLayer(k, true);
+    setLayer(k, true, { fly: false });
   }
 
   function disableAuto(k) {
@@ -492,7 +492,7 @@
     for (const k of probing) {
       state.probeHidden.add(k);
       setMode(k, "none");
-      setLayer(k, true);
+      setLayer(k, true, { fly: false });
     }
     const since = run.startedAt;
     let last = "";

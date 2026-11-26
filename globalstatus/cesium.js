@@ -20,6 +20,9 @@ const state = {
   highlightSource: null,
   countryIndex: null,
   scanSource: null,
+  mapReady: false,
+  gridTester: false,
+  catalogSearches: [],
   outagePoints: [],
   outageMeta: null,
   hungerPoints: [],
@@ -473,6 +476,7 @@ async function startGlobe() {
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
+  viewer.camera.changed.addEventListener(refreshPhoneArcs);
   for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "effects", "quakes", "sats", ...SPACE_KEYS]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
@@ -579,6 +583,7 @@ async function startGlobe() {
     });
   }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
+  state.mapReady = true;
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
   });
@@ -590,6 +595,9 @@ async function startGlobe() {
       phone: phoneLayout,
       setBasemap: (id) => applyBasemap(id),
       closePanels: () => setPanel(""),
+      openGridTester,
+      syncGridTester: syncGridTesterButton,
+      syncLayers: syncLayersButton,
     });
   }
   dismissBootSplash();
@@ -728,6 +736,7 @@ function renderSearches(catalog) {
   });
   grid.append(caption, toggle, scan, menu);
   fillUsTests(unitedStates);
+  fillGridTester(catalog);
   document.querySelector(".country-pick").before(grid);
 }
 
@@ -749,6 +758,60 @@ function syncUsTests() {
   const show = country.value === "United States";
   tests.hidden = !show;
   if (!show) tests.value = "";
+}
+
+function syncLayersButton() {
+  const btn = document.getElementById("open-menu");
+  if (!btn) return;
+  const on = Boolean(window.GsaWelcome && window.GsaWelcome.isOpen && window.GsaWelcome.isOpen());
+  btn.classList.toggle("is-on", on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+
+function syncGridTesterButton() {
+  const btn = document.getElementById("open-grid-tester");
+  if (!btn) return;
+  const welcome = document.getElementById("welcome");
+  const grid = document.getElementById("grid-tester");
+  const overlayOpen = Boolean(welcome && !welcome.hidden);
+  const gridOpen = Boolean(grid && !grid.hidden && overlayOpen);
+  btn.hidden = !state.gridTester || gridOpen || overlayOpen;
+}
+
+function openGridTester() {
+  const welcome = document.getElementById("welcome");
+  const grid = document.getElementById("grid-tester");
+  const home = welcome && welcome.querySelector("[data-welcome-home]");
+  if (!welcome || !grid) return;
+  if (window.GsaWelcome && window.GsaWelcome.releaseCamera) window.GsaWelcome.releaseCamera();
+  if (home) home.hidden = true;
+  grid.hidden = false;
+  welcome.hidden = false;
+  welcome.setAttribute("aria-labelledby", "grid-tester-title");
+  document.documentElement.classList.remove("welcome-pending");
+  document.body.classList.add("welcome-open");
+  state.gridTester = true;
+  grid.scrollTop = 0;
+  syncGridTesterButton();
+}
+
+function fillGridTester(catalog) {
+  const list = document.getElementById("grid-tester-list");
+  if (!list || !catalog) return;
+  state.catalogSearches = catalog.searches || [];
+  const icon = '<span class="welcome-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true" focusable="false"><circle cx="8" cy="15" r="1.6"/><path d="M8 15c5.2-.6 8.2-5.2 10.2-9.2M8 15c1.6-5.4 6.4-8 11-7.2M8 15c6.4.8 9.2 3.6 10.4 7.4"/></svg></span>';
+  const row = (item) => `<button type="button" class="welcome-row" data-grid-test="${esc(item.id)}">${icon}<span class="welcome-text"><strong>${esc(item.label)}</strong></span><span class="welcome-arrow" aria-hidden="true">→</span></button>`;
+  const global = state.catalogSearches.filter((item) => item.group === "global");
+  const us = state.catalogSearches.filter((item) => item.group === "us");
+  list.innerHTML = `<p class="welcome-section">GLOBAL</p>${global.map(row).join("")}<p class="welcome-section">UNITED STATES</p>${us.map(row).join("")}`;
+  if (list.dataset.bound === "1") return;
+  list.dataset.bound = "1";
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-grid-test]");
+    if (!button) return;
+    for (const el of list.querySelectorAll("[data-grid-test]")) el.classList.toggle("is-primary", el === button);
+    startScan(button.dataset.gridTest);
+  });
 }
 
 function fillCountries(list) {
@@ -779,6 +842,8 @@ function hookUi() {
     const panel = document.getElementById("view-settings");
     setViewOpen(panel.classList.contains("is-closed"));
   });
+  const openGrid = document.getElementById("open-grid-tester");
+  if (openGrid) openGrid.addEventListener("click", openGridTester);
   document.getElementById("open-grid-results").addEventListener("click", () => setGridResultsOpen(true));
   document.getElementById("close-grid-results").addEventListener("click", () => setGridResultsOpen(false));
   hookServiceWorker();
@@ -840,8 +905,20 @@ function hookUi() {
   document.getElementById("close-menu").addEventListener("click", () => setPanel(""));
   document.getElementById("close-list").addEventListener("click", () => setPanel(""));
   document.getElementById("open-menu").addEventListener("click", () => {
-    const open = document.querySelector(".rail").classList.contains("is-open");
-    setPanel(open ? "" : "menu");
+    setPanel("");
+    if (!window.GsaWelcome) return;
+    const dock = !phoneLayout();
+    const welcome = document.getElementById("welcome");
+    const docked = Boolean(welcome && welcome.classList.contains("is-docked"));
+    if (window.GsaWelcome.isOpen()) {
+      if (dock && !docked) {
+        window.GsaWelcome.open({ spin: false, noFocus: true, dock: true });
+        return;
+      }
+      window.GsaWelcome.close();
+      return;
+    }
+    window.GsaWelcome.open({ spin: false, dock: dock });
   });
   document.getElementById("clear-layers").addEventListener("click", clearLayers);
   document.getElementById("open-list").addEventListener("click", () => {
@@ -851,6 +928,8 @@ function hookUi() {
   document.getElementById("panel-backdrop").addEventListener("click", () => setPanel(""));
   window.addEventListener("resize", () => {
     tuneQuality(state.basemap || "natural");
+    restyleArcs();
+    syncGridTesterButton();
     if (!phoneLayout()) {
       setGridResultsOpen(false);
     } else syncGridResultsButton();
@@ -889,6 +968,7 @@ function hookUi() {
 
 async function startScan(id, country) {
   if (state.running) return;
+  noteScanView(id, country);
   state.scanWanted = true;
   let response;
   let body = {};
@@ -1213,30 +1293,61 @@ function arcMaterial(color) {
   return new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.28, color });
 }
 
+function arcStyle(color) {
+  // Phone GPUs bake a glowing polyline into the screen. A solid color stays on the globe.
+  if (phoneLayout()) return { width: 2.5, material: color, depthFail: color };
+  const glow = arcMaterial(color);
+  return { width: 4, material: glow, depthFail: arcMaterial(color) };
+}
+
+function applyArcStyle(entity) {
+  if (!entity || !entity.polyline || !entity._arcColor) return;
+  const style = arcStyle(entity._arcColor);
+  entity.polyline.width = style.width;
+  entity.polyline.material = style.material;
+  entity.polyline.depthFailMaterial = style.depthFail;
+  if (entity._arcPositions) entity.polyline.positions = entity._arcPositions.slice();
+}
+
+function restyleArcs() {
+  for (const entity of state.arcs.values()) applyArcStyle(entity);
+}
+
+function refreshPhoneArcs() {
+  if (!phoneLayout() || !state.arcs.size) return;
+  for (const entity of state.arcs.values()) {
+    if (!entity._arcPositions || !entity.polyline) continue;
+    entity.polyline.positions = entity._arcPositions.slice();
+  }
+  if (state.viewer && state.viewer.scene.requestRender) state.viewer.scene.requestRender();
+}
+
 function upsertArc(result) {
   if (!state.viewer || !state.scanSource || result.lat == null || result.lon == null) return;
   state.scanSource.show = true;
   const positions = arcPositions(result.lat, result.lon);
   if (!positions) return;
   const color = COLORS[result.status] || COLORS.pending;
-  const material = arcMaterial(color);
+  const style = arcStyle(color);
   let entity = state.arcs.get(result.index);
   if (!entity) {
     entity = state.scanSource.entities.add({
       polyline: {
-        positions,
-        width: 4,
-        material,
-        depthFailMaterial: arcMaterial(color),
+        positions: positions.slice(),
+        width: style.width,
+        material: style.material,
+        depthFailMaterial: style.depthFail,
         arcType: Cesium.ArcType.NONE,
       },
     });
+    entity._arcPositions = positions;
+    entity._arcColor = color;
     state.arcs.set(result.index, entity);
     return;
   }
-  entity.polyline.positions = positions;
-  entity.polyline.material = material;
-  entity.polyline.depthFailMaterial = arcMaterial(color);
+  entity._arcPositions = positions;
+  entity._arcColor = color;
+  applyArcStyle(entity);
 }
 
 function upsertPoint(result) {
@@ -1536,8 +1647,56 @@ function clearLayers() {
   }
 }
 
-function setLayer(layer, on) {
+const VIEW_US = [-127, 22, -65, 51];
+const VIEW_WORLD = [-168, -48, 150, 72];
+const VIEW_NUKE = [-128, 18, -62, 54];
+const VIEW_NUKE_PHONE = [-132, -8, -60, 56];
+const US_LAYERS = new Set([
+  "tfr", "delays", "nwsalerts", "rivers", "coastal", "outages", "inetusa", "stream",
+  "celltowers", "powerlines", "police", "sheriff", "fire", "hospitals", "airquality",
+  "gunsusa", "ccw", "militianational", "militiastate", "militialocal", "militiainactive",
+]);
+
+function flyOverview(rect) {
+  const viewer = state.viewer;
+  if (!viewer || !rect || !window.Cesium) return;
+  if (window.GsaWelcome && window.GsaWelcome.releaseCamera) window.GsaWelcome.releaseCamera();
+  else viewer.camera.cancelFlight();
+  viewer.camera.flyTo({
+    destination: Cesium.Rectangle.fromDegrees(rect[0], rect[1], rect[2], rect[3]),
+    orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+    duration: 1.6,
+  });
+}
+
+function layerOverview(layer) {
+  if (layer === "effects") return phoneLayout() ? VIEW_NUKE_PHONE : VIEW_NUKE;
+  if (US_LAYERS.has(layer)) return VIEW_US;
+  return VIEW_WORLD;
+}
+
+function flyLayerOverview(layer) {
+  flyOverview(layerOverview(layer));
+}
+
+function noteScanView(id, country) {
+  state.gridTester = true;
+  const key = String(id || "");
+  const us = key === "united-states" || key.startsWith("us-") || country === "United States";
+  flyOverview(us ? VIEW_US : VIEW_WORLD);
+  const toggle = document.getElementById("grid-status");
+  if (toggle && key && key !== "country") {
+    toggle.dataset.scanId = key;
+    const item = (state.catalogSearches || []).find((entry) => entry.id === key);
+    if (item) toggle.textContent = item.label;
+  }
+  syncGridTesterButton();
+}
+
+function setLayer(layer, on, options) {
   if (!Object.prototype.hasOwnProperty.call(state.layers, layer)) return;
+  const wasOn = Boolean(state.layers[layer]);
+  const fly = !options || options.fly !== false;
   state.layers[layer] = Boolean(on);
   const source = sourceFor(layer);
   if (source) source.show = state.layers[layer];
@@ -1643,6 +1802,7 @@ function setLayer(layer, on) {
     loadHunger().catch((error) => statusLive(error.message || String(error)));
   }
   syncMobilePick(layer);
+  if (state.mapReady && fly && state.layers[layer] && !wasOn) flyLayerOverview(layer);
 }
 
 const LAYER_LABEL = {

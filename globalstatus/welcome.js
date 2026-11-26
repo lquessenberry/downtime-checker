@@ -42,6 +42,7 @@
     target: '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.4"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4" stroke-linecap="round"/>',
     group: '<circle cx="8.5" cy="8.6" r="2.6"/><circle cx="16" cy="9.6" r="2.2"/><path d="M3.5 19c.4-3.2 2.4-5 5-5s4.6 1.8 5 5M13.2 14.6c.8-.5 1.7-.8 2.8-.8 2.2 0 3.9 1.6 4.3 4.6" stroke-linecap="round"/>',
     compass: '<circle cx="12" cy="12" r="9"/><path d="m15.6 8.4-2.2 5-5 2.2 2.2-5z" stroke-linejoin="round"/>',
+    web: '<circle cx="8" cy="15" r="1.6"/><path d="M8 15c5.2-.6 8.2-5.2 10.2-9.2M8 15c1.6-5.4 6.4-8 11-7.2M8 15c6.4.8 9.2 3.6 10.4 7.4" stroke-linecap="round"/>',
   };
   // group: the sidebar <details> id whose layers the row turns on (read from the page,
   // so a layer added to a sidebar group later is picked up here too).
@@ -77,7 +78,7 @@
     },
   ];
 
-  var hooks = { viewer: null, setLayer: null, phone: null, setBasemap: null };
+  var hooks = { viewer: null, setLayer: null, phone: null, setBasemap: null, openGridTester: null, syncGridTester: null, syncLayers: null };
   var orbit = { heading: 0 };
   var box = null;
   var spinning = false;
@@ -161,7 +162,11 @@
         '<div class="welcome-drop" hidden>' + items + "</div></div>";
     };
     var cats = PRESETS.filter(function (p) { return p.group; });
-    list.innerHTML = row(PRESETS[0], 0) +
+    var gridRow = '<button type="button" class="welcome-row" data-welcome-grid="1">' +
+      '<span class="welcome-icon">' + svg(I.web) + "</span>" +
+      '<span class="welcome-text"><strong>GRID TESTER</strong><em>Scan a grid and draw the lines on the globe</em></span>' +
+      '<span class="welcome-arrow" aria-hidden="true">→</span></button>';
+    list.innerHTML = row(PRESETS[0], 0) + gridRow +
       '<p class="welcome-section">ALL CATEGORIES</p><div class="welcome-cats">' +
       cats.map(cat).join("") + "</div>" +
       row(PRESETS[PRESETS.length - 1], 1);
@@ -169,6 +174,11 @@
       // A tap that stopped the dive must not land on a row of the picker that opened
       // under the same finger, so rows ignore clicks for a moment after opening.
       if (root.performance.now() - openedAt < 450) return;
+      var gridBtn = event.target.closest("[data-welcome-grid]");
+      if (gridBtn) {
+        if (typeof hooks.openGridTester === "function") hooks.openGridTester();
+        return;
+      }
       var layerBtn = event.target.closest("[data-welcome-layer]");
       if (layerBtn) {
         chooseLayer(layerBtn.dataset.welcomePreset, layerBtn.dataset.welcomeLayer);
@@ -182,7 +192,10 @@
       var picked = event.target.closest("[data-welcome-preset]");
       if (picked && !picked.closest(".welcome-drop")) choose(picked.dataset.welcomePreset);
     });
-    box.querySelector("[data-welcome-close]").addEventListener("click", function () { close(); });
+    var closers = box.querySelectorAll("[data-welcome-close]");
+    for (var c = 0; c < closers.length; c += 1) {
+      closers[c].addEventListener("click", function () { close(); });
+    }
     var check = box.querySelector("[data-welcome-dismiss]");
     check.addEventListener("change", function () { storeSet(check.checked); });
     return box;
@@ -205,24 +218,39 @@
       box.classList.remove("is-entering");
     }
     document.body.classList.add("welcome-open");
-    box.querySelector(".welcome-card").scrollTop = 0;
+    var dock = Boolean(opts && opts.dock) && !(typeof hooks.phone === "function" && hooks.phone());
+    box.classList.toggle("is-docked", dock);
+    var home = box.querySelector("[data-welcome-home]");
+    var grid = document.getElementById("grid-tester");
+    if (home) home.hidden = false;
+    if (grid) grid.hidden = true;
+    box.setAttribute("aria-labelledby", "welcome-title");
+    if (home) home.scrollTop = 0;
     var first = box.querySelector(".welcome-row");
     if (first && !(opts && opts.noFocus)) {
       try { first.focus({ preventScroll: true }); } catch (e) { first.focus(); }
     }
     if (opts && opts.spin) startSpin();
+    if (typeof hooks.syncGridTester === "function") hooks.syncGridTester();
+    if (typeof hooks.syncLayers === "function") hooks.syncLayers();
   }
 
   function close() {
     stopSpin();
     endIntro("closed");
-    if (!box || box.hidden) return;
+    if (box) box.classList.remove("is-docked");
+    if (!box || box.hidden) {
+      if (typeof hooks.syncLayers === "function") hooks.syncLayers();
+      return;
+    }
     box.hidden = true;
     document.documentElement.classList.remove("welcome-pending");
     document.body.classList.remove("welcome-open");
     if (lastFocus && lastFocus.focus && document.contains(lastFocus)) {
       try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
     }
+    if (typeof hooks.syncGridTester === "function") hooks.syncGridTester();
+    if (typeof hooks.syncLayers === "function") hooks.syncLayers();
   }
 
   function viewer() {
@@ -333,6 +361,14 @@
     document.body.classList.remove("welcome-spin");
   }
 
+  // Hand the camera back before a layer or grid test flies somewhere else.
+  function releaseCamera() {
+    stopSpin();
+    endIntro("closed");
+    var v = viewer();
+    if (v && v.camera) v.camera.cancelFlight();
+  }
+
   // Any touch, drag, click or wheel on the globe hands the camera back right away.
   function watchGlobe(v) {
     var canvas = v && v.scene && v.scene.canvas;
@@ -430,6 +466,9 @@
     hooks.setLayer = opts.setLayer || hooks.setLayer;
     hooks.phone = opts.phone || hooks.phone;
     hooks.setBasemap = opts.setBasemap || hooks.setBasemap;
+    hooks.openGridTester = opts.openGridTester || hooks.openGridTester;
+    hooks.syncGridTester = opts.syncGridTester || hooks.syncGridTester;
+    hooks.syncLayers = opts.syncLayers || hooks.syncLayers;
     build();
     var buttons = document.querySelectorAll("[data-welcome-open]");
     for (var i = 0; i < buttons.length; i += 1) {
@@ -455,6 +494,7 @@
       return { phase: intro.phase, startedAt: intro.startedAt, endedAt: intro.endedAt, fromKm: intro.fromKm, toKm: intro.toKm, seconds: INTRO.seconds, landed: intro.landed, city: INTRO.target.name, pitch: INTRO.pitch, altM: INTRO.altM };
     },
     stopSpin: stopSpin,
+    releaseCamera: releaseCamera,
     presets: function () { return PRESETS.map(function (p) { return { id: p.id, title: p.title, group: p.group || "", layers: presetLayers(p) }; }); },
     storeKey: STORE_KEY,
   };

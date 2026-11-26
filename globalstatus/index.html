@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
     #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: center; margin: 0; padding: 0; background: #000; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
-    #boot-splash img { width: 100%; height: clamp(180px, 56.25vw, calc(100dvh - 230px)); object-fit: cover; object-position: center center; display: block; background: #000; }
+    #boot-splash picture { display: block; width: 100%; background: #000; }
+    #boot-splash img { width: 100%; height: clamp(180px, 56.25vw, calc(100dvh - 230px)); object-fit: cover; object-position: center center; display: block; background: #000; box-shadow: 0 -16px 0 8px #000; }
     #boot-splash .boot-copy { flex: 0 0 auto; padding: 16px 14px 22px; background: #000; }
     #boot-splash .boot-title { margin: 0; font-size: clamp(20px, 4.2vw, 32px); font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; }
     #boot-splash .boot-log { width: min(100%, 720px); margin: 14px auto 0; text-align: left; }
@@ -31,7 +32,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126k" />
+  <link rel="stylesheet" href="/cesium.css?v=20261126l" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -44,7 +45,10 @@
 </head>
 <body>
   <div id="boot-splash" class="boot-splash">
-    <img src="/start-satellite.gif?v=20261126k" alt="Satellite above the Earth" width="480" height="270" />
+    <picture>
+      <source media="(min-width: 801px)" srcset="/start-satellite-desk.webp?v=20261126l" type="image/webp" />
+      <img src="/start-satellite.gif?v=20261126l" alt="Satellite above the Earth" width="1920" height="1080" />
+    </picture>
     <div class="boot-copy">
       <p class="boot-title">Global Status</p>
       <div id="boot-log" class="boot-log" aria-live="polite"></div>
@@ -247,13 +251,20 @@
     <div id="cesium"></div>
     <div id="ccw-banner" class="ccw-banner" hidden></div>
     <div id="welcome" class="welcome" role="dialog" aria-modal="false" aria-labelledby="welcome-title" hidden>
-      <div class="welcome-card">
+      <div class="welcome-card" data-welcome-home>
         <button type="button" class="welcome-close" data-welcome-close aria-label="Close">×</button>
         <p class="welcome-kicker">GLOBAL STATUS · FIRST LAUNCH</p>
         <h2 id="welcome-title">Choose your first view</h2>
         <p class="welcome-sub">Start with the Nuke Simulator, or open a category and choose one layer.</p>
         <div class="welcome-list" data-welcome-list></div>
         <label class="welcome-dismiss"><input type="checkbox" data-welcome-dismiss /> Don’t show this again</label>
+      </div>
+      <div class="welcome-card" id="grid-tester" hidden>
+        <button type="button" class="welcome-close" data-welcome-close aria-label="Close">×</button>
+        <p class="welcome-kicker">GLOBAL STATUS · GRID TESTER</p>
+        <h2 id="grid-tester-title">Grid tester</h2>
+        <p class="welcome-sub">Choose a test. Closing this leaves the lines on the map.</p>
+        <div class="welcome-list" id="grid-tester-list"></div>
       </div>
     </div>
     <div id="effects-hud" class="effects-hud" hidden>
@@ -364,6 +375,7 @@
     <div class="effects-reopen" id="effects-reopen">
       <button type="button" id="open-effects-hud" hidden aria-label="Open simulator"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><path d="M17 15.5v4M15 17.5h4"/></svg></button>
       <button type="button" id="open-effects-results" hidden aria-label="Open blast area"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.2"/><circle cx="12" cy="12" r="5.4"/><circle cx="12" cy="12" r="8.6"/></svg></button>
+      <button type="button" id="open-grid-tester" hidden aria-label="Open grid tester"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="1.6"/><path d="M8 15c5.2-.6 8.2-5.2 10.2-9.2M8 15c1.6-5.4 6.4-8 11-7.2M8 15c6.4.8 9.2 3.6 10.4 7.4"/></svg></button>
     </div>
     <div class="stage-stack">
       <div class="stage-meta">
@@ -586,8 +598,8 @@
   <script src="/airquality.js?v=20261125f"></script>
   <script src="/powerlines.js?v=20261124n"></script>
   <script src="/geocoder.js?v=20261124l"></script>
-  <script src="/nearby.js?v=20261124k"></script>
-  <script src="/welcome.js?v=20261126i"></script>
-  <script src="/cesium.js?v=20261126k"></script>
+  <script src="/nearby.js?v=20261126l"></script>
+  <script src="/welcome.js?v=20261126l"></script>
+  <script src="/cesium.js?v=20261126l"></script>
 </body>
 </html>
