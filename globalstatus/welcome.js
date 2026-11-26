@@ -178,6 +178,7 @@
     endIntro("closed");
     if (!box || box.hidden) return;
     box.hidden = true;
+    document.documentElement.classList.remove("welcome-pending");
     document.body.classList.remove("welcome-open");
     if (lastFocus && lastFocus.focus && document.contains(lastFocus)) {
       try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
@@ -298,6 +299,7 @@
   }
 
   function playIntro() {
+    document.body.classList.add("welcome-open");
     var v = viewer();
     var C = root.Cesium;
     if (!v || !C) { open({ spin: false, noFocus: true }); return; }
