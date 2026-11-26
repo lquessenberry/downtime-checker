@@ -4,9 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
-    #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: center; margin: 0; padding: 0; background: #000; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
-    #boot-splash picture { display: block; width: 100%; background: #000; }
-    #boot-splash img { width: 100%; height: clamp(180px, 56.25vw, calc(100dvh - 230px)); object-fit: cover; object-position: center center; display: block; background: #000; box-shadow: 0 -16px 0 8px #000; }
+    #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; background: #000; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
+    #boot-splash picture { position: relative; display: block; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
+    #boot-splash img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center center; display: block; background: #000; }
+    @media (max-width: 800px) {
+      #boot-splash picture { flex: 0 0 auto; width: 100%; height: min(40vh, calc(100dvh - 200px)); }
+      #boot-splash img { object-position: center top; }
+    }
     #boot-splash .boot-copy { flex: 0 0 auto; padding: 16px 14px 22px; background: #000; }
     #boot-splash .boot-title { margin: 0; font-size: clamp(20px, 4.2vw, 32px); font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; }
     #boot-splash .boot-log { width: min(100%, 720px); margin: 14px auto 0; text-align: left; }
@@ -32,7 +36,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126l" />
+  <link rel="stylesheet" href="/cesium.css?v=20261126m" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -46,8 +50,8 @@
 <body>
   <div id="boot-splash" class="boot-splash">
     <picture>
-      <source media="(min-width: 801px)" srcset="/start-satellite-desk.webp?v=20261126l" type="image/webp" />
-      <img src="/start-satellite.gif?v=20261126l" alt="Satellite above the Earth" width="1920" height="1080" />
+      <source media="(min-width: 801px)" srcset="/start-satellite-desk.webp?v=20261126m" type="image/webp" />
+      <img src="/start-satellite.gif?v=20261126m" alt="Satellite above the Earth" width="1920" height="800" />
     </picture>
     <div class="boot-copy">
       <p class="boot-title">Global Status</p>
