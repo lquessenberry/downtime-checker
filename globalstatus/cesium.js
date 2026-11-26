@@ -763,22 +763,9 @@ function syncUsTests() {
 function syncLayersButton() {
   const btn = document.getElementById("open-menu");
   if (!btn) return;
-  const keys = Object.keys(state.layers);
-  const on = keys.length > 0 && keys.every((key) => state.layers[key]);
+  const on = Boolean(window.GsaWelcome && window.GsaWelcome.isOpen && window.GsaWelcome.isOpen());
   btn.classList.toggle("is-on", on);
   btn.setAttribute("aria-pressed", on ? "true" : "false");
-}
-
-function showAllLayers() {
-  setPanel("");
-  if (window.GsaWelcome && window.GsaWelcome.isOpen && window.GsaWelcome.isOpen()) {
-    window.GsaWelcome.close();
-  }
-  for (const key of Object.keys(state.layers)) {
-    if (!state.layers[key]) setLayer(key, true, { fly: false });
-  }
-  flyOverview(VIEW_WORLD);
-  syncLayersButton();
 }
 
 function syncGridTesterButton() {
@@ -917,7 +904,22 @@ function hookUi() {
   });
   document.getElementById("close-menu").addEventListener("click", () => setPanel(""));
   document.getElementById("close-list").addEventListener("click", () => setPanel(""));
-  document.getElementById("open-menu").addEventListener("click", showAllLayers);
+  document.getElementById("open-menu").addEventListener("click", () => {
+    setPanel("");
+    if (!window.GsaWelcome) return;
+    const dock = !phoneLayout();
+    const welcome = document.getElementById("welcome");
+    const docked = Boolean(welcome && welcome.classList.contains("is-docked"));
+    if (window.GsaWelcome.isOpen()) {
+      if (dock && !docked) {
+        window.GsaWelcome.open({ spin: false, noFocus: true, dock: true });
+        return;
+      }
+      window.GsaWelcome.close();
+      return;
+    }
+    window.GsaWelcome.open({ spin: false, dock: dock });
+  });
   document.getElementById("clear-layers").addEventListener("click", clearLayers);
   document.getElementById("open-list").addEventListener("click", () => {
     const open = document.querySelector(".feed-col").classList.contains("is-open");
@@ -1643,7 +1645,6 @@ function clearLayers() {
   for (const key of Object.keys(state.layers)) {
     if (state.layers[key]) setLayer(key, false);
   }
-  syncLayersButton();
 }
 
 const VIEW_US = [-127, 22, -65, 51];
@@ -1802,7 +1803,6 @@ function setLayer(layer, on, options) {
   }
   syncMobilePick(layer);
   if (state.mapReady && fly && state.layers[layer] && !wasOn) flyLayerOverview(layer);
-  syncLayersButton();
 }
 
 const LAYER_LABEL = {
