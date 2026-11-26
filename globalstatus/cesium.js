@@ -96,6 +96,8 @@ const state = {
     // FIREARMS (firearms.js): saved static pin layers, not a live feed.
     gunsusa: false,
     gunsworld: false,
+    // USA CONCEALED CARRY RECIPROCITY (ccw.js): saved state rules, colored by a chosen permit state.
+    ccw: false,
     // INTERNET OUTAGES (internet.js): live IODA (Georgia Tech) outage pins.
     inetusa: false,
     inetglobal: false,
@@ -135,6 +137,7 @@ const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rive
 // INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
 const INFRA_KEYS = ["airports", "bases", "celltowers", "powerplants", "police", "sheriff", "fire", "hospitals"];
 const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
+const CCW_KEYS = ["ccw"];
 const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "militiainactive"];
 const INTERNET_KEYS = ["inetusa", "inetglobal"];
 const TFR_KEYS = ["tfr"];
@@ -484,6 +487,13 @@ async function startGlobe() {
   }
   if (window.GsaFirearms) {
     window.GsaFirearms.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaCcw) {
+    window.GsaCcw.init({
       viewer: () => state.viewer,
       setCount,
       statusLive: () => statusLive(),
@@ -1301,6 +1311,10 @@ function sourceFor(layer) {
   if (layer === "stream") return state.streamSource;
   if (layer === "scan") return state.scanSource;
   if (state.live[layer]?.source) return state.live[layer].source;
+  if (window.GsaCcw && window.GsaCcw.sourceFor) {
+    const ccwSource = window.GsaCcw.sourceFor(layer);
+    if (ccwSource) return ccwSource;
+  }
   if (window.GsaFirearms && window.GsaFirearms.sourceFor) {
     const firearmsSource = window.GsaFirearms.sourceFor(layer);
     if (firearmsSource) return firearmsSource;
@@ -1528,6 +1542,9 @@ function setLayer(layer, on) {
   if (FIREARMS_KEYS.includes(layer) && window.GsaFirearms) {
     window.GsaFirearms.setActive(layer, state.layers[layer]);
   }
+  if (CCW_KEYS.includes(layer) && window.GsaCcw) {
+    window.GsaCcw.setActive(layer, state.layers[layer]);
+  }
   if (MILITIAS_KEYS.includes(layer) && window.GsaMilitias) {
     window.GsaMilitias.setActive(layer, state.layers[layer]);
   }
@@ -1604,6 +1621,7 @@ const LAYER_LABEL = {
   hospitals: "USA HOSPITALS & TRAUMA CENTERS",
   gunsusa: "USA GUN OWNERSHIP",
   gunsworld: "GLOBAL GUN OWNERSHIP",
+  ccw: "USA CONCEALED CARRY RECIPROCITY",
   inetusa: "USA INTERNET OUTAGES",
   inetglobal: "GLOBAL INTERNET OUTAGES",
   tfr: "FAA TFR",
@@ -1633,7 +1651,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "delays", "conflicts", "hunger", "mesh", "disease", "animal", "airquality", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "delays", "conflicts", "hunger", "mesh", "disease", "animal", "airquality", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "ccw", "militianational", "militiastate", "militialocal", "militiainactive"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -3175,6 +3193,13 @@ function cullAircraftHorizon() {
   // pins on the far side of the earth show through and look stuck on the
   // screen when the globe is panned or rotated. USA state pins usually
   // looked fine because they sit together on one side of the globe.
+  // USA CONCEALED CARRY RECIPROCITY state shapes (each carries its state center).
+  if (window.GsaCcw && window.GsaCcw.KEYS) {
+    for (const key of window.GsaCcw.KEYS) {
+      const ccwSource = window.GsaCcw.sourceFor(key);
+      if (ccwSource) sources.push(ccwSource);
+    }
+  }
   if (window.GsaFirearms && window.GsaFirearms.KEYS) {
     for (const key of window.GsaFirearms.KEYS) {
       const firearmsSource = window.GsaFirearms.sourceFor(key);
@@ -3466,6 +3491,9 @@ function liveHtml(item, opts = {}) {
   }
   else if (item.firearms && window.GsaFirearms) {
     extra = window.GsaFirearms.popupHtml(item, opts);
+  }
+  else if (item.ccw && window.GsaCcw) {
+    extra = window.GsaCcw.popupHtml(item, opts);
   }
   else if (item.militias && window.GsaMilitias) {
     extra = window.GsaMilitias.popupHtml(item, opts);
@@ -3880,6 +3908,7 @@ function statusLive(error) {
   if (window.GsaSpaceWeather) parts.push(...window.GsaSpaceWeather.statusParts());
   if (window.GsaInfra) parts.push(...window.GsaInfra.statusParts());
   if (window.GsaFirearms) parts.push(...window.GsaFirearms.statusParts());
+  if (window.GsaCcw) parts.push(...window.GsaCcw.statusParts());
   if (window.GsaMilitias) parts.push(...window.GsaMilitias.statusParts());
   if (window.GsaInternet) parts.push(...window.GsaInternet.statusParts());
   if (window.GsaTfr) parts.push(...window.GsaTfr.statusParts());
