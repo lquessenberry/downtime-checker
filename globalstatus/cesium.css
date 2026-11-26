@@ -1769,3 +1769,69 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
   /* The pin card already fills the phone screen, so the banner steps aside while it is open. */
   .stage:has(#selected:not([hidden])) .ccw-banner { display: none; }
 }
+
+/* First launch "Choose your first view" picker (welcome.js). */
+.views-open { flex: 0 0 auto; white-space: nowrap; padding: 6px 10px; font-size: 11px; letter-spacing: 0.14em; color: #8fe9ff; border-color: rgba(90, 220, 255, 0.45); }
+.views-open:hover, .views-open:focus-visible { border-color: #8fe9ff; box-shadow: 0 0 10px rgba(90, 220, 255, 0.3); }
+.welcome { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; pointer-events: none; }
+.welcome[hidden] { display: none; }
+.welcome-card {
+  pointer-events: auto;
+  position: relative;
+  width: min(460px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 22px 20px 16px;
+  background: rgba(10, 18, 30, 0.72);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid rgba(90, 220, 255, 0.5);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(90, 220, 255, 0.08), 0 0 28px rgba(60, 200, 255, 0.22), 0 18px 48px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+}
+.welcome-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; padding: 0; font-size: 20px; line-height: 1; color: #b8ccd4; background: rgba(16, 26, 38, 0.8); border-radius: 8px; }
+.welcome-close:hover, .welcome-close:focus-visible { color: #fff; border-color: #8fe9ff; }
+.welcome-kicker { margin: 0 40px 8px 0; color: #5ee3ff; font-size: 10.5px; letter-spacing: 0.26em; }
+.welcome-card h2 { margin: 0 40px 6px 0; color: #fff; font-size: 22px; font-weight: 600; letter-spacing: 0.01em; }
+.welcome-sub { margin: 0 0 16px; color: var(--dim); font-size: 12px; line-height: 1.45; }
+.welcome-list { display: grid; gap: 8px; }
+.welcome-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 12px;
+  text-align: left;
+  background: rgba(14, 24, 36, 0.78);
+  border: 1px solid rgba(120, 190, 210, 0.2);
+  border-radius: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.welcome-row:hover, .welcome-row:focus-visible { outline: none; border-color: rgba(94, 227, 255, 0.85); background: rgba(18, 34, 50, 0.88); box-shadow: 0 0 14px rgba(94, 227, 255, 0.22); }
+.welcome-row.is-primary { border-color: #bff4ff; background: rgba(22, 46, 66, 0.85); box-shadow: 0 0 0 1px rgba(94, 227, 255, 0.35), 0 0 18px rgba(94, 227, 255, 0.3); }
+.welcome-icon { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; color: #5ee3ff; background: rgba(94, 227, 255, 0.08); border: 1px solid rgba(94, 227, 255, 0.25); border-radius: 8px; }
+.welcome-row.is-primary .welcome-icon { color: #fff; border-color: rgba(191, 244, 255, 0.7); }
+.welcome-text { display: grid; gap: 3px; min-width: 0; }
+.welcome-text strong { color: #f2f8fa; font-size: 13px; letter-spacing: 0.1em; }
+.welcome-text em { color: var(--dim); font-size: 11.5px; font-style: normal; line-height: 1.35; }
+.welcome-arrow { color: #5ee3ff; font-size: 16px; opacity: 0.7; }
+.welcome-row:hover .welcome-arrow, .welcome-row.is-primary .welcome-arrow { opacity: 1; }
+.welcome-dismiss { display: flex; align-items: center; gap: 8px; margin-top: 14px; color: var(--dim); font-size: 12px; cursor: pointer; }
+.welcome-dismiss input { width: 16px; height: 16px; margin: 0; accent-color: #5ee3ff; }
+@media (max-width: 800px) {
+  .views-open { display: none; }
+  .mobile-nav button { flex: 1 1 auto; padding: 8px 6px; }
+  .welcome { padding: 10px; align-items: flex-start; }
+  .welcome-card { padding: 18px 14px 14px; max-height: 100%; }
+  .welcome-card h2 { font-size: 19px; }
+  .welcome-row { min-height: 56px; padding: 9px 10px; gap: 10px; grid-template-columns: 32px 1fr auto; }
+  .welcome-icon { width: 32px; height: 32px; }
+  .welcome-text strong { font-size: 12.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome-row { transition: none; }
+}

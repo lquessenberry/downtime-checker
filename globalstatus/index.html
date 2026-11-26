@@ -21,7 +21,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126a" />
+  <link rel="stylesheet" href="/cesium.css?v=20261126b" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -42,10 +42,12 @@
       <div class="meter down"><span>OFFLINE</span><strong id="stat-down">0</strong></div>
       <div class="meter"><span>UPTIME</span><strong id="stat-pct">—</strong></div>
     </div>
+    <button type="button" class="views-open" id="open-views" data-welcome-open aria-haspopup="dialog">QUICK VIEWS</button>
     <div class="clock" id="clock">00:00:00Z</div>
     <div class="mobile-nav">
       <button type="button" id="open-menu">MENU</button>
       <button type="button" id="open-list">LIST</button>
+      <button type="button" id="open-views-mobile" data-welcome-open aria-haspopup="dialog">VIEWS</button>
       <button type="button" id="reset-mobile">RESET MAP</button>
     </div>
   </header>
@@ -185,6 +187,16 @@
   <main class="stage">
     <div id="cesium"></div>
     <div id="ccw-banner" class="ccw-banner" hidden></div>
+    <div id="welcome" class="welcome" role="dialog" aria-modal="false" aria-labelledby="welcome-title" hidden>
+      <div class="welcome-card">
+        <button type="button" class="welcome-close" data-welcome-close aria-label="Close">×</button>
+        <p class="welcome-kicker">GLOBAL STATUS · FIRST LAUNCH</p>
+        <h2 id="welcome-title">Choose your first view</h2>
+        <p class="welcome-sub">Pick a starting set of live layers. You can change any of them later from the menu.</p>
+        <div class="welcome-list" data-welcome-list></div>
+        <label class="welcome-dismiss"><input type="checkbox" data-welcome-dismiss /> Don’t show this again</label>
+      </div>
+    </div>
     <div id="effects-hud" class="effects-hud" hidden>
       <div class="effects-hud-head">
         <h2>Nuke Simulator</h2>
@@ -512,6 +524,7 @@
   <script src="/powerlines.js?v=20261124n"></script>
   <script src="/geocoder.js?v=20261124l"></script>
   <script src="/nearby.js?v=20261124k"></script>
-  <script src="/cesium.js?v=20261126a"></script>
+  <script src="/welcome.js?v=20261126b"></script>
+  <script src="/cesium.js?v=20261126b"></script>
 </body>
 </html>

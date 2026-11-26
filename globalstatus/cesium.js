@@ -545,6 +545,15 @@ async function startGlobe() {
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
   });
+  // First launch view picker (welcome.js): turns on preset layers and flies the camera.
+  if (window.GsaWelcome) {
+    window.GsaWelcome.init({
+      viewer: () => state.viewer,
+      setLayer,
+      phone: phoneLayout,
+      closePanels: () => setPanel(""),
+    });
+  }
   // Do not pin a hardcoded city. Place the blue hub only after a fresh lookup.
   if (window.GsaSearch && window.GsaSearch.locateStartup) {
     window.GsaSearch.locateStartup().then((info) => {
