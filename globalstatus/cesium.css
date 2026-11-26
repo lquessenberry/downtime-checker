@@ -1742,3 +1742,6 @@ button:hover { border-color: #9fd4e2; }
 /* The listen panel fills the stage; hide the heading so it does not show through. */
 body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 .io-key.io-probe { background: #38d6ff; border-radius: 0; transform: rotate(45deg); width: 7px; height: 7px; margin-left: 2px; box-shadow: 0 0 0 1px #0b1d26; }
+.swatch.infra-police { background: #2f6bff; box-shadow: 0 0 0 2px #ffffff inset; border-radius: 50%; }
+.swatch.infra-fire { background: #e8261c; box-shadow: 0 0 0 2px #ffffff inset; border-radius: 50%; }
+.swatch.infra-sheriff { background: #ffc233; box-shadow: 0 0 0 2px #1b2350 inset; border-radius: 50%; }
