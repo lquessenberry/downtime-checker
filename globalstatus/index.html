@@ -20,7 +20,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126h" />
+  <link rel="stylesheet" href="/cesium.css?v=20261126i" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -36,7 +36,7 @@
     <div class="brand">
       <div class="pulse-dot" id="link-dot"></div>
       <div>
-        <h1>Global Status App</h1>
+        <h1><span class="brand-line">Global Status</span><span class="brand-app">App</span></h1>
         <p class="tag">CESIUM GLOBE // POWER OUTAGES · SCANNERS · JAMMED GPS SIGNALS · ADS-B · CONFLICT TRACKER</p>
       </div>
     </div>
@@ -204,10 +204,10 @@
     </div>
     <div id="effects-hud" class="effects-hud" hidden>
       <div class="effects-hud-head">
+        <button type="button" id="effects-sound" class="effects-sound" aria-pressed="true">Sound on</button>
         <h2>Nuke Simulator</h2>
         <button type="button" id="effects-hud-close" class="pin-card-close" aria-label="Close">×</button>
       </div>
-      <button type="button" id="effects-sound" class="effects-sound" aria-pressed="true">Sound on</button>
       <p class="effects-lede" id="effects-lede">Tap the globe to choose ground zero, then pick a weapon or type a yield and press Launch Nuke.</p>
       <form id="effects-calc" autocomplete="off">
         <div class="effects-span">
@@ -306,6 +306,10 @@
     <p>Checked against the published 1 megaton optimum airburst: about 2.8 km at 20 psi, 7.0 km at 5 psi, and 21.7 km at 1 psi. The fits are for roughly 1 kiloton to 20 megatons. Outside that, radii follow the cube-root law. Clear air, flat ground, no terrain, no casualties, and no fallout plume.</p>
     <p>15 kilotons is about the yield of the Hiroshima bomb. That line is only a scale marker.</p>
       </footer>
+    </div>
+    <div class="effects-reopen" id="effects-reopen">
+      <button type="button" id="open-effects-hud" hidden aria-label="Open simulator"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><path d="M17 15.5v4M15 17.5h4"/></svg></button>
+      <button type="button" id="open-effects-results" hidden aria-label="Open blast area"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.2"/><circle cx="12" cy="12" r="5.4"/><circle cx="12" cy="12" r="8.6"/></svg></button>
     </div>
     <div class="stage-stack">
       <div class="stage-meta">
@@ -514,7 +518,7 @@
   </div>
 
 
-  <script src="/effects-radius.js"></script>
+  <script src="/effects-radius.js?v=20261126i"></script>
   <script src="/quakes.js"></script>
   <script src="/sats.js"></script>
   <script src="/spaceweather.js?v=20261125e"></script>
@@ -529,7 +533,7 @@
   <script src="/powerlines.js?v=20261124n"></script>
   <script src="/geocoder.js?v=20261124l"></script>
   <script src="/nearby.js?v=20261124k"></script>
-  <script src="/welcome.js?v=20261126h"></script>
-  <script src="/cesium.js?v=20261126h"></script>
+  <script src="/welcome.js?v=20261126i"></script>
+  <script src="/cesium.js?v=20261126i"></script>
 </body>
 </html>

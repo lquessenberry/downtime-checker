@@ -788,7 +788,9 @@ function hookUi() {
     closeMapPopups();
     if (state.viewer && state.viewer.selectedEntity) state.viewer.selectedEntity = undefined;
   });
-  document.getElementById("effects-hud-close").addEventListener("click", () => setLayer("effects", false));
+  document.getElementById("effects-hud-close").addEventListener("click", () => {
+    if (window.GsaEffectsRadius && window.GsaEffectsRadius.hideHud) window.GsaEffectsRadius.hideHud();
+  });
   document.getElementById("ac-close").addEventListener("click", closeAircraft);
   document.getElementById("mode-3d").addEventListener("click", () => setSceneMode("3d"));
   document.getElementById("mode-2d").addEventListener("click", () => setSceneMode("2d"));
