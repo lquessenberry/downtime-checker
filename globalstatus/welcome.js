@@ -3,18 +3,25 @@
 // set of existing layers and flies the camera to a matching view. "Don't show this
 // again" is kept in localStorage; the VIEWS button in the top bar reopens the picker.
 // The globe stops turning the moment the visitor picks, closes, or touches the globe.
-// Fresh launches open with a short fly-in from deep space; the picker fades in as it lands.
+// Fresh launches open with a dive from space down to a tilted, low aerial view over
+// Washington, DC on the Aerial photo map; the picker fades in as it lands and the camera
+// then circles the city slowly until the visitor picks, closes, or touches the map.
 (function (root) {
   "use strict";
 
   var STORE_KEY = "gsa_welcome_dismissed";
-  var SPIN_DEG_PER_SEC = 2.4; // one turn in about 2.5 minutes
-  // Opening fly-in: from deep space over the eastern Atlantic down to the Americas.
+  // Opening dive: straight down over North America, then a tilted landing over the
+  // National Mall. The camera sits behind the target along its heading, so it looks
+  // ahead across the city toward the horizon like a plane or drone.
   var INTRO = {
-    from: { lon: 5, lat: 28, km: 32000 },
-    to: { lon: -48, lat: 18, km: 16000 },
-    seconds: 2.5,
-    popupAt: 0.8, // fraction of the flight when the picker starts to fade in
+    from: { lon: -96, lat: 38, km: 22000 },
+    target: { lon: -77.0365, lat: 38.8895, name: "Washington, DC" },
+    heading: 20, // degrees, looking north-northeast up the Mall
+    pitch: -35, // degrees below the horizon
+    altM: 5200, // camera height above the ground in meters
+    seconds: 3.2,
+    popupAt: 0.82, // fraction of the flight when the picker starts to fade in
+    orbitDegPerSec: 1.6, // slow circle around the city after landing
   };
 
   // [west, south, east, north] in degrees for each view.
@@ -72,13 +79,14 @@
     },
   ];
 
-  var hooks = { viewer: null, setLayer: null, phone: null };
+  var hooks = { viewer: null, setLayer: null, phone: null, setBasemap: null };
+  var orbit = { heading: 0 };
   var box = null;
   var spinning = false;
   var spinFrame = 0;
   var spinLast = 0;
   var lastFocus = null;
-  var intro = { phase: "none", startedAt: 0, endedAt: 0, timer: 0, fromKm: 0, toKm: 0 };
+  var intro = { phase: "none", startedAt: 0, endedAt: 0, timer: 0, fromKm: 0, toKm: 0, landed: false };
 
   function storeGet() {
     try { return root.localStorage.getItem(STORE_KEY) === "1"; } catch (e) { return false; }
@@ -170,22 +178,41 @@
       var phone = typeof hooks.phone === "function" && hooks.phone();
       var r = phone && preset.phoneView ? preset.phoneView : preset.view;
       v.camera.cancelFlight();
+      // Always level out to the usual top-down framing, even from the tilted aerial view.
       v.camera.flyTo({
         destination: root.Cesium.Rectangle.fromDegrees(r[0], r[1], r[2], r[3]),
-        duration: 2.2,
+        orientation: { heading: 0, pitch: -root.Cesium.Math.PI_OVER_TWO, roll: 0 },
+        duration: intro.landed ? 2.8 : 2.2,
       });
     }
     var host = document.getElementById("cesium");
     if (host) host.dataset.welcomePreset = preset.id;
   }
 
-  // The camera turns west about the Earth's axis, so the globe turns east like the real one.
+  // Camera position for the aerial view at a given heading: behind the target along the
+  // heading, at the landing height, so the pitch looks straight at the target.
+  function aerialPose(headingDeg) {
+    var C = root.Cesium;
+    var t = INTRO.target;
+    var center = C.Cartesian3.fromDegrees(t.lon, t.lat, 0);
+    var enu = C.Transforms.eastNorthUpToFixedFrame(center);
+    var h = C.Math.toRadians(headingDeg);
+    var d = INTRO.altM / Math.tan(C.Math.toRadians(-INTRO.pitch));
+    var local = new C.Cartesian3(-d * Math.sin(h), -d * Math.cos(h), INTRO.altM);
+    return {
+      destination: C.Matrix4.multiplyByPoint(enu, local, new C.Cartesian3()),
+      orientation: { heading: h, pitch: C.Math.toRadians(INTRO.pitch), roll: 0 },
+    };
+  }
+
+  // After landing, the camera circles the city slowly at the same height and tilt.
   function spinStep(now) {
     if (!spinning) return;
     var v = viewer();
     if (v && root.Cesium && spinLast) {
       var dt = Math.min(0.1, (now - spinLast) / 1000);
-      v.camera.rotate(root.Cesium.Cartesian3.UNIT_Z, -root.Cesium.Math.toRadians(SPIN_DEG_PER_SEC) * dt);
+      orbit.heading = (orbit.heading + INTRO.orbitDegPerSec * dt) % 360;
+      v.camera.setView(aerialPose(orbit.heading));
       if (v.scene.requestRender) v.scene.requestRender();
     }
     spinLast = now;
@@ -193,7 +220,7 @@
   }
 
   function startSpin() {
-    if (spinning || reducedMotion() || !viewer()) return;
+    if (spinning || reducedMotion() || !viewer() || !intro.landed) return;
     spinning = true;
     spinLast = 0;
     document.body.classList.add("welcome-spin");
@@ -246,23 +273,33 @@
   function playIntro() {
     var v = viewer();
     var C = root.Cesium;
-    if (!v || !C) { open({ spin: true, noFocus: true }); return; }
+    if (!v || !C) { open({ spin: false, noFocus: true }); return; }
+    // Land on real aerial streets and buildings: switch the MAP to Aerial photo.
+    if (typeof hooks.setBasemap === "function") {
+      try { hooks.setBasemap("satellite"); } catch (e) { /* keep the current map */ }
+    }
     var f = INTRO.from;
-    var t = INTRO.to;
-    v.camera.setView({ destination: C.Cartesian3.fromDegrees(f.lon, f.lat, f.km * 1000) });
+    v.camera.setView({
+      destination: C.Cartesian3.fromDegrees(f.lon, f.lat, f.km * 1000),
+      orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
+    });
     intro.phase = "flying";
     intro.startedAt = root.performance.now();
     intro.fromKm = f.km;
-    intro.toKm = t.km;
+    intro.toKm = INTRO.altM / 1000;
+    orbit.heading = INTRO.heading;
+    var land = aerialPose(INTRO.heading);
     document.body.classList.add("welcome-intro");
     v.camera.flyTo({
-      destination: C.Cartesian3.fromDegrees(t.lon, t.lat, t.km * 1000),
+      destination: land.destination,
+      orientation: land.orientation,
       duration: INTRO.seconds,
       maximumHeight: f.km * 1000,
-      easingFunction: C.EasingFunction.CUBIC_IN_OUT,
+      easingFunction: C.EasingFunction.QUADRATIC_OUT, // fast drop from space, slow glide into the city
       complete: function () {
         if (intro.phase !== "flying") return;
         endIntro("done");
+        intro.landed = true;
         document.body.classList.remove("welcome-intro");
         if (!isOpen()) open({ spin: true, fade: true, noFocus: true });
         else startSpin();
@@ -271,7 +308,7 @@
         document.body.classList.remove("welcome-intro");
       },
     });
-    // Fade the picker in near the end of the glide; the spin starts once the camera lands.
+    // Fade the picker in near the end of the dive; the slow circle starts once it lands.
     intro.timer = root.setTimeout(function () {
       intro.timer = 0;
       if (intro.phase === "flying" && !isOpen()) open({ spin: false, fade: true, noFocus: true });
@@ -292,6 +329,7 @@
     hooks.viewer = opts.viewer || hooks.viewer;
     hooks.setLayer = opts.setLayer || hooks.setLayer;
     hooks.phone = opts.phone || hooks.phone;
+    hooks.setBasemap = opts.setBasemap || hooks.setBasemap;
     build();
     var buttons = document.querySelectorAll("[data-welcome-open]");
     for (var i = 0; i < buttons.length; i += 1) {
@@ -314,7 +352,7 @@
     isOpen: isOpen,
     isSpinning: function () { return spinning; },
     introState: function () {
-      return { phase: intro.phase, startedAt: intro.startedAt, endedAt: intro.endedAt, fromKm: intro.fromKm, toKm: intro.toKm, seconds: INTRO.seconds };
+      return { phase: intro.phase, startedAt: intro.startedAt, endedAt: intro.endedAt, fromKm: intro.fromKm, toKm: intro.toKm, seconds: INTRO.seconds, landed: intro.landed, city: INTRO.target.name, pitch: INTRO.pitch, altM: INTRO.altM };
     },
     stopSpin: stopSpin,
     presets: PRESETS.map(function (p) { return { id: p.id, title: p.title, layers: p.layers.slice() }; }),
