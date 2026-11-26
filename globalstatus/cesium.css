@@ -371,6 +371,7 @@ button:hover { border-color: #9fd4e2; }
   padding: 3px 7px;
 }
 #heading { font-size: 12px; line-height: 1.2; letter-spacing: 0.06em; }
+#heading[hidden] { display: none; }
 #hint { color: var(--dim); font-size: 10px; line-height: 1.2; margin-top: 1px; letter-spacing: 0.01em; }
 .traffic-switch,
 .air-filters,
@@ -401,20 +402,20 @@ button:hover { border-color: #9fd4e2; }
 }
 .ship-credit, .air-credit, .jam-credit {
   position: absolute;
-  left: 8px;
-  right: 108px;
+  left: 0;
+  right: 0;
   bottom: 14px;
   z-index: 2;
   height: 22px;
   margin: 0;
-  padding: 0 8px;
+  padding: 0;
   overflow: hidden;
   white-space: nowrap;
   color: var(--dim);
   font-size: 11px;
   letter-spacing: 0.02em;
   line-height: 22px;
-  background: rgba(7, 11, 16, 0.72);
+  background: none;
   pointer-events: none;
 }
 .ship-credit-track, .air-credit-track, .jam-credit-track {
@@ -432,6 +433,16 @@ button:hover { border-color: #9fd4e2; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ship-credit-track, .air-credit-track, .jam-credit-track { animation: none; padding-left: 0; }
+}
+/* The dark bar is gone. In 3D the mask hides the line where the earth is,
+   so the text scrolls in from the side, passes behind the globe, and comes out. */
+.ship-credit.is-behind-globe,
+.air-credit.is-behind-globe,
+.jam-credit.is-behind-globe,
+.sw-credit.is-behind-globe,
+.infra-credit.is-behind-globe {
+  -webkit-mask-image: radial-gradient(circle at var(--globe-x) var(--globe-y), transparent calc(var(--globe-r) - 1px), #000 calc(var(--globe-r) + 10px));
+  mask-image: radial-gradient(circle at var(--globe-x) var(--globe-y), transparent calc(var(--globe-r) - 1px), #000 calc(var(--globe-r) + 10px));
 }
 .outage-card {
   position: relative;
@@ -1001,6 +1012,9 @@ button:hover { border-color: #9fd4e2; }
     border-radius: 8px;
   }
   .mobile-nav svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  #open-menu .icon-layers { display: none; }
+  #open-menu .icon-reset { display: block; }
+  #reset-mobile { display: none; }
   .rail, .feed-col {
     display: none;
     position: fixed;
@@ -1030,16 +1044,12 @@ button:hover { border-color: #9fd4e2; }
   .air-filters button,
   .ship-filters button { min-height: 44px; font-size: 14px; }
   .ship-credit, .air-credit, .jam-credit {
-    left: 8px;
-    right: 96px;
+    left: 0;
+    right: 0;
     bottom: calc(8px + env(safe-area-inset-bottom));
     height: 22px;
     font-size: 12px;
     line-height: 22px;
-  }
-  .stage:has(.view-settings:not(.is-closed)) .ship-credit, .stage:has(.view-settings:not(.is-closed)) .air-credit, .stage:has(.view-settings:not(.is-closed)) .jam-credit {
-    right: min(252px, 68%);
-    bottom: calc(8px + env(safe-area-inset-bottom));
   }
   .aircraft-card { width: min(340px, calc(100vw - 16px)); max-height: calc(100dvh - 170px); }
   .selected {
@@ -1443,20 +1453,20 @@ button:hover { border-color: #9fd4e2; }
 .sw-note i { color: var(--dim); font-style: italic; }
 .sw-credit {
   position: absolute;
-  left: 8px;
-  right: 108px;
+  left: 0;
+  right: 0;
   bottom: 40px;
   z-index: 2;
   height: 22px;
   margin: 0;
-  padding: 0 8px;
+  padding: 0;
   overflow: hidden;
   white-space: nowrap;
   color: var(--dim);
   font-size: 11px;
   letter-spacing: 0.02em;
   line-height: 22px;
-  background: rgba(7, 11, 16, 0.72);
+  background: none;
   pointer-events: none;
 }
 .sw-credit[hidden] { display: none; }
@@ -1472,7 +1482,7 @@ button:hover { border-color: #9fd4e2; }
   .sw-credit-track { animation: none; padding-left: 0; }
 }
 @media (max-width: 800px) {
-  .sw-credit { right: 96px; bottom: calc(34px + env(safe-area-inset-bottom)); font-size: 12px; }
+  .sw-credit { right: 0; left: 0; bottom: calc(34px + env(safe-area-inset-bottom)); font-size: 12px; }
   .layer-group > summary { min-height: 44px; font-size: 13px; }
 }
 
@@ -1496,20 +1506,20 @@ button:hover { border-color: #9fd4e2; }
 #selected .infra-caption { color: var(--dim); font-size: 0.9em; }
 .infra-credit {
   position: absolute;
-  left: 8px;
-  right: 108px;
+  left: 0;
+  right: 0;
   bottom: 64px;
   z-index: 2;
   height: 22px;
   margin: 0;
-  padding: 0 8px;
+  padding: 0;
   overflow: hidden;
   white-space: nowrap;
   color: var(--dim);
   font-size: 11px;
   letter-spacing: 0.02em;
   line-height: 22px;
-  background: rgba(7, 11, 16, 0.72);
+  background: none;
   pointer-events: none;
 }
 .infra-credit[hidden] { display: none; }
@@ -1527,7 +1537,7 @@ button:hover { border-color: #9fd4e2; }
   .infra-credit-track { animation: none; padding-left: 0; }
 }
 @media (max-width: 800px) {
-  .infra-credit { right: 96px; bottom: calc(58px + env(safe-area-inset-bottom)); font-size: 12px; }
+  .infra-credit { right: 0; left: 0; bottom: calc(58px + env(safe-area-inset-bottom)); font-size: 12px; }
 }
 
 /* Phone bottom bar: one row of layer dots that swipes left and right, so
@@ -1872,7 +1882,7 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 /* Boot splash. The same rules are inlined in index.html so the screen is black before this file arrives. */
 #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; background: #000; color: var(--text); font-family: var(--font); text-align: center; }
 #boot-splash .boot-visual { position: relative; display: block; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
-#boot-splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center top; display: block; background: #000; }
+#boot-splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center bottom; display: block; background: #000; }
 @media (max-width: 800px) {
   #boot-splash .boot-visual { flex: 0 0 auto; height: auto; }
   #boot-splash video { position: static; width: 100%; height: auto; object-fit: contain; }
@@ -1993,6 +2003,10 @@ body.welcome-open #open-grid-tester { display: none !important; }
 .welcome-drop { display: grid; gap: 4px; }
 .welcome-drop[hidden] { display: none; }
 .welcome-drop button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   width: 100%;
   text-align: left;
   min-height: 36px;
@@ -2004,7 +2018,12 @@ body.welcome-open #open-grid-tester { display: none !important; }
   font-size: 12px;
   letter-spacing: 0.04em;
 }
+.welcome-drop button .welcome-layer-name { flex: 1 1 auto; min-width: 0; }
 .welcome-drop button:hover, .welcome-drop button:focus-visible { border-color: #9fd4e2; outline: none; }
+.welcome-drop button.on .switch,
+.welcome-row.on .switch { background: #1e4a34; }
+.welcome-drop button.on .switch::after,
+.welcome-row.on .switch::after { left: 16px; background: #3dff9a; }
 .welcome-row[aria-expanded="true"] .welcome-arrow { color: #9fd4e2; }
 @media (min-width: 801px) {
   body {
@@ -2036,6 +2055,7 @@ body.welcome-open #open-grid-tester { display: none !important; }
   }
   .mobile-nav button.is-on { border-color: #9fd4e2; }
   .mobile-nav svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  #open-menu .icon-reset { display: none; }
   .rail, .feed-col {
     display: none;
     position: fixed;
