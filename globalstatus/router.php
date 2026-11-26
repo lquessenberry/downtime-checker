@@ -59,6 +59,15 @@ function gsa_http_routes()
     if ($path === '/api/outages' && $method === 'GET') {
         json_out(200, outages_snapshot());
     }
+    if ($path === '/api/outages-uk' && $method === 'GET') {
+        json_out(200, outages_region_snapshot('uk'));
+    }
+    if ($path === '/api/outages-ca' && $method === 'GET') {
+        json_out(200, outages_region_snapshot('ca'));
+    }
+    if ($path === '/api/outages-au' && $method === 'GET') {
+        json_out(200, outages_region_snapshot('au'));
+    }
     if ($path === '/api/mil' && $method === 'GET') {
         json_out(200, military_snapshot());
     }
@@ -704,65 +713,52 @@ function remote_json($url, $post = null)
 function outage_coverage_note()
 {
     return 'US pins are counties from utilities that report to DOE/ORNL ODIN, not every US outage. '
-        . 'United Kingdom pins are unplanned outages from UK Power Networks, Northern Powergrid, and National Grid Electricity Distribution. '
-        . 'SP Energy Networks, Electricity North West, Northern Ireland Electricity, and SSEN are not included. '
-        . 'Canada pins are Hydro-Québec unplanned outages only. '
-        . 'Australia, Ireland, New Zealand, and South Africa do not publish an open live location feed that can be pinned.';
+        . 'poweroutage.us requires a key. massoutage.com, poweroutagetracker.com, and outagemap.org do not publish a public coordinate feed.';
 }
 
 function outage_credit_text()
 {
-    return 'U.S. Department of Energy and Oak Ridge National Laboratory, Outage Data Initiative Nationwide. County locations are U.S. Census centroids. '
-        . 'United Kingdom: UK Power Networks (CC BY 4.0), Northern Powergrid open data, and National Grid Electricity Distribution open data. '
-        . 'Canada: Hydro-Québec outage markers, which are indicative. '
-        . 'Australia, Ireland, New Zealand, and South Africa are not pinned.';
+    return 'U.S. Department of Energy and Oak Ridge National Laboratory, Outage Data Initiative Nationwide. County locations are U.S. Census centroids.';
+}
+
+function outages_us_empty()
+{
+    return array(
+        'source' => 'DOE/ORNL ODIN',
+        'sourceUrl' => 'https://odin.ornl.gov/',
+        'credit' => outage_credit_text(),
+        'note' => 'The US feed did not answer this time. ' . outage_coverage_note(),
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'stale' => false,
+        'error' => 'ODIN did not answer',
+        'customers' => 0,
+        'counties' => 0,
+        'utilities' => 0,
+        'points' => array(),
+        'feeds' => array(array('name' => 'DOE/ORNL ODIN', 'ok' => false)),
+    );
+}
+
+function outages_us_build()
+{
+    global $root;
+    $raw = outage_fetch('https://odin.ornl.gov/odi?format=JSON&view=county');
+    if (!is_array($raw) || !isset($raw['outage']) || !is_array($raw['outage'])) {
+        return null;
+    }
+    $built = outages_build($root, $raw);
+    $built['feeds'] = array(array(
+        'name' => 'DOE/ORNL ODIN',
+        'ok' => true,
+        'count' => count($built['points']),
+    ));
+    return $built;
 }
 
 function outages_snapshot()
 {
-    global $root, $dataDir;
-    $cacheFile = $dataDir . '/outages-cache.json';
-    $ttl = 180;
-    $cached = null;
-    if (is_file($cacheFile)) {
-        $cached = json_decode((string) file_get_contents($cacheFile), true);
-    }
-    $fresh = is_array($cached) && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $ttl;
-    if ($fresh) {
-        unset($cached['fetchedAt']);
-        $cached['stale'] = false;
-        return $cached;
-    }
-    $raw = outage_fetch('https://odin.ornl.gov/odi?format=JSON&view=county');
-    if (!is_array($raw) || !isset($raw['outage']) || !is_array($raw['outage'])) {
-        if (is_array($cached) && !empty($cached['points'])) {
-            unset($cached['fetchedAt']);
-            $cached['stale'] = true;
-            return $cached;
-        }
-        $built = outages_attach_world(array(
-            'sourceUrl' => 'https://odin.ornl.gov/',
-            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
-            'stale' => false,
-            'error' => 'ODIN did not answer',
-            'customers' => 0,
-            'counties' => 0,
-            'utilities' => 0,
-            'points' => array(),
-        ), true);
-        if (!empty($built['points'])) {
-            $stored = $built;
-            $stored['fetchedAt'] = time();
-            file_put_contents($cacheFile, json_encode($stored), LOCK_EX);
-        }
-        return $built;
-    }
-    $built = outages_attach_world(outages_build($root, $raw), false);
-    $stored = $built;
-    $stored['fetchedAt'] = time();
-    file_put_contents($cacheFile, json_encode($stored), LOCK_EX);
-    unset($built['fetchedAt']);
-    return $built;
+    global $dataDir;
+    return outages_cached_view($dataDir . '/outages-cache.json', 'outages_us_build', 'outages_us_empty');
 }
 
 function outage_body($url)
@@ -805,12 +801,67 @@ function outage_num($value)
     return $value + 0;
 }
 
-function outage_make($id, $name, $state, $lat, $lon, $customers, $utilities, $country, $source, $box)
+function outage_plain($value)
+{
+    $value = trim(preg_replace('/\s+/', ' ', strip_tags((string) $value)));
+    $value = preg_replace('#https?://\S+#i', '', $value);
+    $value = preg_replace('#\btel:\S+#i', '', $value);
+    return trim((string) $value);
+}
+
+function outage_when($value)
+{
+    if (is_int($value) || is_float($value) || (is_string($value) && is_numeric(trim($value)))) {
+        $n = (float) $value;
+        if ($n > 100000000000) {
+            $n = $n / 1000;
+        }
+        if ($n > 1000000000 && $n < 4000000000) {
+            return gmdate('Y-m-d H:i', (int) $n) . ' UTC';
+        }
+    }
+    $value = outage_plain($value);
+    if ($value === '') {
+        return '';
+    }
+    if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{2}):(\d{2})#', $value, $match)) {
+        return sprintf('%02d/%02d/%04d %02d:%02d', $match[1], $match[2], $match[3], $match[4], $match[5]);
+    }
+    if (preg_match('#^\d{4}-\d{2}-\d{2}T#', $value)) {
+        $stamp = strtotime($value);
+        if ($stamp) {
+            return gmdate('Y-m-d H:i', $stamp) . ' UTC';
+        }
+    }
+    return substr($value, 0, 40);
+}
+
+function outage_finish($point, $ref, $etr, $detail)
+{
+    if (!is_array($point)) {
+        return null;
+    }
+    $ref = substr(outage_plain($ref), 0, 40);
+    $etr = substr(outage_when($etr), 0, 40);
+    $detail = substr(outage_plain($detail), 0, 120);
+    if ($ref !== '') {
+        $point['ref'] = $ref;
+    }
+    if ($etr !== '') {
+        $point['etr'] = $etr;
+    }
+    if ($detail !== '') {
+        $point['detail'] = $detail;
+    }
+    return $point;
+}
+
+function outage_make($id, $name, $state, $lat, $lon, $customers, $utilities, $country, $source, $box, $minCustomers = 1)
 {
     $lat = outage_num($lat);
     $lon = outage_num($lon);
     $customers = (int) $customers;
-    if ($lat === null || $lon === null || $customers < 1) {
+    if ($lat === null || $lon === null || $customers < $minCustomers) {
         return null;
     }
     if ($lat < $box[0] || $lat > $box[1] || $lon < $box[2] || $lon > $box[3]) {
@@ -857,9 +908,13 @@ function outage_ods_results($url, $where, $cap = 300)
     $limit = 100;
     while ($offset < $cap) {
         $page = $url . '?limit=' . $limit . '&offset=' . $offset . '&where=' . rawurlencode($where);
-        $decoded = json_decode((string) outage_body($page), true);
+        $body = outage_body($page);
+        if ($body === null) {
+            return $offset === 0 ? null : $rows;
+        }
+        $decoded = json_decode($body, true);
         if (!is_array($decoded)) {
-            break;
+            return $offset === 0 ? null : $rows;
         }
         $batch = $decoded['results'] ?? null;
         if (!is_array($batch) || !$batch) {
@@ -888,6 +943,9 @@ function outages_ukpn()
         'https://ukpowernetworks.opendatasoft.com/api/explore/v2.1/catalog/datasets/ukpn-live-faults/records',
         'powercuttype="Unplanned" AND nocustomeraffected>0'
     );
+    if (!is_array($rows)) {
+        return null;
+    }
     $box = array(49.0, 61.2, -8.8, 2.3);
     $points = array();
     foreach ($rows as $row) {
@@ -925,6 +983,9 @@ function outages_npg()
         'https://northernpowergrid.opendatasoft.com/api/explore/v2.1/catalog/datasets/live-power-cuts-data/records',
         'isaffected=1 AND totalconfirmedpowercut>0'
     );
+    if (!is_array($rows)) {
+        return null;
+    }
     $box = array(49.0, 61.2, -8.8, 2.3);
     $points = array();
     foreach ($rows as $row) {
@@ -961,7 +1022,7 @@ function outages_nged()
 {
     $body = outage_body('https://connecteddata.nationalgrid.co.uk/dataset/d6672e1e-c684-4cea-bb78-c7e5248b62a2/resource/a1365982-4e05-463c-8304-8323a2ba0ccd/download/live_detailed_power_cuts.csv');
     if ($body === null || $body === '') {
-        return array();
+        return null;
     }
     $handle = fopen('php://temp', 'r+');
     if (!$handle) {
@@ -1027,13 +1088,19 @@ function outage_is_list($value)
 
 function outages_hydroquebec()
 {
-    $version = json_decode((string) outage_body('https://pannes.hydroquebec.com/pannes/donnees/v3_0/bisversion.json'), true);
-    if (!is_string($version) || !preg_match('/^\d{10,20}$/', $version)) {
-        return array();
+    $versionBody = outage_body('https://pannes.hydroquebec.com/pannes/donnees/v3_0/bisversion.json');
+    if ($versionBody === null) {
+        return null;
     }
-    $decoded = json_decode((string) outage_body(
-        'https://pannes.hydroquebec.com/pannes/donnees/v3_0/bismarkers' . $version . '.json'
-    ), true);
+    $version = json_decode($versionBody, true);
+    if (!is_string($version) || !preg_match('/^\d{10,20}$/', $version)) {
+        return null;
+    }
+    $markerBody = outage_body('https://pannes.hydroquebec.com/pannes/donnees/v3_0/bismarkers' . $version . '.json');
+    if ($markerBody === null) {
+        return null;
+    }
+    $decoded = json_decode($markerBody, true);
     $rows = array();
     if (is_array($decoded) && isset($decoded['pannes']) && is_array($decoded['pannes'])) {
         $rows = $decoded['pannes'];
@@ -1081,36 +1148,276 @@ function outages_hydroquebec()
     return $points;
 }
 
-function outages_world_points()
+function outage_geom_latlon($geom)
 {
-    $points = array();
-    foreach (array('outages_ukpn', 'outages_npg', 'outages_nged', 'outages_hydroquebec') as $fn) {
-        try {
-            $rows = $fn();
-        } catch (Throwable $e) {
-            $rows = array();
+    if (!is_array($geom)) {
+        return array(null, null);
+    }
+    $coords = $geom['coordinates'] ?? null;
+    if (($geom['type'] ?? '') === 'Point' && is_array($coords) && count($coords) >= 2) {
+        return array(outage_num($coords[1]), outage_num($coords[0]));
+    }
+    $lats = array();
+    $lons = array();
+    $walk = function ($node) use (&$walk, &$lats, &$lons) {
+        if (!is_array($node) || count($lats) >= 400) {
+            return;
         }
-        if (!is_array($rows)) {
+        if (count($node) >= 2 && is_numeric($node[0]) && is_numeric($node[1]) && !is_array($node[0])) {
+            $lons[] = (float) $node[0];
+            $lats[] = (float) $node[1];
+            return;
+        }
+        foreach ($node as $child) {
+            $walk($child);
+        }
+    };
+    $walk($coords);
+    if (!$lats) {
+        return array(null, null);
+    }
+    return array(array_sum($lats) / count($lats), array_sum($lons) / count($lons));
+}
+
+function outages_enw()
+{
+    $body = outage_body('https://electricitynorthwest.opendatasoft.com/api/explore/v2.1/catalog/datasets/live_incidents/exports/geojson?limit=300');
+    if ($body === null) {
+        return null;
+    }
+    $decoded = json_decode($body, true);
+    $features = is_array($decoded) ? ($decoded['features'] ?? null) : null;
+    if (!is_array($features)) {
+        return null;
+    }
+    $box = array(49.0, 61.2, -8.8, 2.3);
+    $points = array();
+    foreach ($features as $feature) {
+        if (!is_array($feature)) {
             continue;
         }
-        foreach ($rows as $row) {
-            if (is_array($row) && isset($row['lat'], $row['lon'])) {
-                $points[] = $row;
-            }
+        $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : array();
+        list($lat, $lon) = outage_geom_latlon($feature['geometry'] ?? null);
+        $customers = (int) ($props['customers_off_supply'] ?? ($props['customers_affected'] ?? 0));
+        $point = outage_make(
+            'enw-' . ($props['incident_num'] ?? ''),
+            'North West England',
+            'North West',
+            $lat,
+            $lon,
+            $customers,
+            array('Electricity North West'),
+            'United Kingdom',
+            'Electricity North West',
+            $box,
+            0
+        );
+        $kind = outage_plain($props['incident_type'] ?? '');
+        $point = outage_finish($point, $props['incident_num'] ?? '', $props['estimated_restoration_time'] ?? '', $kind);
+        if ($point) {
+            $points[] = $point;
         }
     }
     return $points;
 }
 
-function outages_attach_world($built, $usFailed)
+function outages_ssen()
 {
-    if (!is_array($built)) {
-        $built = array('points' => array());
+    $decoded = json_decode((string) outage_body('https://external.distribution.prd.ssen.co.uk/opendataportal-prd/v4/api/getallfaults'), true);
+    $faults = is_array($decoded) ? ($decoded['faults'] ?? null) : null;
+    if (!is_array($faults)) {
+        return null;
     }
-    $points = is_array($built['points'] ?? null) ? $built['points'] : array();
-    $world = outages_world_points();
-    if ($world) {
-        $points = array_merge($points, $world);
+    $box = array(49.0, 61.2, -8.8, 2.3);
+    $points = array();
+    foreach ($faults as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $loc = is_array($row['location'] ?? null) ? $row['location'] : array();
+        $areas = is_array($row['affectedAreas'] ?? null) ? $row['affectedAreas'] : array();
+        $title = outage_plain($row['title'] ?? '');
+        $sector = $areas ? outage_plain($areas[0]) : '';
+        if ($title === '') {
+            $title = $sector !== '' ? $sector : 'United Kingdom';
+        }
+        $type = strtoupper(outage_plain($row['type'] ?? ''));
+        $detail = $type === 'PSI' ? 'Planned' : 'Unplanned';
+        $point = outage_make(
+            'ssen-' . ($row['reference'] ?? ''),
+            $title,
+            $sector !== '' ? $sector : 'SSEN',
+            $loc['latitude'] ?? null,
+            $loc['longitude'] ?? null,
+            (int) ($row['customerCount'] ?? 0),
+            array('SSEN'),
+            'United Kingdom',
+            'SSEN',
+            $box,
+            0
+        );
+        $point = outage_finish($point, $row['reference'] ?? '', $row['estimatedRestorationTimeUtc'] ?? '', $detail);
+        if ($point) {
+            $points[] = $point;
+        }
+    }
+    return $points;
+}
+
+function outages_bchydro()
+{
+    $decoded = json_decode((string) outage_body('https://www.bchydro.com/power-outages/app/outages-map-data.json'), true);
+    if (!outage_is_list($decoded)) {
+        return null;
+    }
+    $box = array(47.0, 62.0, -141.0, -110.0);
+    $points = array();
+    foreach ($decoded as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $place = outage_plain($row['municipality'] ?? '');
+        $area = outage_plain($row['area'] ?? '');
+        $point = outage_make(
+            'bch-' . ($row['id'] ?? ''),
+            $place !== '' ? $place : 'British Columbia',
+            $area !== '' ? $area : 'British Columbia',
+            $row['latitude'] ?? null,
+            $row['longitude'] ?? null,
+            (int) ($row['numCustomersOut'] ?? 0),
+            array('BC Hydro'),
+            'Canada',
+            'BC Hydro',
+            $box,
+            0
+        );
+        $point = outage_finish($point, $row['id'] ?? '', $row['crewEtr'] ?? '', $row['cause'] ?? '');
+        if ($point) {
+            $points[] = $point;
+        }
+    }
+    if (count($points) > 1500) {
+        usort($points, function ($a, $b) {
+            return ((int) $b['customers']) <=> ((int) $a['customers']);
+        });
+        $points = array_slice($points, 0, 1500);
+    }
+    return $points;
+}
+
+function outages_essential()
+{
+    $body = outage_body('https://www.essentialenergy.com.au/Assets/kmz/current.kml');
+    if ($body === null || $body === '') {
+        return null;
+    }
+    if (!preg_match_all('/<Placemark\b([^>]*)>([\s\S]*?)<\/Placemark>/', $body, $marks, PREG_SET_ORDER)) {
+        return array();
+    }
+    $box = array(-45.0, -10.0, 110.0, 156.0);
+    $points = array();
+    foreach ($marks as $mark) {
+        $attrs = $mark[1];
+        $chunk = $mark[2];
+        $id = '';
+        if (preg_match('/\bid="([^"]+)"/', $attrs, $idMatch)) {
+            $id = $idMatch[1];
+        }
+        $customers = 0;
+        if (preg_match('/Customers affected:<\/span>\s*([0-9,]+)/i', $chunk, $countMatch)) {
+            $customers = (int) str_replace(',', '', $countMatch[1]);
+        }
+        $etr = '';
+        if (preg_match('/Est\. Time On:<\/span>\s*([^<]+)/i', $chunk, $etrMatch)) {
+            $etr = $etrMatch[1];
+        }
+        $reason = '';
+        if (preg_match('/Reason:<\/span>\s*([^<]+)/i', $chunk, $reasonMatch)) {
+            $reason = $reasonMatch[1];
+        }
+        if (!preg_match('/<coordinates>\s*([^<]+)/', $chunk, $coordMatch)) {
+            continue;
+        }
+        $lats = array();
+        $lons = array();
+        foreach (preg_split('/\s+/', trim($coordMatch[1])) as $pair) {
+            if (count($lats) >= 400) {
+                break;
+            }
+            $bits = explode(',', $pair);
+            if (count($bits) < 2) {
+                continue;
+            }
+            $lon = outage_num($bits[0]);
+            $lat = outage_num($bits[1]);
+            if ($lat === null || $lon === null) {
+                continue;
+            }
+            $lats[] = $lat;
+            $lons[] = $lon;
+        }
+        if (!$lats) {
+            continue;
+        }
+        $style = strtolower($chunk);
+        if (strpos($style, 'unplanned') !== false) {
+            $detail = 'Unplanned';
+        } elseif (strpos($style, 'planned') !== false) {
+            $detail = 'Planned';
+        } else {
+            $detail = 'Outage';
+        }
+        if (outage_plain($reason) !== '') {
+            $detail .= ' · ' . outage_plain($reason);
+        }
+        $label = $id !== '' ? $id : 'Essential Energy';
+        $point = outage_make(
+            'ee-' . ($id !== '' ? $id : md5($coordMatch[1])),
+            $label,
+            'Essential Energy',
+            array_sum($lats) / count($lats),
+            array_sum($lons) / count($lons),
+            $customers,
+            array('Essential Energy'),
+            'Australia',
+            'Essential Energy',
+            $box,
+            0
+        );
+        $point = outage_finish($point, $id, $etr, $detail);
+        if ($point) {
+            $points[] = $point;
+        }
+    }
+    return $points;
+}
+
+function outages_pack($calls)
+{
+    $points = array();
+    $feeds = array();
+    foreach ($calls as $call) {
+        $name = $call[0];
+        $fn = $call[1];
+        try {
+            $rows = $fn();
+        } catch (Throwable $e) {
+            $rows = null;
+        }
+        if (!is_array($rows)) {
+            $feeds[] = array('name' => $name, 'ok' => false);
+            continue;
+        }
+        $kept = array();
+        foreach ($rows as $row) {
+            if (is_array($row) && isset($row['lat'], $row['lon'])) {
+                $kept[] = $row;
+            }
+        }
+        $feeds[] = array('name' => $name, 'ok' => true, 'count' => count($kept));
+        foreach ($kept as $row) {
+            $points[] = $row;
+        }
     }
     usort($points, function ($a, $b) {
         $left = (int) ($a['customers'] ?? 0);
@@ -1124,16 +1431,199 @@ function outages_attach_world($built, $usFailed)
     foreach ($points as $point) {
         $customers += (int) ($point['customers'] ?? 0);
     }
-    $built['points'] = $points;
-    $built['customers'] = $customers;
-    $note = outage_coverage_note();
-    if ($usFailed) {
-        $note = 'The US feed did not answer this time. ' . $note;
+    return array($points, $feeds, $customers);
+}
+
+function outages_region_spec($key)
+{
+    if ($key === 'uk') {
+        return array(
+            'file' => 'outages-uk-cache.json',
+            'source' => 'UK Power Networks, Northern Powergrid, National Grid Electricity Distribution, Electricity North West, SSEN',
+            'note' => 'United Kingdom pins are live outages from UK Power Networks, Northern Powergrid, National Grid Electricity Distribution, Electricity North West, and SSEN. SP Energy Networks publishes faults without coordinates. Northern Ireland Electricity does not publish an open point feed.',
+            'calls' => array(
+                array('UK Power Networks', 'outages_ukpn'),
+                array('Northern Powergrid', 'outages_npg'),
+                array('National Grid Electricity Distribution', 'outages_nged'),
+                array('Electricity North West', 'outages_enw'),
+                array('SSEN', 'outages_ssen'),
+            ),
+        );
     }
-    $built['note'] = $note;
-    $built['credit'] = outage_credit_text();
-    $built['source'] = 'DOE/ORNL ODIN, UK Power Networks, Northern Powergrid, National Grid Electricity Distribution, Hydro-Québec';
+    if ($key === 'ca') {
+        return array(
+            'file' => 'outages-ca-cache.json',
+            'source' => 'Hydro-Québec, BC Hydro',
+            'note' => 'Canada pins are Hydro-Québec unplanned outages and BC Hydro outages. Other Canadian utilities are not in an open point feed.',
+            'calls' => array(
+                array('Hydro-Québec', 'outages_hydroquebec'),
+                array('BC Hydro', 'outages_bchydro'),
+            ),
+        );
+    }
+    if ($key === 'au') {
+        return array(
+            'file' => 'outages-au-cache.json',
+            'source' => 'Essential Energy',
+            'note' => 'Australia pins are Essential Energy outage areas. Ausgrid, Energex, Ergon, and Western Power did not publish an open point feed that answered.',
+            'calls' => array(
+                array('Essential Energy', 'outages_essential'),
+            ),
+        );
+    }
+    return null;
+}
+
+function outages_region_build($key)
+{
+    $spec = outages_region_spec($key);
+    if (!$spec) {
+        return null;
+    }
+    list($points, $feeds, $customers) = outages_pack($spec['calls']);
+    $down = 0;
+    foreach ($feeds as $feed) {
+        if (empty($feed['ok'])) {
+            $down++;
+        }
+    }
+    $built = array(
+        'source' => $spec['source'],
+        'note' => $spec['note'],
+        'credit' => $spec['note'],
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'stale' => false,
+        'customers' => $customers,
+        'counties' => count($points),
+        'points' => $points,
+        'feeds' => $feeds,
+    );
+    if ($down === count($feeds)) {
+        $built['error'] = 'This feed is temporarily unavailable.';
+    }
     return $built;
+}
+
+function outages_cache_read($file)
+{
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+function outages_cache_age($cached)
+{
+    if (!is_array($cached)) {
+        return PHP_INT_MAX;
+    }
+    return time() - (int) ($cached['fetchedAt'] ?? 0);
+}
+
+function outages_cache_publish($cached, $stale)
+{
+    unset($cached['fetchedAt']);
+    $cached['stale'] = $stale;
+    return $cached;
+}
+
+function outages_cache_write($file, $built)
+{
+    $stored = $built;
+    $stored['fetchedAt'] = time();
+    file_put_contents($file, json_encode($stored), LOCK_EX);
+    return outages_cache_publish($stored, false);
+}
+
+function outages_cached_view($file, $builder, $emptyName)
+{
+    $cached = outages_cache_read($file);
+    $age = outages_cache_age($cached);
+    if ($cached && $age < 600) {
+        return outages_cache_publish($cached, false);
+    }
+    if ($cached && $age < 900) {
+        return outages_cache_publish($cached, true);
+    }
+    try {
+        $built = $builder();
+    } catch (Throwable $e) {
+        $built = null;
+    }
+    if (!is_array($built)) {
+        if ($cached) {
+            return outages_cache_publish($cached, true);
+        }
+        return $emptyName();
+    }
+    return outages_cache_write($file, $built);
+}
+
+function outages_cached_refresh($file, $builder)
+{
+    $cached = outages_cache_read($file);
+    if ($cached && outages_cache_age($cached) < 600) {
+        return array('ok' => true, 'skipped' => true, 'count' => count($cached['points'] ?? array()));
+    }
+    try {
+        $built = $builder();
+    } catch (Throwable $e) {
+        $built = null;
+    }
+    if (!is_array($built)) {
+        return array('ok' => false, 'error' => 'feed did not answer');
+    }
+    outages_cache_write($file, $built);
+    return array('ok' => true, 'count' => count($built['points'] ?? array()));
+}
+
+function outages_region_snapshot($key)
+{
+    global $dataDir;
+    $spec = outages_region_spec($key);
+    if (!$spec) {
+        return array('error' => 'Unknown outage layer', 'points' => array(), 'customers' => 0, 'feeds' => array());
+    }
+    $file = $dataDir . '/' . $spec['file'];
+    return outages_cached_view($file, function () use ($key) {
+        return outages_region_build($key);
+    }, function () use ($spec) {
+        return array(
+            'source' => $spec['source'],
+            'note' => $spec['note'],
+            'credit' => $spec['note'],
+            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+            'stale' => false,
+            'error' => 'This feed is temporarily unavailable.',
+            'customers' => 0,
+            'counties' => 0,
+            'points' => array(),
+            'feeds' => array(),
+        );
+    });
+}
+
+function outages_regions_refresh()
+{
+    global $dataDir;
+    $out = array();
+    try {
+        $out['us'] = outages_cached_refresh($dataDir . '/outages-cache.json', 'outages_us_build');
+    } catch (Throwable $e) {
+        $out['us'] = array('ok' => false, 'error' => 'refresh failed');
+    }
+    foreach (array('uk', 'ca', 'au') as $key) {
+        try {
+            $spec = outages_region_spec($key);
+            $out[$key] = outages_cached_refresh($dataDir . '/' . $spec['file'], function () use ($key) {
+                return outages_region_build($key);
+            });
+        } catch (Throwable $e) {
+            $out[$key] = array('ok' => false, 'error' => 'refresh failed');
+        }
+    }
+    return $out;
 }
 
 function outage_fetch($url, $agent = '')
