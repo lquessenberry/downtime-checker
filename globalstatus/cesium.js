@@ -214,19 +214,19 @@ function esc(value) {
 function dismissBootSplash() {
   const splash = document.getElementById("boot-splash");
   if (!splash || splash.dataset.done === "1") return;
+  if (!window.__bootLogDone) {
+    window.setTimeout(dismissBootSplash, 200);
+    return;
+  }
   splash.dataset.done = "1";
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const shownAt = window.__bootShown || performance.now();
-  const wait = reduce ? 0 : Math.max(0, 1400 - (performance.now() - shownAt));
-  window.setTimeout(() => {
-    splash.classList.add("is-done");
-    const remove = () => { if (splash.parentNode) splash.remove(); };
-    if (reduce) remove();
-    else {
-      splash.addEventListener("transitionend", remove, { once: true });
-      window.setTimeout(remove, 1000);
-    }
-  }, wait);
+  splash.classList.add("is-done");
+  const remove = () => { if (splash.parentNode) splash.remove(); };
+  if (reduce) remove();
+  else {
+    splash.addEventListener("transitionend", remove, { once: true });
+    window.setTimeout(remove, 1000);
+  }
 }
 
 async function boot() {
@@ -265,8 +265,13 @@ async function boot() {
       loadOutages().catch((error) => statusLive(error.message || String(error)));
     }, 180000);
   } catch (error) {
-    const line = document.getElementById("boot-status");
-    if (line) line.textContent = "The globe did not open. Refresh the page.";
+    const log = document.getElementById("boot-log");
+    if (log && !log.querySelector("[data-boot-error]")) {
+      const row = document.createElement("p");
+      row.dataset.bootError = "1";
+      row.textContent = "> THE GLOBE DID NOT OPEN. REFRESH THE PAGE.";
+      log.appendChild(row);
+    }
     throw error;
   }
 }
@@ -391,7 +396,11 @@ function setViewOpen(open) {
   const panel = document.getElementById("view-settings");
   const reopen = document.getElementById("open-view");
   if (panel) panel.classList.toggle("is-closed", !open);
-  if (reopen) reopen.hidden = open;
+  if (reopen) {
+    reopen.classList.toggle("is-on", open);
+    reopen.setAttribute("aria-pressed", open ? "true" : "false");
+    reopen.setAttribute("aria-label", open ? "Close view" : "View");
+  }
 }
 
 function setPanel(which) {
@@ -766,7 +775,10 @@ function hookUi() {
   document.getElementById("btn-reset").addEventListener("click", resetMap);
   document.getElementById("reset-mobile").addEventListener("click", resetMap);
   document.getElementById("close-view").addEventListener("click", () => setViewOpen(false));
-  document.getElementById("open-view").addEventListener("click", () => setViewOpen(true));
+  document.getElementById("open-view").addEventListener("click", () => {
+    const panel = document.getElementById("view-settings");
+    setViewOpen(panel.classList.contains("is-closed"));
+  });
   document.getElementById("open-grid-results").addEventListener("click", () => setGridResultsOpen(true));
   document.getElementById("close-grid-results").addEventListener("click", () => setGridResultsOpen(false));
   hookServiceWorker();
