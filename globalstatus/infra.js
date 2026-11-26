@@ -72,12 +72,12 @@
 
   const META = {
     airports: {
-      label: "AIRPORTS",
+      label: "GLOBAL AIRPORTS",
       credit: 'Airports: <a href="https://ourairports.com/" target="_blank" rel="noreferrer">OurAirports</a> (public domain)',
       caption: "Large and medium airports. Zoom in to see small airports and seaplane bases. Closed airports and heliports are left out.",
     },
     bases: {
-      label: "MILITARY BASES",
+      label: "GLOBAL MILITARY BASES",
       credit: 'Military bases: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> (ODbL)',
       caption: "Community-mapped from OpenStreetMap — incomplete; a blank area does not mean no base.",
     },

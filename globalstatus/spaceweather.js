@@ -9,7 +9,7 @@
  * Server cache (the 5-minute aircraft cron fills data/, visitors read /api/space/...):
  *   NWS ALERTS   /api/space/nws        (cron pulls api.weather.gov every 5 min)
  *   HURRICANES   /api/space/hurricanes (cron pulls NHC every 15 min)
- *   WILDFIRES    /api/space/wildfires  (cron pulls NASA FIRMS every 3 h)
+ *   GLOBAL WILDFIRES /api/space/wildfires  (cron pulls NASA FIRMS every 3 h)
  *   RIVERS       /api/space/rivers     (cron pulls NOAA NWPS river gauges every 15 min)
  *   COASTAL      /api/space/coastal    (cron pulls NOAA CO-OPS water levels every 15 min)
  *   TSUNAMI      /api/space/tsunami    (cron pulls tsunami.gov NTWC + PTWC every 5 min)
@@ -36,7 +36,7 @@
       credit: 'Disasters: <a href="https://www.gdacs.org/" target="_blank" rel="noreferrer">GDACS</a> (EC JRC / UN OCHA) and <a href="https://eonet.gsfc.nasa.gov/" target="_blank" rel="noreferrer">NASA EONET</a>',
     },
     radar: {
-      label: "WEATHER RADAR",
+      label: "GLOBAL WEATHER RADAR",
       poll: 10 * 60 * 1000,
       credit: 'Weather data by <a href="https://www.rainviewer.com/" target="_blank" rel="noreferrer">RainViewer</a>',
     },
@@ -73,7 +73,7 @@
       credit: 'Tsunami alerts: <a href="https://www.tsunami.gov/" target="_blank" rel="noreferrer">NOAA/NWS Tsunami Warning Centers</a> (NTWC and PTWC)',
     },
     wildfires: {
-      label: "WILDFIRES",
+      label: "GLOBAL WILDFIRES",
       poll: 15 * 60 * 1000,
       credit: 'Fires: <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noreferrer">NASA FIRMS</a> (VIIRS, last 24 h), part of NASA EOSDIS',
     },

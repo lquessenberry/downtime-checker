@@ -21,7 +21,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261125d" />
+  <link rel="stylesheet" href="/cesium.css?v=20261125e" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -70,11 +70,13 @@
       <details class="layer-group" id="group-transportation" data-layer-group="transportation">
         <summary class="layer-group-head"><span>TRANSPORTATION</span><em class="layer-group-count"></em></summary>
         <button type="button" class="layer" data-layer-toggle="aircraft" aria-pressed="false"><span class="layer-name"><span class="swatch air"></span> LIVE AIR TRAFFIC</span><span class="layer-meta"><em data-count="aircraft">—</em><span class="switch" aria-hidden="true"></span></span></button>
-        <button type="button" class="layer" data-layer-toggle="ships" aria-pressed="false"><span class="layer-name"><span class="swatch ais"></span> MARITIME TRAFFIC</span><span class="layer-meta"><em data-count="ships">—</em><span class="switch" aria-hidden="true"></span></span></button>
-        <button type="button" class="layer" data-layer-toggle="airports" aria-pressed="false"><span class="layer-name"><span class="swatch infra-airports"></span> AIRPORTS</span><span class="layer-meta"><em data-count="airports">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="ships" aria-pressed="false"><span class="layer-name"><span class="swatch ais"></span> GLOBAL MARITIME TRAFFIC</span><span class="layer-meta"><em data-count="ships">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="airports" aria-pressed="false"><span class="layer-name"><span class="swatch infra-airports"></span> GLOBAL AIRPORTS</span><span class="layer-meta"><em data-count="airports">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-infra-note="airports" hidden></p>
         <button type="button" class="layer" data-layer-toggle="tfr" aria-pressed="false"><span class="layer-name"><span class="swatch tfr"></span> FAA TFR</span><span class="layer-meta"><em data-count="tfr">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-tfr-note="tfr" hidden></p>
+        <button type="button" class="layer" data-layer-toggle="delays" aria-pressed="false"><span class="layer-name"><span class="swatch delays"></span> FLIGHT DELAYS</span><span class="layer-meta"><em data-count="delays">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-delays-note="delays" hidden></p>
       </details>
       <details class="layer-group" id="group-space" data-layer-group="space">
         <summary class="layer-group-head"><span>SPACE</span><em class="layer-group-count"></em></summary>
@@ -87,7 +89,7 @@
       </details>
       <details class="layer-group" id="group-weather" data-layer-group="weather">
         <summary class="layer-group-head"><span>WEATHER</span><em class="layer-group-count"></em></summary>
-        <button type="button" class="layer" data-layer-toggle="radar" aria-pressed="false"><span class="layer-name"><span class="swatch sw-radar"></span> WEATHER RADAR</span><span class="layer-meta"><em data-count="radar">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="radar" aria-pressed="false"><span class="layer-name"><span class="swatch sw-radar"></span> GLOBAL WEATHER RADAR</span><span class="layer-meta"><em data-count="radar">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-sw-note="radar" hidden></p>
         <button type="button" class="layer" data-layer-toggle="nwsalerts" aria-pressed="false"><span class="layer-name"><span class="swatch sw-nwsalerts"></span> US WEATHER ALERTS</span><span class="layer-meta"><em data-count="nwsalerts">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-sw-note="nwsalerts" hidden></p>
@@ -96,12 +98,12 @@
       </details>
       <details class="layer-group" id="group-natural-disasters" data-layer-group="natural-disasters">
         <summary class="layer-group-head"><span>NATURAL DISASTERS</span><em class="layer-group-count"></em></summary>
-        <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="layer-name"><span class="swatch quakes"></span> EARTHQUAKES</span><span class="layer-meta"><em data-count="quakes">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="layer-name"><span class="swatch quakes"></span> GLOBAL EARTHQUAKES</span><span class="layer-meta"><em data-count="quakes">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="volcanoes" aria-pressed="false"><span class="layer-name"><span class="swatch sw-volcanoes"></span> VOLCANO ALERTS</span><span class="layer-meta"><em data-count="volcanoes">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-sw-note="volcanoes" hidden></p>
         <button type="button" class="layer" data-layer-toggle="tsunami" aria-pressed="false"><span class="layer-name"><span class="swatch sw-tsunami"></span> TSUNAMI ALERTS</span><span class="layer-meta"><em data-count="tsunami">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-sw-note="tsunami" hidden></p>
-        <button type="button" class="layer" data-layer-toggle="wildfires" aria-pressed="false"><span class="layer-name"><span class="swatch sw-wildfires"></span> WILDFIRES</span><span class="layer-meta"><em data-count="wildfires">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="wildfires" aria-pressed="false"><span class="layer-name"><span class="swatch sw-wildfires"></span> GLOBAL WILDFIRES</span><span class="layer-meta"><em data-count="wildfires">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-sw-note="wildfires" hidden></p>
         <button type="button" class="layer" data-layer-toggle="disasters" aria-pressed="false"><span class="layer-name"><span class="swatch sw-disasters"></span> GLOBAL DISASTERS</span><span class="layer-meta"><em data-count="disasters">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-sw-note="disasters" hidden></p>
@@ -121,15 +123,15 @@
         <button type="button" class="layer" data-layer-toggle="inetglobal" aria-pressed="false"><span class="layer-name"><span class="swatch inet-global"></span> GLOBAL INTERNET OUTAGES</span><span class="layer-meta"><em data-count="inetglobal">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-internet-note="inetglobal" hidden></p>
         <button type="button" class="layer" data-layer-toggle="stream" aria-pressed="false"><span class="layer-name"><span class="swatch stream"></span> SCANNERS</span><span class="layer-meta"><em data-count="stream">—</em><span class="switch" aria-hidden="true"></span></span></button>
-        <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="layer-name"><span class="swatch amfm"></span> AM FM TOWERS</span><span class="layer-meta"><em data-count="amfm">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="layer-name"><span class="swatch amfm"></span> GLOBAL AM FM TOWERS</span><span class="layer-meta"><em data-count="amfm">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="celltowers" aria-pressed="false"><span class="layer-name"><span class="swatch infra-celltowers"></span> USA CELL TOWERS</span><span class="layer-meta"><em data-count="celltowers">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-infra-note="celltowers" hidden></p>
         <button type="button" class="layer" data-layer-toggle="powerlines" aria-pressed="false"><span class="layer-name"><span class="swatch powerlines"></span> USA POWER LINES</span><span class="layer-meta"><em data-count="powerlines">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-power-note="powerlines" hidden></p>
         <button type="button" class="layer" data-layer-toggle="powerplants" aria-pressed="false"><span class="layer-name"><span class="swatch infra-powerplants"></span> GLOBAL POWER PLANTS</span><span class="layer-meta"><em data-count="powerplants">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-infra-note="powerplants" hidden></p>
-        <button type="button" class="layer" data-layer-toggle="mesh" aria-pressed="false"><span class="layer-name"><span class="swatch mesh"></span> MESH NODES</span><span class="layer-meta"><em data-count="mesh">—</em><span class="switch" aria-hidden="true"></span></span></button>
-        <button type="button" class="layer" data-layer-toggle="jamming" aria-pressed="false"><span class="layer-name"><span class="swatch jam"></span> JAMMED GPS SIGNALS</span><span class="layer-meta"><em data-count="jamming">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="mesh" aria-pressed="false"><span class="layer-name"><span class="swatch mesh"></span> GLOBAL MESH NODES</span><span class="layer-meta"><em data-count="mesh">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="jamming" aria-pressed="false"><span class="layer-name"><span class="swatch jam"></span> GLOBAL JAMMED GPS SIGNALS</span><span class="layer-meta"><em data-count="jamming">—</em><span class="switch" aria-hidden="true"></span></span></button>
       </details>
       <details class="layer-group" id="group-emergency" data-layer-group="emergency">
         <summary class="layer-group-head"><span>EMERGENCY SERVICES</span><em class="layer-group-count"></em></summary>
@@ -144,14 +146,14 @@
       </details>
       <details class="layer-group" id="group-conflict-military" data-layer-group="conflict-military">
         <summary class="layer-group-head"><span>CONFLICT &amp; MILITARY</span><em class="layer-group-count"></em></summary>
-        <button type="button" class="layer" data-layer-toggle="conflicts" aria-pressed="false"><span class="layer-name"><span class="swatch war"></span> CONFLICT TRACKER</span><span class="layer-meta"><em data-count="conflicts">—</em><span class="switch" aria-hidden="true"></span></span></button>
-        <button type="button" class="layer" data-layer-toggle="bases" aria-pressed="false"><span class="layer-name"><span class="swatch infra-bases"></span> MILITARY BASES</span><span class="layer-meta"><em data-count="bases">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="conflicts" aria-pressed="false"><span class="layer-name"><span class="swatch war"></span> GLOBAL CONFLICT TRACKER</span><span class="layer-meta"><em data-count="conflicts">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="bases" aria-pressed="false"><span class="layer-name"><span class="swatch infra-bases"></span> GLOBAL MILITARY BASES</span><span class="layer-meta"><em data-count="bases">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-infra-note="bases" hidden></p>
       </details>
       <details class="layer-group" id="group-health" data-layer-group="health">
         <summary class="layer-group-head"><span>HEALTH &amp; HUMANITARIAN</span><em class="layer-group-count"></em></summary>
-        <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="layer-name"><span class="swatch disease"></span> DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="disease">—</em><span class="switch" aria-hidden="true"></span></span></button>
-        <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="layer-name"><span class="swatch animal"></span> ANIMAL DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="animal">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="layer-name"><span class="swatch disease"></span> GLOBAL DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="disease">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="layer-name"><span class="swatch animal"></span> GLOBAL ANIMAL DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="animal">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="hunger" aria-pressed="false"><span class="layer-name"><span class="swatch hunger"></span> GLOBAL HUNGER</span><span class="layer-meta"><em data-count="hunger">—</em><span class="switch" aria-hidden="true"></span></span></button>
       </details>
       <details class="layer-group" id="group-firearms" data-layer-group="firearms">
@@ -448,19 +450,19 @@
     <div class="legend">
       <button type="button" class="layer" data-layer-toggle="outages" aria-pressed="false"><span class="swatch outage"></span> POWER OUTAGES <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="stream" aria-pressed="false"><span class="swatch stream"></span> SCANNERS <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="jamming" aria-pressed="false"><span class="swatch jam"></span> JAMMED GPS SIGNALS <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="jamming" aria-pressed="false"><span class="swatch jam"></span> GLOBAL JAMMED GPS SIGNALS <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="aircraft" aria-pressed="false"><span class="swatch air"></span> LIVE AIR TRAFFIC <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="ships" aria-pressed="false"><span class="swatch ais"></span> MARITIME TRAFFIC <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="conflicts" aria-pressed="false"><span class="swatch war"></span> CONFLICT TRACKER <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="ships" aria-pressed="false"><span class="swatch ais"></span> GLOBAL MARITIME TRAFFIC <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="conflicts" aria-pressed="false"><span class="swatch war"></span> GLOBAL CONFLICT TRACKER <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="hunger" aria-pressed="false"><span class="swatch hunger"></span> GLOBAL HUNGER <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="mesh" aria-pressed="false"><span class="swatch mesh"></span> MESH NODES <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="swatch disease"></span> DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="swatch animal"></span> ANIMAL DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="swatch amfm"></span> AM FM TOWERS <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="mesh" aria-pressed="false"><span class="swatch mesh"></span> GLOBAL MESH NODES <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="swatch disease"></span> GLOBAL DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="swatch animal"></span> GLOBAL ANIMAL DISEASE OUTBREAK <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="amfm" aria-pressed="false"><span class="swatch amfm"></span> GLOBAL AM FM TOWERS <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="effects" aria-pressed="false"><span class="swatch effects"></span> NUKE SIMULATOR <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="daynight" aria-pressed="false"><span class="swatch daynight"></span> DAY / NIGHT <span class="switch" aria-hidden="true"></span></button>
       <button type="button" class="layer" data-layer-toggle="sats" aria-pressed="false"><span class="swatch sats"></span> SATELLITES <span class="switch" aria-hidden="true"></span></button>
-      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="swatch quakes"></span> EARTHQUAKES <span class="switch" aria-hidden="true"></span></button>
+      <button type="button" class="layer" data-layer-toggle="quakes" aria-pressed="false"><span class="swatch quakes"></span> GLOBAL EARTHQUAKES <span class="switch" aria-hidden="true"></span></button>
     </div>
     <div id="status-line"><span id="status-track">CESIUM READY · LOADING POWER OUTAGES, JAMMED GPS SIGNALS, AND CONFLICT TRACKER</span></div>
   </footer>
@@ -493,15 +495,16 @@
   <script src="/effects-radius.js"></script>
   <script src="/quakes.js"></script>
   <script src="/sats.js"></script>
-  <script src="/spaceweather.js?v=20261124p"></script>
-  <script src="/infra.js?v=20261125d"></script>
+  <script src="/spaceweather.js?v=20261125e"></script>
+  <script src="/infra.js?v=20261125e"></script>
   <script src="/firearms.js?v=20261124p"></script>
   <script src="/militias.js?v=20261124k"></script>
   <script src="/internet.js?v=20261125a"></script>
   <script src="/tfr.js?v=20261125c"></script>
+  <script src="/delays.js?v=20261125e"></script>
   <script src="/powerlines.js?v=20261124n"></script>
   <script src="/geocoder.js?v=20261124l"></script>
   <script src="/nearby.js?v=20261124k"></script>
-  <script src="/cesium.js?v=20261125d"></script>
+  <script src="/cesium.js?v=20261125e"></script>
 </body>
 </html>

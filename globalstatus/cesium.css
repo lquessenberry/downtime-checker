@@ -1751,3 +1751,5 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 /* USA HOSPITALS & TRAUMA CENTERS (infra.js): swatch is a red trauma pin with a pink ring. */
 .swatch.infra-hospitals { background: #ff2d2d; box-shadow: 0 0 0 2px #ff9ec7 inset; border-radius: 50%; }
 .hosp-key { width: 9px; height: 9px; box-shadow: 0 0 0 1px #1a1d27; }
+/* FLIGHT DELAYS (delays.js): orange ground-delay pin with a red ring. */
+.swatch.delays { background: #ff8c1a; box-shadow: 0 0 0 2px #ff2d2d inset; border-radius: 50%; }

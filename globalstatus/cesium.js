@@ -101,6 +101,8 @@ const state = {
     inetglobal: false,
     // FAA TFR (tfr.js): live FAA temporary flight restriction areas.
     tfr: false,
+    // FLIGHT DELAYS (delays.js): live FAA NAS Status airport delays.
+    delays: false,
     // MILITIAS (militias.js): saved static pin layers, not a live feed.
     militianational: false,
     militiastate: false,
@@ -134,6 +136,7 @@ const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
 const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "militiainactive"];
 const INTERNET_KEYS = ["inetusa", "inetglobal"];
 const TFR_KEYS = ["tfr"];
+const DELAYS_KEYS = ["delays"];
 const POWERLINES_KEYS = ["powerlines"];
 
 const COLORS = {
@@ -485,6 +488,13 @@ async function startGlobe() {
   }
   if (window.GsaInternet) {
     window.GsaInternet.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaDelays) {
+    window.GsaDelays.init({
       viewer: () => state.viewer,
       setCount,
       statusLive: () => statusLive(),
@@ -1297,6 +1307,10 @@ function sourceFor(layer) {
     const tfrSource = window.GsaTfr.sourceFor(layer);
     if (tfrSource) return tfrSource;
   }
+  if (window.GsaDelays && window.GsaDelays.sourceFor) {
+    const delaysSource = window.GsaDelays.sourceFor(layer);
+    if (delaysSource) return delaysSource;
+  }
   return null;
 }
 
@@ -1509,6 +1523,9 @@ function setLayer(layer, on) {
   if (TFR_KEYS.includes(layer) && window.GsaTfr) {
     window.GsaTfr.setActive(layer, state.layers[layer]);
   }
+  if (DELAYS_KEYS.includes(layer) && window.GsaDelays) {
+    window.GsaDelays.setActive(layer, state.layers[layer]);
+  }
   if (POWERLINES_KEYS.includes(layer) && window.GsaPowerLines) {
     window.GsaPowerLines.setActive(layer, state.layers[layer]);
   }
@@ -1535,32 +1552,32 @@ function setLayer(layer, on) {
 const LAYER_LABEL = {
   outages: "POWER OUTAGES",
   stream: "SCANNERS",
-  jamming: "JAMMED GPS SIGNALS",
+  jamming: "GLOBAL JAMMED GPS SIGNALS",
   aircraft: "LIVE AIR TRAFFIC",
-  ships: "MARITIME TRAFFIC",
-  conflicts: "CONFLICT TRACKER",
+  ships: "GLOBAL MARITIME TRAFFIC",
+  conflicts: "GLOBAL CONFLICT TRACKER",
   hunger: "GLOBAL HUNGER",
-  mesh: "MESH NODES",
-  disease: "DISEASE OUTBREAK",
-  animal: "ANIMAL DISEASE OUTBREAK",
-  amfm: "AM FM TOWERS",
+  mesh: "GLOBAL MESH NODES",
+  disease: "GLOBAL DISEASE OUTBREAK",
+  animal: "GLOBAL ANIMAL DISEASE OUTBREAK",
+  amfm: "GLOBAL AM FM TOWERS",
   effects: "NUKE SIMULATOR",
-  quakes: "EARTHQUAKES",
+  quakes: "GLOBAL EARTHQUAKES",
   daynight: "DAY / NIGHT",
   sats: "SATELLITES",
   iss: "ISS POSITION",
   volcanoes: "VOLCANO ALERTS",
   disasters: "GLOBAL DISASTERS",
-  radar: "WEATHER RADAR",
+  radar: "GLOBAL WEATHER RADAR",
   nwsalerts: "US WEATHER ALERTS",
   aurora: "AURORA / SPACE WEATHER",
   hurricanes: "HURRICANES",
-  wildfires: "WILDFIRES",
+  wildfires: "GLOBAL WILDFIRES",
   rivers: "RIVER GAUGES IN FLOOD (US)",
   coastal: "COASTAL WATER LEVELS (US)",
   tsunami: "TSUNAMI ALERTS",
-  airports: "AIRPORTS",
-  bases: "MILITARY BASES",
+  airports: "GLOBAL AIRPORTS",
+  bases: "GLOBAL MILITARY BASES",
   celltowers: "USA CELL TOWERS",
   powerlines: "USA POWER LINES",
   powerplants: "GLOBAL POWER PLANTS",
@@ -1573,6 +1590,7 @@ const LAYER_LABEL = {
   inetusa: "USA INTERNET OUTAGES",
   inetglobal: "GLOBAL INTERNET OUTAGES",
   tfr: "FAA TFR",
+  delays: "FLIGHT DELAYS",
   militianational: "NATIONAL GROUPS",
   militiastate: "STATEWIDE GROUPS",
   militialocal: "LOCAL GROUPS",
@@ -1597,7 +1615,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "delays", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -3151,6 +3169,13 @@ function cullAircraftHorizon() {
       if (internetSource) sources.push(internetSource);
     }
   }
+  // FLIGHT DELAYS airport pins and code labels.
+  if (window.GsaDelays && window.GsaDelays.KEYS) {
+    for (const key of window.GsaDelays.KEYS) {
+      const delaysSource = window.GsaDelays.sourceFor(key);
+      if (delaysSource) sources.push(delaysSource);
+    }
+  }
   // FAA TFR center pins (and their flat areas, which carry the same center).
   if (window.GsaTfr && window.GsaTfr.KEYS) {
     for (const key of window.GsaTfr.KEYS) {
@@ -3425,6 +3450,9 @@ function liveHtml(item, opts = {}) {
   }
   else if (item.tfr && window.GsaTfr) {
     extra = window.GsaTfr.popupHtml(item, opts);
+  }
+  else if (item.delays && window.GsaDelays) {
+    extra = window.GsaDelays.popupHtml(item, opts);
   }
   else if (item.power && window.GsaPowerLines) {
     extra = window.GsaPowerLines.popupHtml(item, opts);
@@ -3787,35 +3815,35 @@ function statusLive(error) {
   const shipPick = shipDrawList(shipPoints);
   const shipLabel = shipNames[state.shipFilter] || "";
   const ships = !state.layers.ships && !shipPoints.length
-    ? "MARITIME TRAFFIC"
+    ? "GLOBAL MARITIME TRAFFIC"
     : shipPick.matched > shipPick.draw.length
-      ? `MARITIME TRAFFIC ${shipPick.draw.length} OF ${shipPick.matched} ${shipLabel}`.trim()
-      : `MARITIME TRAFFIC ${shipPick.draw.length} ${shipLabel}`.trim();
-  const war = state.conflictsReady ? `CONFLICT TRACKER ${state.conflicts.length}` : "CONFLICT TRACKER …";
+      ? `GLOBAL MARITIME TRAFFIC ${shipPick.draw.length} OF ${shipPick.matched} ${shipLabel}`.trim()
+      : `GLOBAL MARITIME TRAFFIC ${shipPick.draw.length} ${shipLabel}`.trim();
+  const war = state.conflictsReady ? `GLOBAL CONFLICT TRACKER ${state.conflicts.length}` : "GLOBAL CONFLICT TRACKER …";
   const parts = [
     state.outagePoints.length
       ? `POWER OUTAGES ${state.outagePoints.length} COUNTIES · ${outageCustomers(state.outageMeta && state.outageMeta.customers)}`
       : "POWER OUTAGES",
     `${state.streamPoints.length} SCANNERS`,
-    `JAMMED GPS SIGNALS ${jam}`,
+    `GLOBAL JAMMED GPS SIGNALS ${jam}`,
     air,
     ships,
     war,
     state.live.disease.points.length
-      ? `DISEASE OUTBREAK ${state.live.disease.points.length}`
-      : "DISEASE OUTBREAK",
+      ? `GLOBAL DISEASE OUTBREAK ${state.live.disease.points.length}`
+      : "GLOBAL DISEASE OUTBREAK",
     state.live.animal.points.length
-      ? `ANIMAL DISEASE OUTBREAK ${state.live.animal.points.length}`
-      : "ANIMAL DISEASE OUTBREAK",
+      ? `GLOBAL ANIMAL DISEASE OUTBREAK ${state.live.animal.points.length}`
+      : "GLOBAL ANIMAL DISEASE OUTBREAK",
     state.amfmReady
-      ? `AM FM TOWERS ${amfmVisibleCount(state.live.amfm.points)}`
-      : "AM FM TOWERS",
+      ? `GLOBAL AM FM TOWERS ${amfmVisibleCount(state.live.amfm.points)}`
+      : "GLOBAL AM FM TOWERS",
     state.layers.effects && window.GsaEffectsRadius && window.GsaEffectsRadius.hasResult()
       ? "NUKE SIMULATOR 1"
       : "NUKE SIMULATOR",
     state.live.quakes.points.length
-      ? `EARTHQUAKES ${state.live.quakes.points.length}`
-      : "EARTHQUAKES",
+      ? `GLOBAL EARTHQUAKES ${state.live.quakes.points.length}`
+      : "GLOBAL EARTHQUAKES",
     state.layers.daynight ? "DAY / NIGHT ON" : "DAY / NIGHT",
     state.live.sats.points.length
       ? `SATELLITES ${state.live.sats.points.length}`
@@ -3827,6 +3855,7 @@ function statusLive(error) {
   if (window.GsaMilitias) parts.push(...window.GsaMilitias.statusParts());
   if (window.GsaInternet) parts.push(...window.GsaInternet.statusParts());
   if (window.GsaTfr) parts.push(...window.GsaTfr.statusParts());
+  if (window.GsaDelays) parts.push(...window.GsaDelays.statusParts());
   if (window.GsaPowerLines) parts.push(...window.GsaPowerLines.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
