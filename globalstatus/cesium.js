@@ -379,6 +379,10 @@ function setPanel(which) {
   rail.classList.toggle("is-open", openMenu);
   feed.classList.toggle("is-open", openList);
   backdrop.hidden = !(openMenu || openList);
+  const menuBtn = document.getElementById("open-menu");
+  const listBtn = document.getElementById("open-list");
+  if (menuBtn) menuBtn.classList.toggle("is-on", openMenu);
+  if (listBtn) listBtn.classList.toggle("is-on", openList);
 }
 
 async function startGlobe() {
@@ -800,6 +804,7 @@ function hookUi() {
     const open = document.querySelector(".rail").classList.contains("is-open");
     setPanel(open ? "" : "menu");
   });
+  document.getElementById("clear-layers").addEventListener("click", clearLayers);
   document.getElementById("open-list").addEventListener("click", () => {
     const open = document.querySelector(".feed-col").classList.contains("is-open");
     setPanel(open ? "" : "list");
@@ -1483,6 +1488,14 @@ function syncLayerGroups() {
   }
 }
 window.gsSyncLayerGroups = syncLayerGroups;
+
+function clearLayers() {
+  closeMapPopups();
+  if (state.viewer && state.viewer.selectedEntity) state.viewer.selectedEntity = undefined;
+  for (const key of Object.keys(state.layers)) {
+    if (state.layers[key]) setLayer(key, false);
+  }
+}
 
 function setLayer(layer, on) {
   if (!Object.prototype.hasOwnProperty.call(state.layers, layer)) return;

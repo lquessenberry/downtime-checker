@@ -951,7 +951,7 @@ button:hover { border-color: #9fd4e2; }
   .hud-top .meters,
   .hud-top .clock,
   .hud-top .mobile-nav { pointer-events: auto; }
-  .brand { flex: 1 1 auto; min-width: 0; }
+  .brand { flex: 1 1 0; min-width: 0; }
   .brand h1 { overflow: hidden; text-overflow: ellipsis; }
   .meters { flex: 1 1 auto; order: 3; gap: 8px; min-width: 0; }
   .clock { order: 4; margin-left: auto; }
@@ -959,13 +959,13 @@ button:hover { border-color: #9fd4e2; }
   .meter span { font-size: 9px; letter-spacing: 0.06em; }
   .meter strong { font-size: 12px; }
   .meter em { font-size: 11px; }
-  .mobile-nav { grid-area: icons; display: flex; width: auto; gap: 6px; }
+  .mobile-nav { grid-area: icons; display: flex; width: auto; gap: 4px; margin-left: auto; flex: 0 0 auto; }
   .mobile-nav button {
-    flex: 0 0 44px;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
     padding: 0;
     display: grid;
     place-items: center;
@@ -1054,13 +1054,8 @@ button:hover { border-color: #9fd4e2; }
     min-height: 0;
     padding: 2px 6px calc(4px + env(safe-area-inset-bottom));
   }
-  .hud-bot .legend {
-    display: flex;
-    width: 100%;
-    justify-content: space-between;
-    flex-wrap: nowrap;
-    gap: 2px;
-  }
+  .hud-bot .legend { display: none; }
+  .hud-bot:not(:has(#mobile-pick:not([hidden]))) { display: none; }
   #status-line { display: none; }
   .mobile-pick:not([hidden]) {
     display: block;
@@ -1891,16 +1886,76 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
   .welcome-text em { line-height: 1.25; }
   .welcome-dismiss { margin-top: 8px; }
 }
+.welcome-cat { display: grid; gap: 4px; min-width: 0; }
+.welcome-drop { display: grid; gap: 4px; }
+.welcome-drop[hidden] { display: none; }
+.welcome-drop button {
+  width: 100%;
+  text-align: left;
+  min-height: 36px;
+  padding: 6px 10px;
+  color: var(--text);
+  background: #101820;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.welcome-drop button:hover, .welcome-drop button:focus-visible { border-color: #9fd4e2; outline: none; }
+.welcome-row[aria-expanded="true"] .welcome-arrow { color: #9fd4e2; }
+@media (min-width: 801px) {
+  body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "top"
+      "stage"
+      "bot";
+  }
+  .hud-top, .hud-bot { min-width: 0; max-width: 100%; }
+  .brand { min-width: 0; flex: 1 1 auto; }
+  .tag { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meters { min-width: 0; }
+  .mobile-nav { display: flex; flex: 0 0 auto; width: auto; gap: 6px; margin-left: 10px; }
+  #open-views-mobile, #reset-mobile { display: none; }
+  .mobile-nav button {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    color: var(--text);
+    background: rgba(8, 14, 20, 0.78);
+    border: 1px solid rgba(120, 190, 210, 0.4);
+    border-radius: 8px;
+  }
+  .mobile-nav button.is-on { border-color: #9fd4e2; }
+  .mobile-nav svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .rail, .feed-col {
+    display: none;
+    position: fixed;
+    z-index: 30;
+    top: 64px;
+    bottom: 0;
+    width: min(380px, 42vw);
+    overflow: auto;
+    background: rgba(8, 14, 20, 0.97);
+  }
+  .rail { left: 0; }
+  .feed-col { right: 0; }
+  .rail.is-open, .feed-col.is-open { display: flex; }
+  .drawer-close { display: block; margin: 10px 12px 0; min-height: 36px; }
+}
 @media (max-width: 800px) {
   .views-open { display: none; }
-  .welcome { padding: 108px 10px 10px; align-items: flex-start; }
+  .welcome { padding: 108px 10px 36px; align-items: flex-start; }
   .welcome-card { padding: 16px 12px 12px; max-height: 100%; }
   .welcome-card h2 { font-size: 18px; }
   .welcome-row { min-height: 56px; padding: 9px 10px; gap: 10px; grid-template-columns: 32px 1fr auto; }
   .welcome-icon { width: 32px; height: 32px; }
   .welcome-cats { grid-template-columns: 1fr; }
-  /* Leave a strip of the moving map below the card so the globe can still be touched. */
-  .welcome-card { max-height: calc(100% - 96px); }
   .welcome-row.is-category { min-height: 48px; }
 }
 @media (prefers-reduced-motion: reduce) {

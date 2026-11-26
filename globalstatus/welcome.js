@@ -119,28 +119,68 @@
     return '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true" focusable="false">' + inner + "</svg>";
   }
 
+  function layerChoices(p) {
+    var group = p.group && document.getElementById(p.group);
+    if (!group) return [];
+    var seen = {};
+    var out = [];
+    var buttons = group.querySelectorAll("[data-layer-toggle]");
+    for (var i = 0; i < buttons.length; i += 1) {
+      var key = buttons[i].dataset.layerToggle;
+      if (!key || seen[key]) continue;
+      seen[key] = true;
+      var nameEl = buttons[i].querySelector(".layer-name");
+      var name = nameEl ? nameEl.textContent.replace(/\s+/g, " ").trim() : key;
+      out.push({ key: key, name: name });
+    }
+    return out;
+  }
+
   function build() {
     if (box) return box;
     box = document.getElementById("welcome");
     if (!box) return null;
     var list = box.querySelector("[data-welcome-list]");
     var row = function (p, i) {
-      return '<button type="button" class="welcome-row' + (i === 0 ? " is-primary" : "") + (p.group ? " is-category" : "") + '" data-welcome-preset="' + p.id + '">' +
+      return '<button type="button" class="welcome-row' + (i === 0 ? " is-primary" : "") + '" data-welcome-preset="' + p.id + '">' +
         '<span class="welcome-icon">' + svg(p.icon) + "</span>" +
         '<span class="welcome-text"><strong>' + p.title.replace(/&/g, "&amp;") + "</strong><em>" + p.sub + "</em></span>" +
         '<span class="welcome-arrow" aria-hidden="true">→</span></button>';
     };
+    var cat = function (p) {
+      var choices = layerChoices(p);
+      var items = choices.map(function (item) {
+        return '<button type="button" data-welcome-layer="' + item.key + '" data-welcome-preset="' + p.id + '">' +
+          item.name.replace(/&/g, "&amp;") + "</button>";
+      }).join("");
+      return '<div class="welcome-cat">' +
+        '<button type="button" class="welcome-row is-category" data-welcome-toggle="' + p.id + '" aria-expanded="false">' +
+        '<span class="welcome-icon">' + svg(p.icon) + "</span>" +
+        '<span class="welcome-text"><strong>' + p.title.replace(/&/g, "&amp;") + "</strong><em>" + p.sub + "</em></span>" +
+        '<span class="welcome-arrow" aria-hidden="true">▾</span></button>' +
+        '<div class="welcome-drop" hidden>' + items + "</div></div>";
+    };
     var cats = PRESETS.filter(function (p) { return p.group; });
     list.innerHTML = row(PRESETS[0], 0) +
       '<p class="welcome-section">ALL CATEGORIES</p><div class="welcome-cats">' +
-      cats.map(function (p) { return row(p, 1); }).join("") + "</div>" +
+      cats.map(cat).join("") + "</div>" +
       row(PRESETS[PRESETS.length - 1], 1);
     list.addEventListener("click", function (event) {
       // A tap that stopped the dive must not land on a row of the picker that opened
       // under the same finger, so rows ignore clicks for a moment after opening.
       if (root.performance.now() - openedAt < 450) return;
-      var row = event.target.closest("[data-welcome-preset]");
-      if (row) choose(row.dataset.welcomePreset);
+      var layerBtn = event.target.closest("[data-welcome-layer]");
+      if (layerBtn) {
+        chooseLayer(layerBtn.dataset.welcomePreset, layerBtn.dataset.welcomeLayer);
+        return;
+      }
+      var toggle = event.target.closest("[data-welcome-toggle]");
+      if (toggle) {
+        toggleDrop(toggle);
+        return;
+      }
+      var picked = event.target.closest("[data-welcome-preset]");
+      if (picked && !picked.closest(".welcome-drop")) choose(picked.dataset.welcomePreset);
     });
     box.querySelector("[data-welcome-close]").addEventListener("click", function () { close(); });
     var check = box.querySelector("[data-welcome-dismiss]");
@@ -189,11 +229,52 @@
     return typeof hooks.viewer === "function" ? hooks.viewer() : hooks.viewer;
   }
 
+  function toggleDrop(button) {
+    var cat = button.closest(".welcome-cat");
+    var drop = cat && cat.querySelector(".welcome-drop");
+    if (!drop) return;
+    var open = drop.hidden;
+    var drops = box.querySelectorAll(".welcome-drop");
+    for (var i = 0; i < drops.length; i += 1) {
+      drops[i].hidden = true;
+      var head = drops[i].parentNode.querySelector("[data-welcome-toggle]");
+      if (head) head.setAttribute("aria-expanded", "false");
+    }
+    drop.hidden = !open;
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function chooseLayer(presetId, key) {
+    var preset = PRESETS.filter(function (p) { return p.id === presetId; })[0];
+    stopSpin();
+    close();
+    if (hooks.setLayer && key) hooks.setLayer(key, true);
+    var group = preset && preset.group && document.getElementById(preset.group);
+    if (group) group.open = true;
+    flyPreset(preset);
+    var host = document.getElementById("cesium");
+    if (host && preset) host.dataset.welcomePreset = preset.id + ":" + key;
+  }
+
+  function flyPreset(preset) {
+    var v = viewer();
+    if (!preset || !preset.view || !v || !root.Cesium) return;
+    var phone = typeof hooks.phone === "function" && hooks.phone();
+    var r = phone && preset.phoneView ? preset.phoneView : preset.view;
+    v.camera.cancelFlight();
+    v.camera.flyTo({
+      destination: root.Cesium.Rectangle.fromDegrees(r[0], r[1], r[2], r[3]),
+      orientation: { heading: 0, pitch: -root.Cesium.Math.PI_OVER_TWO, roll: 0 },
+      duration: intro.landed ? 2.8 : 2.2,
+    });
+  }
+
   function choose(id) {
     var preset = PRESETS.filter(function (p) { return p.id === id; })[0];
     stopSpin();
     close();
     if (!preset) return;
+    if (preset.group) return;
     var keys = presetLayers(preset);
     for (var i = 0; i < keys.length; i += 1) {
       if (hooks.setLayer) hooks.setLayer(keys[i], true);
@@ -201,18 +282,7 @@
     // Open the category in the menu so its layers can be switched one by one.
     var group = preset.group && document.getElementById(preset.group);
     if (group) group.open = true;
-    var v = viewer();
-    if (preset.view && v && root.Cesium) {
-      var phone = typeof hooks.phone === "function" && hooks.phone();
-      var r = phone && preset.phoneView ? preset.phoneView : preset.view;
-      v.camera.cancelFlight();
-      // Always level out to the usual top-down framing, even from the tilted aerial view.
-      v.camera.flyTo({
-        destination: root.Cesium.Rectangle.fromDegrees(r[0], r[1], r[2], r[3]),
-        orientation: { heading: 0, pitch: -root.Cesium.Math.PI_OVER_TWO, roll: 0 },
-        duration: intro.landed ? 2.8 : 2.2,
-      });
-    }
+    flyPreset(preset);
     var host = document.getElementById("cesium");
     if (host) host.dataset.welcomePreset = preset.id;
   }
