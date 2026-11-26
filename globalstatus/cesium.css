@@ -957,7 +957,6 @@ button:hover { border-color: #9fd4e2; }
       "bot";
   }
   .tag { display: none; }
-  .brand h1 { font-size: 14px; }
   .hud-top {
     position: absolute;
     top: 0;
@@ -978,20 +977,18 @@ button:hover { border-color: #9fd4e2; }
   .hud-top .meters,
   .hud-top .clock,
   .hud-top .mobile-nav { pointer-events: auto; }
-  .brand { flex: 1 1 0; min-width: 0; }
+  .brand { flex: 1 1 auto; min-width: min-content; }
   .brand h1 {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    overflow: hidden;
-    white-space: normal;
-    text-overflow: clip;
-    font-size: 12px;
-    line-height: 1.05;
+    display: block;
+    overflow: visible;
+    white-space: nowrap;
+    font-size: 14px;
+    line-height: 1.15;
     letter-spacing: 0;
   }
-  .brand-line { white-space: nowrap; }
-  .brand-app::before { content: none; }
+  .brand-line,
+  .brand-app { white-space: nowrap; }
+  .brand-app::before { content: "\00a0"; }
   .meters { flex: 1 1 auto; order: 3; gap: 8px; min-width: 0; }
   .clock { order: 4; margin-left: auto; }
   .meter { flex-direction: row; align-items: baseline; gap: 3px; min-width: 0; white-space: nowrap; }
