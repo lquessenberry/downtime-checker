@@ -33,12 +33,19 @@
  *                   /infra/<police|sheriff|fire>/<tile>.json    every station, 2-degree tiles,
  *                   fetched only when zoomed in over that tile
  *                   Cards are on-screen text only: no links off globalstatus.app.
+ *     USA HOSPITALS & TRAUMA CENTERS  HIFLD Next Hospitals v1.1.0 (public domain, open
+ *                   hospitals only) joined with CMS Care Compare (Oct 2026) for emergency
+ *                   services, star rating and CMS type. Built by scripts/build_hospitals.py
+ *                   /infra/hospitals/overview.json  every trauma center + one other hospital
+ *                   per 0.35-degree cell; /infra/hospitals/<tile>.json every hospital,
+ *                   2-degree tiles. Trauma centers are larger pins colored by level.
+ *                   Phones are plain text; WEBSITE and SOURCE URLs are never shipped.
  *
  * Drawn with Cesium PointPrimitiveCollections (tens of thousands of points stay
  * cheap on phones). Nothing is fetched until a layer is switched on.
  */
 (function (root) {
-  const KEYS = ["airports", "bases", "celltowers", "powerplants", "police", "sheriff", "fire"];
+  const KEYS = ["airports", "bases", "celltowers", "powerplants", "police", "sheriff", "fire", "hospitals"];
   const V = "20261123t";
   const BASE_URL = "/infra/";
   // Small airports appear below this camera height (metres above the ellipsoid).
@@ -58,7 +65,7 @@
   const PLANT_NEAR_HEIGHT = 2500 * 1000;
   const PLANT_MAX_TILES = 24;
   // EMERGENCY SERVICES: every station appears below this camera height; above it, the overview.
-  const STATION_V = "20261125b";
+  const STATION_V = "20261125d";
   const STATION_NEAR_HEIGHT = 900 * 1000;
   const STATION_MAX_TILES = 40;
   const STATION_KEEP_TILES = 90;
@@ -104,6 +111,12 @@
       credit: "Fire and EMS stations: USGS The National Map, Structures (public domain). Counties: U.S. Census Bureau",
       caption: "Fire stations, volunteer fire companies and EMS stations in the US and territories. The type is read from the station name. Zoom in to see every station. The USGS file has no phone numbers.",
     },
+    hospitals: {
+      label: "USA HOSPITALS & TRAUMA CENTERS",
+      // Plain text on purpose: nothing in this layer links off globalstatus.app.
+      credit: "Hospitals: HIFLD Next Hospitals v1.1.0 (public domain), CMS Care Compare Oct 2026",
+      caption: "Open hospitals in the US and territories. Trauma centers are larger pins colored by their highest adult level; a magenta ring marks a pediatric trauma designation. Other hospitals are small pink pins, faded where CMS lists no emergency department. Trauma levels are cleaned from the state-reported HIFLD text; Montana, Wyoming and South Dakota use their own designations. Every trauma center shows at any distance; zoom in to see every hospital.",
+    },
   };
 
   // FCC ASR structure type codes (build script TYPES order).
@@ -140,10 +153,30 @@
   const FIRE_TYPES = ["Fire station", "Volunteer fire company", "Fire and EMS station", "EMS or ambulance station", "Wildland fire station", "Emergency services station"];
   const FIRE_STYLE = { color: "#e8261c", outline: "#ffffff", size: 7, far: true };
   const EMS_STYLE = { color: "#ffffff", outline: "#e8261c", size: 7, far: true };
+  // USA HOSPITALS & TRAUMA CENTERS: trauma class (build script CLASSES order) sets color and size.
+  const HOSP_CLASSES = ["Not a trauma center", "Level I", "Level II", "Level III", "Level IV", "Level V", "Pediatric", "State-specific"];
+  const HOSP_COLORS = ["#ff9ec7", "#ff2d2d", "#ff8c1a", "#ffd400", "#2fd36b", "#2fd36b", "#d65cff", "#22b8cf"];
+  const HOSP_SIZES = [6, 13, 12, 11, 10, 10, 11, 10];
+  const HOSP_PED_RING = "#d65cff";
+  const hospStyles = {};
+  function hospStyle(row) {
+    const cls = row[2] || 0;
+    const noEr = cls === 0 && row[11] === 0;
+    const ped = row[18] === 1 && cls !== 6;
+    const key = `${cls}:${noEr ? 1 : 0}:${ped ? 1 : 0}`;
+    if (hospStyles[key]) return hospStyles[key];
+    let style;
+    if (cls === 0) style = noEr
+      ? { color: "rgba(255,158,199,0.45)", outline: "rgba(255,255,255,0.35)", outlineWidth: 1, size: 5, far: true }
+      : { color: HOSP_COLORS[0], outline: "#ffffff", outlineWidth: 1, size: 6, far: true };
+    else style = { color: HOSP_COLORS[cls], outline: ped || cls === 6 ? (cls === 6 ? "#ffffff" : HOSP_PED_RING) : OUTLINE, outlineWidth: ped ? 3 : 1.5, size: HOSP_SIZES[cls], far: true };
+    return (hospStyles[key] = style);
+  }
   const STATION = {
     police: { url: "/infra/police/", types: POLICE_TYPES, style: () => POLICE_STYLE, noun: "stations", fallback: "Police station", source: "USGS National Structures Dataset, via Esri U.S. Federal Datasets (CC BY 4.0)" },
     sheriff: { url: "/infra/sheriff/", types: SHERIFF_TYPES, style: (t) => (t === 1 ? SHERIFF_SUB_STYLE : SHERIFF_STYLE), noun: "offices", fallback: "Sheriff's office", source: "USGS National Structures Dataset, via Esri U.S. Federal Datasets (CC BY 4.0)" },
     fire: { url: "/infra/fire/", types: FIRE_TYPES, style: (t) => (t === 3 ? EMS_STYLE : FIRE_STYLE), noun: "stations", fallback: "Fire station", source: "USGS The National Map, Structures (public domain)" },
+    hospitals: { url: "/infra/hospitals/", types: HOSP_CLASSES, style: (t, row) => hospStyle(row), noun: "hospitals", fallback: "Hospital", source: "HIFLD Next Hospitals v1.1.0 (public domain), CMS Care Compare Oct 2026" },
   };
 
   const AIRPORT_TYPE = { L: "LARGE AIRPORT", M: "MEDIUM AIRPORT", S: "SMALL AIRPORT", W: "SEAPLANE BASE" };
@@ -227,7 +260,7 @@
       pixelSize: style.size,
       color: style.cssColor || (style.cssColor = Cesium.Color.fromCssColorString(style.color)),
       outlineColor: style.cssOutline || (style.cssOutline = Cesium.Color.fromCssColorString(style.outline || OUTLINE)),
-      outlineWidth: style.outline ? 1.5 : 1,
+      outlineWidth: style.outlineWidth != null ? style.outlineWidth : (style.outline ? 1.5 : 1),
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
       // USA CELL TOWERS: smaller dots from far away so the country is not one solid blob.
       scaleByDistance: style.far ? (style.scale || (style.scale = new Cesium.NearFarScalar(1.5e6, 1.0, 1.2e7, 0.4))) : undefined,
@@ -282,6 +315,7 @@
           const sl = stations[key];
           if (key === "police") bits.push(`<span class="pp-key" style="--pp:${POLICE_STYLE.color};box-shadow:0 0 0 1px ${POLICE_STYLE.outline}"></span>Police, state, campus, tribal`);
           else if (key === "sheriff") bits.push(`<span class="pp-key" style="--pp:${SHERIFF_STYLE.color};box-shadow:0 0 0 1px ${SHERIFF_STYLE.outline}"></span>Sheriff's office (smaller: substation)`);
+          else if (key === "hospitals") bits.push(hospLegend(sl));
           else bits.push(`<span class="pp-key" style="--pp:${FIRE_STYLE.color}"></span>Fire <span class="pp-key" style="--pp:${EMS_STYLE.color};box-shadow:0 0 0 1px ${EMS_STYLE.outline}"></span>EMS only`);
           const noun = STATION[key].noun;
           bits.push(sl.nearShown
@@ -298,6 +332,22 @@
     if (ctx && ctx.setCount) ctx.setCount(key, countText(key));
     renderCredit();
     renderGroupCount();
+  }
+
+  function hospLegend(sl) {
+    const c = (sl.counts && sl.counts.byClass) || {};
+    const n = (label) => (c[label] != null ? ` ${fmt(c[label])}` : "");
+    const key = (i, label, extra) => `<span class="pp-key hosp-key" style="--pp:${HOSP_COLORS[i]}${extra || ""}"></span>${esc(label)}${n(HOSP_CLASSES[i])}`;
+    const parts = [
+      key(1, "Level I"), key(2, "Level II"), key(3, "Level III"),
+      `<span class="pp-key hosp-key" style="--pp:${HOSP_COLORS[4]}"></span>Level IV${n("Level IV")} / V${n("Level V")}`,
+      key(6, "Pediatric only"), key(7, "State-specific"),
+      `<span class="pp-key hosp-key" style="--pp:transparent;box-shadow:0 0 0 2px ${HOSP_PED_RING} inset"></span>ring = pediatric designation${sl.counts ? ` (${fmt(sl.counts.pediatric)})` : ""}`,
+      `<span class="pp-key" style="--pp:${HOSP_COLORS[0]};box-shadow:0 0 0 1px #fff"></span>Other hospital${n(HOSP_CLASSES[0])} (faded: no emergency department listed by CMS)`,
+    ];
+    let text = parts.join(" ");
+    if (sl.counts) text += ` · ${fmt(sl.counts.trauma)} trauma centers of ${fmt(sl.counts.total)} open hospitals · CMS details for ${fmt(sl.counts.cmsMatched)}`;
+    return text;
   }
 
   function renderCredit() {
@@ -538,7 +588,7 @@
     const styleFor = STATION[key].style;
     for (let i = 0; i < rows.length; i += 1) {
       const row = rows[i];
-      addPoint(coll, row[0], row[1], styleFor(row[2]), { __infra: key, row, body, tile: tileKey });
+      addPoint(coll, row[0], row[1], styleFor(row[2], row), { __infra: key, row, body, tile: tileKey });
     }
     return rows.length;
   }
@@ -551,6 +601,7 @@
     st[key].count = addStationRows(key, sl.ov, body, "overview");
     sl.total = Number(body.total) || 0;
     sl.newest = Number(body.newest) || 0;
+    sl.counts = body.counts || null;
     st[key].built = body.built || "";
     st[key].ready = true;
   }
@@ -755,6 +806,18 @@
       const body = id.body || {};
       const def = STATION[id.__infra];
       const typeLabel = def.types[row[2]] || def.types[def.types.length - 1];
+      if (id.__infra === "hospitals") {
+        const pick = (list, i) => (Array.isArray(list) && list[i]) || "";
+        const raw = pick(body.trauma, row[10]).split("\t");
+        const cls = row[2] || 0;
+        return {
+          infra: true, layer: "hospitals", kind: cls ? `TRAUMA CENTER · ${(raw[0] || HOSP_CLASSES[cls]).toUpperCase()}` : "HOSPITAL",
+          name: row[3] || "Hospital", lat: row[0], lon: row[1], cls,
+          address: row[4] || "", place: pick(body.places, row[5]), zip: row[6] || "", county: pick(body.counties, row[7]), updated: row[8] || 0,
+          type: pick(body.types, row[9]), traumaClean: raw[0] || "", traumaRaw: raw[1] || "", er: row[11], beds: row[12], helipad: row[13],
+          stars: row[14], owner: pick(body.owners, row[15]), phone: row[16] || "", cmsType: pick(body.cmsTypes, row[17]), pediatric: row[18] === 1,
+        };
+      }
       return {
         infra: true, layer: id.__infra, kind: typeLabel.toUpperCase(),
         name: row[3] || def.fallback, lat: row[0], lon: row[1], typeLabel,
@@ -824,6 +887,30 @@
     return html;
   }
 
+  function hospitalPopupHtml(item) {
+    // On-screen facts only: no links, the phone is plain text, and no website or source URL.
+    const lines = [];
+    lines.push(`Type: ${item.type || "Not listed"}${item.cmsType && item.cmsType.toLowerCase().replace(/s$/, "") !== String(item.type).toLowerCase() ? ` (CMS: ${item.cmsType})` : ""}`);
+    if (item.cls) {
+      lines.push(`Trauma level: ${item.traumaClean || HOSP_CLASSES[item.cls]}`);
+      if (item.traumaRaw && item.traumaRaw.toLowerCase() !== String(item.traumaClean).toLowerCase()) lines.push(`As listed: ${item.traumaRaw}`);
+    } else lines.push("Trauma level: Not a designated trauma center in this data");
+    lines.push(`Emergency services: ${item.er === 1 ? "Yes" : item.er === 0 ? "No" : "Not listed (no CMS match)"}`);
+    lines.push(`Beds: ${item.beds >= 0 ? fmt(item.beds) : "Not listed"}`);
+    lines.push(`Helipad: ${item.helipad === 1 ? "Yes" : item.helipad === 0 ? "No" : "Not listed"}`);
+    lines.push(`CMS overall star rating: ${item.stars > 0 ? `${item.stars} of 5` : item.stars === 0 ? "Not rated" : "Not listed (no CMS match)"}`);
+    if (item.owner) lines.push(`Ownership: ${item.owner}`);
+    if (item.address) lines.push(`Address: ${item.address}`);
+    lines.push([item.place, item.zip].filter(Boolean).join(" "));
+    if (item.county) lines.push(`County: ${item.county}`);
+    lines.push(`Phone: ${item.phone || "Not listed"}`);
+    if (item.updated) lines.push(`Source record dated: ${ymd(item.updated)}`);
+    let html = lines.filter(Boolean).map((line) => `<br>${esc(line)}`).join("");
+    html += '<br><i class="infra-caption">Trauma levels are state-reported and may be out of date. Call 911 in an emergency.</i>';
+    html += `<br>Source: ${esc(STATION.hospitals.source)}`;
+    return html;
+  }
+
   function stationPopupHtml(item) {
     const lines = [];
     if (item.address) lines.push(item.address);
@@ -842,6 +929,7 @@
     if (!(opts && opts.list)) lastShown = item; // the nearby list is not the open popup
     if (item.layer === "celltowers") return cellPopupHtml(item);
     if (item.layer === "powerplants") return plantPopupHtml(item);
+    if (item.layer === "hospitals") return hospitalPopupHtml(item);
     if (STATION[item.layer]) return stationPopupHtml(item);
     const lines = [];
     let link = "";
@@ -897,7 +985,7 @@
     if (!s.on) hidePopupFor(key);
     if (s.on && !s.ready && !s.loading) {
       s.error = "";
-      const loader = { airports: loadAirports, celltowers: loadCellTowers, powerplants: loadPowerPlants, police: () => loadStations("police"), sheriff: () => loadStations("sheriff"), fire: () => loadStations("fire") }[key] || loadBases;
+      const loader = { airports: loadAirports, celltowers: loadCellTowers, powerplants: loadPowerPlants, police: () => loadStations("police"), sheriff: () => loadStations("sheriff"), fire: () => loadStations("fire"), hospitals: () => loadStations("hospitals") }[key] || loadBases;
       s.loading = loader()
         .then(() => {
           if (key === "airports") {

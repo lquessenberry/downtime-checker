@@ -1748,3 +1748,6 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 /* FAA TFR (tfr.js): restricted-area swatch and the NOTAM text block in the card. */
 .swatch.tfr { background: rgba(255, 77, 77, 0.3); border: 2px solid #ff4d4d; border-radius: 2px; }
 .tfr-text { display: block; white-space: pre-wrap; word-break: break-word; font-size: 0.92em; opacity: 0.88; }
+/* USA HOSPITALS & TRAUMA CENTERS (infra.js): swatch is a red trauma pin with a pink ring. */
+.swatch.infra-hospitals { background: #ff2d2d; box-shadow: 0 0 0 2px #ff9ec7 inset; border-radius: 50%; }
+.hosp-key { width: 9px; height: 9px; box-shadow: 0 0 0 1px #1a1d27; }
