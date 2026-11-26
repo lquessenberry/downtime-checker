@@ -782,12 +782,6 @@ function syncUsTests() {
 function syncLayersButton() {
   const btn = document.getElementById("open-menu");
   if (!btn) return;
-  if (phoneLayout()) {
-    btn.classList.remove("is-on");
-    btn.setAttribute("aria-pressed", "false");
-    btn.setAttribute("aria-label", "Reset map");
-    return;
-  }
   btn.setAttribute("aria-label", "Layers");
   const on = Boolean(window.GsaWelcome && window.GsaWelcome.isOpen && window.GsaWelcome.isOpen());
   btn.classList.toggle("is-on", on);
@@ -931,10 +925,6 @@ function hookUi() {
   document.getElementById("close-menu").addEventListener("click", () => setPanel(""));
   document.getElementById("close-list").addEventListener("click", () => setPanel(""));
   document.getElementById("open-menu").addEventListener("click", () => {
-    if (phoneLayout()) {
-      resetMap();
-      return;
-    }
     setPanel("");
     if (!window.GsaWelcome) return;
     const dock = !phoneLayout();
