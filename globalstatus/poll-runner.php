@@ -8,6 +8,7 @@
 //   php poll-runner.php space [--force-space] [--only=nws,hurricanes,wildfires,tsunami,rivers,coastal]
 //   php poll-runner.php ioda [--force-ioda]
 //   php poll-runner.php ripe [--force-ripe]
+//   php poll-runner.php tfr [--force-tfr]
 //   php poll-runner.php grid --slice=40     (test: first 40 sites only, never published)
 //
 // World Grid: one full pass is saved to data/scan-cache.json. Visitors'
@@ -23,7 +24,8 @@
 // time-gated in poll-lib.php (gsa_space_refresh). Still no new cron.
 // Internet outages: the same */5 cron refreshes the IODA (Georgia Tech) cache
 // when it is at least 10 minutes old (gsa_ioda_refresh), and the RIPE Atlas
-// probe cache on the same 10-minute gate (gsa_ripe_refresh).
+// probe cache on the same 10-minute gate (gsa_ripe_refresh), and the FAA TFR
+// cache on the same gate (gsa_tfr_refresh).
 
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
@@ -52,6 +54,8 @@ $onlySpace = array();
 $forceIoda = false;
 $skipIoda = false;
 $forceRipe = false;
+$forceTfr = false;
+$skipTfr = false;
 $skipRipe = false;
 foreach ($argv as $arg) {
     if (strpos($arg, '--slice=') === 0) {
@@ -78,6 +82,10 @@ foreach ($argv as $arg) {
         $GLOBALS['GSA_SPACE_MOCK_TSUNAMI'] = substr($arg, 15);
     } elseif (strpos($arg, '--mock-coops=') === 0) {
         $GLOBALS['GSA_SPACE_MOCK_COOPS'] = substr($arg, 13);
+    } elseif ($arg === '--force-tfr') {
+        $forceTfr = true;
+    } elseif ($arg === '--skip-tfr') {
+        $skipTfr = true;
     } elseif ($arg === '--force-ripe') {
         $forceRipe = true;
     } elseif ($arg === '--skip-ripe') {
@@ -176,6 +184,28 @@ function runner_ripe($force)
     return $info;
 }
 
+// FAA TFRs. A failure never changes the aircraft job's exit code.
+function runner_tfr($force)
+{
+    $t0 = microtime(true);
+    try {
+        $info = gsa_tfr_refresh(array('force' => $force));
+    } catch (Throwable $e) {
+        $info = array('ok' => false, 'error' => $e->getMessage());
+    }
+    $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+    if (empty($info['busy']) && empty($info['skipped'])) {
+        gsa_poll_status_note('tfr', $info);
+    }
+    return $info;
+}
+
+if ($job === 'tfr') {
+    $info = runner_tfr($forceTfr);
+    runner_print(array('tfr' => $info));
+    exit(!empty($info['ok']) ? 0 : 2);
+}
+
 if ($job === 'ripe') {
     $info = runner_ripe($forceRipe);
     runner_print(array('ripe' => $info));
@@ -236,6 +266,9 @@ if ($job === 'aircraft') {
     if (!$skipRipe) {
         $out['ripe'] = runner_ripe($forceRipe);
     }
+    if (!$skipTfr) {
+        $out['tfr'] = runner_tfr($forceTfr);
+    }
     runner_print($out);
     $airOk = !empty($info['ok']) || !empty($info['busy']) || !empty($info['skipped']);
     $jamOk = $skipJam || !empty($out['jamming']['ok']) || !empty($out['jamming']['busy']) || !empty($out['jamming']['skipped']);
@@ -243,7 +276,7 @@ if ($job === 'aircraft') {
 }
 
 if ($job !== 'grid') {
-    fwrite(STDERR, "Unknown job: $job (use grid, aircraft, jamming, space, ioda, ripe, or status)\n");
+    fwrite(STDERR, "Unknown job: $job (use grid, aircraft, jamming, space, ioda, ripe, tfr, or status)\n");
     exit(1);
 }
 

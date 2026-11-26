@@ -28,6 +28,7 @@ globalstatus/data/animal-cache.json
 globalstatus/data/ioda-cache.json
 globalstatus/data/ripe-atlas-cache.json
 globalstatus/data/ripe-asnames.json
+globalstatus/data/tfr-cache.json
 globalstatus/.ftpquota
 
 # Designation claims (#60): live jsonl stays local. SPLC exports must never be committed.

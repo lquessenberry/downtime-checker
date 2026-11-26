@@ -75,6 +75,10 @@ function gsa_http_routes()
     if ($path === '/api/internet-outages' && $method === 'GET') {
         json_out(200, gsa_ioda_snapshot());
     }
+    // TRANSPORTATION > FAA TFR: FAA temporary flight restrictions cache (*/5 cron).
+    if ($path === '/api/faa-tfr' && $method === 'GET') {
+        json_out(200, gsa_tfr_snapshot());
+    }
     // RIPE Atlas probes that went offline, shown in the same two layers.
     if ($path === '/api/internet-probes' && $method === 'GET') {
         json_out(200, gsa_ripe_snapshot());
