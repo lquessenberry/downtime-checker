@@ -4,7 +4,7 @@
 // again" is kept in localStorage; the VIEWS button in the top bar reopens the picker.
 // The globe stops turning the moment the visitor picks, closes, or touches the globe.
 // Fresh launches open with a dive from space down to a tilted, low aerial view over
-// Washington, DC on the Aerial photo map; the picker fades in as it lands and the camera
+// Washington, DC on the site's normal default map; the picker fades in as it lands and the camera
 // then circles the city slowly until the visitor picks, closes, or touches the map.
 (function (root) {
   "use strict";
@@ -79,7 +79,7 @@
     },
   ];
 
-  var hooks = { viewer: null, setLayer: null, phone: null, setBasemap: null };
+  var hooks = { viewer: null, setLayer: null, phone: null };
   var orbit = { heading: 0 };
   var box = null;
   var spinning = false;
@@ -274,10 +274,8 @@
     var v = viewer();
     var C = root.Cesium;
     if (!v || !C) { open({ spin: false, noFocus: true }); return; }
-    // Land on real aerial streets and buildings: switch the MAP to Aerial photo.
-    if (typeof hooks.setBasemap === "function") {
-      try { hooks.setBasemap("satellite"); } catch (e) { /* keep the current map */ }
-    }
+    // The intro only moves the camera. The map, lighting, atmosphere, terrain and layers
+    // stay on the site's normal defaults so the opening looks like the usual globe.
     var f = INTRO.from;
     v.camera.setView({
       destination: C.Cartesian3.fromDegrees(f.lon, f.lat, f.km * 1000),
@@ -329,7 +327,6 @@
     hooks.viewer = opts.viewer || hooks.viewer;
     hooks.setLayer = opts.setLayer || hooks.setLayer;
     hooks.phone = opts.phone || hooks.phone;
-    hooks.setBasemap = opts.setBasemap || hooks.setBasemap;
     build();
     var buttons = document.querySelectorAll("[data-welcome-open]");
     for (var i = 0; i < buttons.length; i += 1) {
