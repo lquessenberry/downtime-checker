@@ -12,8 +12,10 @@
  *                                 the query starts with a house number
  *   "lat, lon" in decimal degrees  handled here, no request
  *
- * Picking a result drops one pin (replaces the last one) and hands the place to
- * nearby.js, which frames a 50-mile circle and switches on layers with pins inside.
+ * Picking a result drops one pin (replaces the last one) and asks
+ * "Open with Layer Radius?". Yes hands the place to nearby.js, which frames a
+ * 50-mile circle and switches on layers with pins inside. No flies to the pin
+ * and leaves those layers off. The pin stays.
  * Clearing the box, CLEAR on the nearby card, or RESET MAP removes pin and circle.
  */
 (function (root) {
@@ -61,6 +63,8 @@
   let pinImage = null;
   let locateSeq = 0;
   let noteTimer = 0;
+  let askEl = null;
+  let askPending = null;
 
   const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
   const lang = () => {
@@ -255,28 +259,84 @@
     });
   }
 
-  function destinationFound(viewModel, destination) {
-    const info = meta.get(destination);
-    lastPicked = String(viewModel._searchText || "").trim();
-    if (info) dropPin(info);
-    if (info && root.GsaNearby) {
-      viewModel.complete.raiseEvent();
-      root.GsaNearby.start(info);
-    } else viewModel._scene.camera.flyTo({
+  function hideRadiusAsk() {
+    askPending = null;
+    if (askEl) askEl.hidden = true;
+  }
+
+  // Close the phone keyboard so the globe and the question are visible. Cesium
+  // re-focuses the box on the tap's pointerup, so let that run first.
+  function blurSearch(viewModel) {
+    if (!(root.matchMedia && root.matchMedia("(max-width: 800px)").matches)) return;
+    setTimeout(() => {
+      if (viewModel) viewModel._focusTextbox = false;
+      const box = document.querySelector(".cesium-geocoder-input");
+      if (box) box.blur();
+    }, 50);
+  }
+
+  function flyToPick(viewModel, destination) {
+    const camera = viewModel && viewModel._scene && viewModel._scene.camera;
+    if (!camera) {
+      if (viewModel && viewModel.complete) viewModel.complete.raiseEvent();
+      return;
+    }
+    camera.flyTo({
       destination,
       duration: viewModel.flightDuration,
       endTransform: Cesium.Matrix4.IDENTITY,
       complete: () => viewModel.complete.raiseEvent(),
     });
-    // Close the phone keyboard so the globe and the nearby card are visible. Cesium
-    // re-focuses the box on the tap's pointerup, so let that run first.
-    if (root.matchMedia && root.matchMedia("(max-width: 800px)").matches) {
-      setTimeout(() => {
-        viewModel._focusTextbox = false;
-        const box = document.querySelector(".cesium-geocoder-input");
-        if (box) box.blur();
-      }, 50);
+  }
+
+  function ensureRadiusAsk() {
+    if (askEl) return askEl;
+    const el = document.createElement("div");
+    el.id = "radius-ask";
+    el.className = "radius-ask";
+    el.hidden = true;
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-modal", "true");
+    el.setAttribute("aria-labelledby", "radius-ask-title");
+    el.innerHTML = '<p id="radius-ask-title">Open with Layer Radius?</p>'
+      + '<div class="radius-ask-actions">'
+      + '<button type="button" data-radius-ask="yes">Yes</button>'
+      + '<button type="button" data-radius-ask="no">No</button>'
+      + '</div>';
+    el.addEventListener("click", (ev) => {
+      const button = ev.target.closest && ev.target.closest("[data-radius-ask]");
+      if (!button || !askPending) return;
+      const pending = askPending;
+      hideRadiusAsk();
+      if (button.dataset.radiusAsk === "yes") {
+        if (root.GsaNearby) root.GsaNearby.start(pending.info);
+        return;
+      }
+      // Drop a previous radius so the layers it turned on go back off.
+      // Layers switched on by hand stay. The address pin stays.
+      if (root.GsaNearby) root.GsaNearby.clear();
+      dropPin(pending.info);
+      flyToPick(pending.viewModel, pending.destination);
+    });
+    const host = (viewerRef && viewerRef.container) || document.body;
+    host.appendChild(el);
+    askEl = el;
+    return el;
+  }
+
+  function destinationFound(viewModel, destination) {
+    const info = meta.get(destination);
+    lastPicked = String(viewModel._searchText || "").trim();
+    if (info) dropPin(info);
+    blurSearch(viewModel);
+    if (info && root.GsaNearby) {
+      if (viewModel.complete) viewModel.complete.raiseEvent();
+      askPending = { viewModel, destination, info };
+      ensureRadiusAsk().hidden = false;
+      return;
     }
+    hideRadiusAsk();
+    flyToPick(viewModel, destination);
   }
 
   // ---------- MY AREA / MY EXACT LOCATION ----------
@@ -505,6 +565,7 @@
       Cesium.knockout.getObservable(vm, "_searchText").subscribe((v) => {
         if (!String(v || "").trim()) {
           lastPicked = "";
+          hideRadiusAsk();
           clearPin();
           if (root.GsaNearby) root.GsaNearby.clear();
         }
@@ -515,6 +576,7 @@
       busy(false);
       note("");
       lastPicked = "";
+      hideRadiusAsk();
       clearPin();
       if (root.GsaNearby) root.GsaNearby.clear();
       if (viewerRef && viewerRef.geocoder) viewerRef.geocoder.viewModel.searchText = "";
