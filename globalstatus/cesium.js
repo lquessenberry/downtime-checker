@@ -551,6 +551,7 @@ async function startGlobe() {
       viewer: () => state.viewer,
       setLayer,
       phone: phoneLayout,
+      setBasemap: (id) => applyBasemap(id),
       closePanels: () => setPanel(""),
     });
   }
