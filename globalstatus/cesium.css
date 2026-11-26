@@ -1753,3 +1753,6 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 .hosp-key { width: 9px; height: 9px; box-shadow: 0 0 0 1px #1a1d27; }
 /* FLIGHT DELAYS (delays.js): orange ground-delay pin with a red ring. */
 .swatch.delays { background: #ff8c1a; box-shadow: 0 0 0 2px #ff2d2d inset; border-radius: 50%; }
+
+/* USA AIR QUALITY (airquality.js): AQI green to maroon, with a smoke-gray ring. */
+.swatch.airquality { background: conic-gradient(#00e400 0 33%, #ffff00 0 55%, #ff7e00 0 75%, #ff0000 0 88%, #8f3f97 0); box-shadow: 0 0 0 2px #9a9a9a inset; border-radius: 50%; }

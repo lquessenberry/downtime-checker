@@ -3820,3 +3820,425 @@ function gsa_fd_snapshot()
     $cached['ageSeconds'] = $age;
     return $cached;
 }
+
+// ---------------------------------------------------------------------------
+// HEALTH & HUMANITARIAN > USA AIR QUALITY
+// EPA AirNow current monitors (ozone, PM2.5, PM10; ArcGIS FeatureServer, hourly)
+// plus NOAA Hazard Mapping System smoke plumes (daily KML, updated through the day).
+// Cache: data/airquality-cache.json, refreshed by the */5 aircraft cron about every
+// 15 minutes (gsa_aq_refresh), served at /api/air-quality.
+// ---------------------------------------------------------------------------
+
+function gsa_aq_cache_file()
+{
+    global $dataDir;
+    return $dataDir . '/airquality-cache.json';
+}
+
+function gsa_aq_cache_read()
+{
+    $file = gsa_aq_cache_file();
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+// US state / territory FIPS codes -> postal abbreviations.
+function gsa_aq_fips()
+{
+    return array(
+        '01' => 'AL', '02' => 'AK', '04' => 'AZ', '05' => 'AR', '06' => 'CA', '08' => 'CO', '09' => 'CT', '10' => 'DE', '11' => 'DC',
+        '12' => 'FL', '13' => 'GA', '15' => 'HI', '16' => 'ID', '17' => 'IL', '18' => 'IN', '19' => 'IA', '20' => 'KS', '21' => 'KY',
+        '22' => 'LA', '23' => 'ME', '24' => 'MD', '25' => 'MA', '26' => 'MI', '27' => 'MN', '28' => 'MS', '29' => 'MO', '30' => 'MT',
+        '31' => 'NE', '32' => 'NV', '33' => 'NH', '34' => 'NJ', '35' => 'NM', '36' => 'NY', '37' => 'NC', '38' => 'ND', '39' => 'OH',
+        '40' => 'OK', '41' => 'OR', '42' => 'PA', '44' => 'RI', '45' => 'SC', '46' => 'SD', '47' => 'TN', '48' => 'TX', '49' => 'UT',
+        '50' => 'VT', '51' => 'VA', '53' => 'WA', '54' => 'WV', '55' => 'WI', '56' => 'WY', '60' => 'AS', '66' => 'GU', '69' => 'MP',
+        '72' => 'PR', '78' => 'VI',
+    );
+}
+
+// The AirNow layer also carries Canada, Mexico, and U.S. embassy monitors abroad.
+// Keep US monitors only: 9-character AQS ids that start with a US state / territory
+// code, 12-character ids with the US (840) or Puerto Rico (630) country code, and
+// tribal monitors (TT...). Returns the state code, '' for tribal, or null for non-US.
+function gsa_aq_us_state($aqsid)
+{
+    $id = (string) $aqsid;
+    $fips = gsa_aq_fips();
+    if (strlen($id) === 9 && ctype_digit($id)) {
+        return $fips[substr($id, 0, 2)] ?? null;
+    }
+    if (strlen($id) === 12 && substr($id, 0, 3) === '840') {
+        return $fips[substr($id, 3, 2)] ?? null;
+    }
+    if (strlen($id) === 12 && substr($id, 0, 3) === '630') {
+        return 'PR';
+    }
+    if (strncmp($id, 'TT', 2) === 0) {
+        return '';
+    }
+    return null;
+}
+
+function gsa_aq_num($v)
+{
+    if ($v === null || $v === '' || !is_numeric($v)) {
+        return null;
+    }
+    return (int) round((float) $v);
+}
+
+function gsa_aq_airnow()
+{
+    $base = 'https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/Air_Now_Current_Monitors_Ozone_and_PM/FeatureServer/0/query';
+    $fields = 'AQSID,SiteName,DataSource,ReportingArea_PipeDelimited,OZONEPM_AQI,OZONE_AQI,PM25_AQI,PM10_AQI,PM25,OZONE,PM10,ValidTime,LocalTimeString,MonitorType,Status';
+    $rows = array();
+    $page = 2000;
+    for ($offset = 0, $guard = 0; $guard < 10; $guard++, $offset += $page) {
+        $url = $base . '?' . http_build_query(array(
+            'where' => "Status='Active'", 'outFields' => $fields, 'outSR' => 4326, 'returnGeometry' => 'true',
+            'orderByFields' => 'ObjectId', 'resultOffset' => $offset, 'resultRecordCount' => $page, 'f' => 'json',
+        ));
+        $got = gsa_tfr_fetch(array('p' => $url), 40, 1);
+        $body = $got['p'] ?? null;
+        $data = $body ? json_decode($body, true) : null;
+        if (!is_array($data) || !isset($data['features']) || isset($data['error'])) {
+            return null;
+        }
+        foreach ($data['features'] as $f) {
+            $rows[] = $f;
+        }
+        if (empty($data['exceededTransferLimit']) && count($data['features']) < $page) {
+            break;
+        }
+    }
+    $monitors = array();
+    $tribal = array();
+    foreach ($rows as $f) {
+        $a = $f['attributes'] ?? array();
+        $g = $f['geometry'] ?? array();
+        $state = gsa_aq_us_state($a['AQSID'] ?? '');
+        if ($state === null || !isset($g['x'], $g['y'])) {
+            continue;
+        }
+        $aqi = gsa_aq_num($a['OZONEPM_AQI'] ?? null);
+        $parts = array('Ozone' => gsa_aq_num($a['OZONE_AQI'] ?? null), 'PM2.5' => gsa_aq_num($a['PM25_AQI'] ?? null), 'PM10' => gsa_aq_num($a['PM10_AQI'] ?? null));
+        $primary = null;
+        if ($aqi !== null) {
+            $best = -1;
+            foreach ($parts as $name => $v) {
+                if ($v !== null && $v > $best) {
+                    $best = $v;
+                    $primary = $name;
+                }
+            }
+        }
+        $area = trim((string) ($a['ReportingArea_PipeDelimited'] ?? ''));
+        if ($area !== '') {
+            $area = trim(explode('|', $area)[0]);
+        }
+        $m = array(
+            'id' => (string) $a['AQSID'],
+            'name' => trim((string) ($a['SiteName'] ?? '')),
+            'agency' => trim((string) ($a['DataSource'] ?? '')),
+            'area' => $area,
+            'state' => $state,
+            'lat' => round((float) $g['y'], 4),
+            'lon' => round((float) $g['x'], 4),
+            'aqi' => $aqi,
+            'primary' => $primary,
+            'o3' => $parts['Ozone'],
+            'pm25' => $parts['PM2.5'],
+            'pm10' => $parts['PM10'],
+            'time' => !empty($a['ValidTime']) ? (int) floor($a['ValidTime'] / 1000) : null,
+            'temp' => ($a['MonitorType'] ?? '') === 'Temporary',
+        );
+        if ($state === '') {
+            $tribal[] = count($monitors);
+        }
+        $monitors[] = $m;
+    }
+    // Tribal monitors have no state in their id; the card names the tribe (agency) and area.
+    foreach ($tribal as $i) {
+        $monitors[$i]['tribal'] = true;
+    }
+    // Compact: agency names repeat, so send each once and point to it by index.
+    $agencies = array();
+    $agencyIndex = array();
+    foreach ($monitors as $i => $m) {
+        if (!isset($agencyIndex[$m['agency']])) {
+            $agencyIndex[$m['agency']] = count($agencies);
+            $agencies[] = $m['agency'];
+        }
+        $m['ag'] = $agencyIndex[$m['agency']];
+        unset($m['agency']);
+        foreach (array('o3', 'pm25', 'pm10', 'primary', 'aqi') as $k) {
+            if ($m[$k] === null) {
+                unset($m[$k]);
+            }
+        }
+        if (empty($m['temp'])) {
+            unset($m['temp']);
+        }
+        if ($m['area'] === '') {
+            unset($m['area']);
+        }
+        $monitors[$i] = $m;
+    }
+    return array('monitors' => $monitors, 'agencies' => $agencies, 'feedCount' => count($rows));
+}
+
+// "2026329 1610UTC" (year, day of year, HHMM) -> unix seconds.
+function gsa_aq_hms_time($text)
+{
+    if (!preg_match('/(\d{4})(\d{3})\s+(\d{2})(\d{2})/', (string) $text, $m)) {
+        return null;
+    }
+    return gmmktime((int) $m[3], (int) $m[4], 0, 1, (int) $m[2], (int) $m[1]);
+}
+
+// Douglas-Peucker on [lon, lat] points (degrees).
+function gsa_aq_simplify($pts, $tol)
+{
+    $n = count($pts);
+    if ($n < 3) {
+        return $pts;
+    }
+    $keep = array_fill(0, $n, false);
+    $keep[0] = $keep[$n - 1] = true;
+    $stack = array(array(0, $n - 1));
+    while ($stack) {
+        list($s, $e) = array_pop($stack);
+        $ax = $pts[$s][0];
+        $ay = $pts[$s][1];
+        $dx = $pts[$e][0] - $ax;
+        $dy = $pts[$e][1] - $ay;
+        $len = sqrt($dx * $dx + $dy * $dy);
+        $maxD = 0;
+        $idx = -1;
+        for ($i = $s + 1; $i < $e; $i++) {
+            $px = $pts[$i][0] - $ax;
+            $py = $pts[$i][1] - $ay;
+            $d = $len > 0 ? abs($dx * $py - $dy * $px) / $len : sqrt($px * $px + $py * $py);
+            if ($d > $maxD) {
+                $maxD = $d;
+                $idx = $i;
+            }
+        }
+        if ($idx > 0 && $maxD > $tol) {
+            $keep[$idx] = true;
+            $stack[] = array($s, $idx);
+            $stack[] = array($idx, $e);
+        }
+    }
+    $out = array();
+    foreach ($pts as $i => $p) {
+        if ($keep[$i]) {
+            $out[] = $p;
+        }
+    }
+    return $out;
+}
+
+function gsa_aq_smoke_parse($kml)
+{
+    $plumes = array();
+    if (!preg_match_all('#<Placemark>(.*?)</Placemark>#s', $kml, $pm)) {
+        return $plumes;
+    }
+    foreach ($pm[1] as $block) {
+        $desc = preg_match('#<description>(.*?)</description>#s', $block, $m) ? $m[1] : '';
+        $desc = strip_tags(str_replace(array('<br>', '<br/>', '<br />'), "\n", html_entity_decode(str_replace(array('<![CDATA[', ']]>'), '', $desc), ENT_QUOTES | ENT_XML1, 'UTF-8')));
+        $density = preg_match('/Density:\s*(Light|Medium|Heavy)/i', $desc, $m) ? ucfirst(strtolower($m[1])) : null;
+        if ($density === null && preg_match('#<styleUrl>\#?Smoke_(Light|Medium|Heavy)#', $block, $m)) {
+            $density = $m[1];
+        }
+        if ($density === null) {
+            continue;
+        }
+        $start = preg_match('/Start Time:\s*([0-9]{7}\s+[0-9]{4})/i', $desc, $m) ? gsa_aq_hms_time($m[1]) : null;
+        $end = preg_match('/End Time:\s*([0-9]{7}\s+[0-9]{4})/i', $desc, $m) ? gsa_aq_hms_time($m[1]) : null;
+        $sat = preg_match('/Satellite:\s*([^\n]+)/i', $desc, $m) ? trim($m[1]) : '';
+        if (!preg_match_all('#<outerBoundaryIs>.*?<coordinates>(.*?)</coordinates>#s', $block, $rings)) {
+            continue;
+        }
+        foreach ($rings[1] as $text) {
+            $pts = array();
+            foreach (preg_split('/\s+/', trim($text)) as $tok) {
+                $xy = explode(',', $tok);
+                if (count($xy) >= 2 && is_numeric($xy[0]) && is_numeric($xy[1])) {
+                    $pts[] = array((float) $xy[0], (float) $xy[1]);
+                }
+            }
+            if (count($pts) < 4) {
+                continue;
+            }
+            $simple = gsa_aq_simplify($pts, 0.03);
+            if (count($simple) < 4) {
+                $simple = gsa_aq_simplify($pts, 0.005);
+            }
+            if (count($simple) < 4) {
+                continue;
+            }
+            $ring = array();
+            $sx = $sy = 0;
+            foreach ($simple as $p) {
+                $ring[] = array(round($p[0], 3), round($p[1], 3));
+                $sx += $p[0];
+                $sy += $p[1];
+            }
+            $plumes[] = array(
+                'density' => $density,
+                'start' => $start,
+                'end' => $end,
+                'satellite' => $sat,
+                'lat' => round($sy / count($simple), 3),
+                'lon' => round($sx / count($simple), 3),
+                'ring' => $ring,
+            );
+        }
+    }
+    return $plumes;
+}
+
+// Today's UTC file is posted once analysts start mapping (usually mid-morning ET);
+// until then, use yesterday's.
+function gsa_aq_smoke()
+{
+    $base = 'https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/KML/';
+    foreach (array(0, 1) as $back) {
+        $t = time() - $back * 86400;
+        $day = gmdate('Ymd', $t);
+        $url = $base . gmdate('Y/m', $t) . '/hms_smoke' . $day . '.kml';
+        $got = gsa_tfr_fetch(array('k' => $url), 40, 1);
+        $kml = $got['k'] ?? null;
+        if (!$kml || strpos($kml, '<kml') === false) {
+            continue;
+        }
+        return array('date' => substr($day, 0, 4) . '-' . substr($day, 4, 2) . '-' . substr($day, 6, 2), 'plumes' => gsa_aq_smoke_parse($kml));
+    }
+    return null;
+}
+
+function gsa_aq_band($aqi)
+{
+    if ($aqi === null) {
+        return 'none';
+    }
+    if ($aqi <= 50) {
+        return 'good';
+    }
+    if ($aqi <= 100) {
+        return 'moderate';
+    }
+    if ($aqi <= 150) {
+        return 'usg';
+    }
+    if ($aqi <= 200) {
+        return 'unhealthy';
+    }
+    if ($aqi <= 300) {
+        return 'veryunhealthy';
+    }
+    return 'hazardous';
+}
+
+function gsa_aq_build($previous = null)
+{
+    $air = gsa_aq_airnow();
+    if ($air === null) {
+        return null;
+    }
+    $smoke = gsa_aq_smoke();
+    $smokeError = null;
+    if ($smoke === null) {
+        $smokeError = 'NOAA HMS smoke file did not answer at ' . gmdate('H:i\Z');
+        $smoke = ($previous && isset($previous['smoke'])) ? $previous['smoke'] : array('date' => null, 'plumes' => array());
+    }
+    $bands = array('good' => 0, 'moderate' => 0, 'usg' => 0, 'unhealthy' => 0, 'veryunhealthy' => 0, 'hazardous' => 0, 'none' => 0);
+    $obs = 0;
+    foreach ($air['monitors'] as $m) {
+        $bands[gsa_aq_band($m['aqi'] ?? null)]++;
+        if ($m['time'] && $m['time'] > $obs) {
+            $obs = $m['time'];
+        }
+    }
+    $dens = array('Light' => 0, 'Medium' => 0, 'Heavy' => 0);
+    foreach ($smoke['plumes'] as $p) {
+        $dens[$p['density']]++;
+    }
+    $out = array(
+        'source' => 'EPA AirNow & NOAA HMS Smoke',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'observed' => $obs ? gmdate('Y-m-d\TH:i:s\Z', $obs) : null,
+        'monitors' => $air['monitors'],
+        'agencies' => $air['agencies'],
+        'smoke' => $smoke,
+        'counts' => array('monitors' => count($air['monitors']), 'feedMonitors' => $air['feedCount'], 'bands' => $bands, 'plumes' => count($smoke['plumes']), 'density' => $dens),
+    );
+    if ($smokeError) {
+        $out['smokeError'] = $smokeError;
+    }
+    return $out;
+}
+
+function gsa_aq_refresh($opts = array())
+{
+    global $dataDir;
+    $maxAge = (int) ($opts['maxAge'] ?? 870);
+    $cached = gsa_aq_cache_read();
+    if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+        return array('ok' => true, 'skipped' => true);
+    }
+    $lock = fopen($dataDir . '/airquality.lock', 'c');
+    if (!$lock) {
+        return array('ok' => false, 'error' => 'no lock file');
+    }
+    if (!flock($lock, !empty($opts['wait']) ? LOCK_EX : (LOCK_EX | LOCK_NB))) {
+        fclose($lock);
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        $cached = gsa_aq_cache_read();
+        if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+            return array('ok' => true, 'skipped' => true);
+        }
+        $t0 = microtime(true);
+        $built = gsa_aq_build($cached);
+        if ($built === null) {
+            if ($cached) {
+                $cached['lastError'] = 'EPA AirNow did not answer at ' . gmdate('H:i\Z');
+                gsa_atomic_write(gsa_aq_cache_file(), json_encode($cached));
+            }
+            return array('ok' => false, 'error' => 'EPA AirNow did not answer');
+        }
+        $built['fetchedAt'] = time();
+        gsa_atomic_write(gsa_aq_cache_file(), json_encode($built));
+        return array('ok' => true, 'monitors' => $built['counts']['monitors'], 'plumes' => $built['counts']['plumes'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function gsa_aq_snapshot()
+{
+    $cached = gsa_aq_cache_read();
+    $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    if ($age > 1800) {
+        gsa_aq_refresh(array('maxAge' => 1800, 'wait' => !$cached));
+        $cached = gsa_aq_cache_read();
+        $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    }
+    if (!$cached) {
+        return array('source' => 'EPA AirNow & NOAA HMS Smoke', 'updated' => gmdate('Y-m-d\TH:i:s\Z'), 'stale' => false,
+            'error' => 'EPA AirNow did not answer. Try again in a few minutes.', 'monitors' => array(), 'agencies' => array(), 'smoke' => array('date' => null, 'plumes' => array()),
+            'counts' => array('monitors' => 0, 'bands' => array(), 'plumes' => 0, 'density' => array()));
+    }
+    unset($cached['fetchedAt']);
+    $cached['stale'] = $age > 3600;
+    $cached['ageSeconds'] = $age;
+    return $cached;
+}

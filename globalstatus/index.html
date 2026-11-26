@@ -21,7 +21,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261125e" />
+  <link rel="stylesheet" href="/cesium.css?v=20261125f" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
   </script>
@@ -155,6 +155,8 @@
         <button type="button" class="layer" data-layer-toggle="disease" aria-pressed="false"><span class="layer-name"><span class="swatch disease"></span> GLOBAL DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="disease">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="animal" aria-pressed="false"><span class="layer-name"><span class="swatch animal"></span> GLOBAL ANIMAL DISEASE OUTBREAK</span><span class="layer-meta"><em data-count="animal">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <button type="button" class="layer" data-layer-toggle="hunger" aria-pressed="false"><span class="layer-name"><span class="swatch hunger"></span> GLOBAL HUNGER</span><span class="layer-meta"><em data-count="hunger">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <button type="button" class="layer" data-layer-toggle="airquality" aria-pressed="false"><span class="layer-name"><span class="swatch airquality"></span> USA AIR QUALITY</span><span class="layer-meta"><em data-count="airquality">—</em><span class="switch" aria-hidden="true"></span></span></button>
+        <p class="sw-note" data-airquality-note="airquality" hidden></p>
       </details>
       <details class="layer-group" id="group-firearms" data-layer-group="firearms">
         <summary class="layer-group-head"><span>FIREARMS</span><em class="layer-group-count"></em></summary>
@@ -502,9 +504,10 @@
   <script src="/internet.js?v=20261125a"></script>
   <script src="/tfr.js?v=20261125c"></script>
   <script src="/delays.js?v=20261125e"></script>
+  <script src="/airquality.js?v=20261125f"></script>
   <script src="/powerlines.js?v=20261124n"></script>
   <script src="/geocoder.js?v=20261124l"></script>
   <script src="/nearby.js?v=20261124k"></script>
-  <script src="/cesium.js?v=20261125e"></script>
+  <script src="/cesium.js?v=20261125f"></script>
 </body>
 </html>

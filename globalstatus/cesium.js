@@ -103,6 +103,8 @@ const state = {
     tfr: false,
     // FLIGHT DELAYS (delays.js): live FAA NAS Status airport delays.
     delays: false,
+    // USA AIR QUALITY (airquality.js): live EPA AirNow monitors + NOAA HMS smoke.
+    airquality: false,
     // MILITIAS (militias.js): saved static pin layers, not a live feed.
     militianational: false,
     militiastate: false,
@@ -137,6 +139,7 @@ const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "milit
 const INTERNET_KEYS = ["inetusa", "inetglobal"];
 const TFR_KEYS = ["tfr"];
 const DELAYS_KEYS = ["delays"];
+const AIRQUALITY_KEYS = ["airquality"];
 const POWERLINES_KEYS = ["powerlines"];
 
 const COLORS = {
@@ -495,6 +498,13 @@ async function startGlobe() {
   }
   if (window.GsaDelays) {
     window.GsaDelays.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaAirQuality) {
+    window.GsaAirQuality.init({
       viewer: () => state.viewer,
       setCount,
       statusLive: () => statusLive(),
@@ -1311,6 +1321,10 @@ function sourceFor(layer) {
     const delaysSource = window.GsaDelays.sourceFor(layer);
     if (delaysSource) return delaysSource;
   }
+  if (window.GsaAirQuality && window.GsaAirQuality.sourceFor) {
+    const aqSource = window.GsaAirQuality.sourceFor(layer);
+    if (aqSource) return aqSource;
+  }
   return null;
 }
 
@@ -1526,6 +1540,9 @@ function setLayer(layer, on) {
   if (DELAYS_KEYS.includes(layer) && window.GsaDelays) {
     window.GsaDelays.setActive(layer, state.layers[layer]);
   }
+  if (AIRQUALITY_KEYS.includes(layer) && window.GsaAirQuality) {
+    window.GsaAirQuality.setActive(layer, state.layers[layer]);
+  }
   if (POWERLINES_KEYS.includes(layer) && window.GsaPowerLines) {
     window.GsaPowerLines.setActive(layer, state.layers[layer]);
   }
@@ -1591,6 +1608,7 @@ const LAYER_LABEL = {
   inetglobal: "GLOBAL INTERNET OUTAGES",
   tfr: "FAA TFR",
   delays: "FLIGHT DELAYS",
+  airquality: "USA AIR QUALITY",
   militianational: "NATIONAL GROUPS",
   militiastate: "STATEWIDE GROUPS",
   militialocal: "LOCAL GROUPS",
@@ -1615,7 +1633,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "delays", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "delays", "conflicts", "hunger", "mesh", "disease", "animal", "airquality", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -3176,6 +3194,13 @@ function cullAircraftHorizon() {
       if (delaysSource) sources.push(delaysSource);
     }
   }
+  // USA AIR QUALITY monitor pins and smoke plumes (plumes carry their center).
+  if (window.GsaAirQuality && window.GsaAirQuality.KEYS) {
+    for (const key of window.GsaAirQuality.KEYS) {
+      const aqSource = window.GsaAirQuality.sourceFor(key);
+      if (aqSource) sources.push(aqSource);
+    }
+  }
   // FAA TFR center pins (and their flat areas, which carry the same center).
   if (window.GsaTfr && window.GsaTfr.KEYS) {
     for (const key of window.GsaTfr.KEYS) {
@@ -3453,6 +3478,9 @@ function liveHtml(item, opts = {}) {
   }
   else if (item.delays && window.GsaDelays) {
     extra = window.GsaDelays.popupHtml(item, opts);
+  }
+  else if (item.airquality && window.GsaAirQuality) {
+    extra = window.GsaAirQuality.popupHtml(item, opts);
   }
   else if (item.power && window.GsaPowerLines) {
     extra = window.GsaPowerLines.popupHtml(item, opts);
@@ -3856,6 +3884,7 @@ function statusLive(error) {
   if (window.GsaInternet) parts.push(...window.GsaInternet.statusParts());
   if (window.GsaTfr) parts.push(...window.GsaTfr.statusParts());
   if (window.GsaDelays) parts.push(...window.GsaDelays.statusParts());
+  if (window.GsaAirQuality) parts.push(...window.GsaAirQuality.statusParts());
   if (window.GsaPowerLines) parts.push(...window.GsaPowerLines.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));
