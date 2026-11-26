@@ -1724,6 +1724,33 @@ button:hover { border-color: #9fd4e2; }
   .gsa-locate-note { top: 0; left: auto; right: 46px; max-width: min(240px, calc(100vw - 72px)); }
 }
 
+/* Address pick: ask before the nearby radius turns layers on. */
+.radius-ask {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+  width: min(320px, calc(100% - 24px));
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  background: rgba(8, 14, 20, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  text-align: center;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.radius-ask[hidden] { display: none; }
+.radius-ask p { margin: 0; font-size: 15px; letter-spacing: 0.04em; line-height: 1.35; }
+.radius-ask-actions { display: flex; gap: 8px; }
+.radius-ask-actions button { flex: 1 1 0; min-height: 40px; font-size: 14px; letter-spacing: 0.08em; }
+.radius-ask-actions button[data-radius-ask="yes"] { border-color: #9fd4e2; }
+@media (max-width: 800px) {
+  .radius-ask { top: auto; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translate(-50%, 0); }
+}
+
 /* WHAT'S NEARBY card (nearby.js): opens after an address search pick. */
 .nearby-card {
   position: absolute;
