@@ -1,5 +1,5 @@
 // First launch "Choose your first view" picker (GS-47).
-// NUKE SIMULATOR comes first, then SDR (your own radio, sdr-popup.js), then one row for
+// NUKE SIMULATOR comes first, then SDR & MESH (your own radio, sdr-popup.js), then one row for
 // every sidebar layer category except
 // SIMULATORS & GAMES (its only layer is the Nuke Simulator), then EXPLORE MANUALLY.
 // A category row opens that category. Each layer has an on/off switch. Turning a
@@ -65,7 +65,7 @@
       icon: I.nuke,
     },
     // SDR (sdr-popup.js): your own USB radio, listed directly under NUKE SIMULATOR.
-    { id: "sdr", group: "group-sdr", sdr: true, title: "SDR", sub: "Plug a USB SDR into your computer or phone to use · HackRF, PortaPack, RTL-SDR", icon: I.radio },
+    { id: "sdr", group: "group-sdr", sdr: true, title: "SDR & MESH", sub: "Plug in your SDR or mesh radio to see live signals on the map", icon: I.radio },
     { id: "transportation", group: "group-transportation", title: "TRANSPORTATION", sub: "Live aircraft, ships, airports, FAA TFRs and flight delays", view: VIEW_US, icon: I.plane },
     { id: "space", group: "group-space", title: "SPACE", sub: "ISS, satellites, aurora and the day / night line", view: VIEW_WORLD, icon: I.space },
     { id: "weather", group: "group-weather", title: "WEATHER", sub: "Global radar, US weather alerts and hurricanes", view: [-168, 5, -48, 74], icon: I.cloud },
