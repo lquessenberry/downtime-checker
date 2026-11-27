@@ -683,9 +683,24 @@ button:hover { border-color: #9fd4e2; }
 .chip.on { border-color: #9fd4e2; }
 .rail-head { flex-wrap: wrap; gap: 6px; }
 .feed { overflow: auto; flex: 1; }
+.feed-favicon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: #10202c;
+  object-fit: cover;
+  flex: none;
+}
+.selected-favicon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
 .row {
   display: grid;
-  grid-template-columns: 72px 1fr auto;
+  grid-template-columns: 16px 72px 1fr auto;
   gap: 8px;
   align-items: center;
   padding: 6px 0;

@@ -51,7 +51,7 @@ Colors follow the **live CSS swatches** in `globalstatus/cesium.css` so a later 
 
 Layers: nuke simulator, aircraft, ships, airports, TFRs, delays, ISS, satellites, aurora, day/night, radar, NWS alerts, hurricanes, quakes, volcanoes, tsunami, wildfires, disasters, rivers, coastal, USA/UK/Canada/Australia power outages, USA/global internet outages, streams, AM/FM, cell towers, power lines, power plants, mesh, jamming, ham/WebSDR, police, sheriff, fire, hospitals, conflicts, bases, designations (opt-in), disease, animal disease, hunger, air quality, USA/world firearms, CCW, four militia scopes, UFO, bigfoot.
 
-`designations` and `radio` are not in the current layer rail; the glyphs are ready for a later toggle. **Not wired** into Cesium billboards or the rail — the swatches there stay as they are until someone reviews the sheet.
+`designations` and `radio` are not in the current layer rail yet; the glyphs are ready for that toggle. Lee approved every set — including firearms, militia, designations, and ham/radio — for all surfaces, store listings included. Layer-rail and Cesium wiring for these glyphs is still a follow-up so the current swatches stay stable until that pass.
 
 ### 3. Splash / loading (13 files)
 
@@ -93,7 +93,7 @@ Other iOS `apple-touch-startup-image` sizes are left as a checklist so we do not
 
 ### Review sheets
 
-`preview/sheet-01-icons.png`, `sheet-02-markers.png`, `sheet-03-splash-store.png`, `sheet-04-ui.png`, plus the earlier logo, icon-family, and map-conventions sheets.
+`preview/sheet-01-icons.png`, `sheet-02-markers.png`, `sheet-03-splash-store.png`, `sheet-04-ui.png`, `sheet-05-favicons.png`, plus the earlier logo, icon-family, and map-conventions sheets.
 
 The nuclear-effects convention sheet uses the public effects-radius check values (1 MT airburst). It is a color legend, not calculator source. NUKEMAP is inspiration only.
 
@@ -106,12 +106,31 @@ The nuclear-effects convention sheet uses the public effects-radius check values
 - Boot-splash `<video poster="/assets/splash/boot-poster-1280x720.png">`
 - Icon query strings bumped to `?v=20261127a`
 
+## Grid favicon markers
+
+The scheduled World Grid pass (`poll-runner.php grid` → `run_scheduled_scan` in `router.php`) now refreshes favicons for **up** hosts after the probe finishes, using whatever remains of the 8-minute grid deadline.
+
+| Item | Value |
+| --- | --- |
+| Lookup order | `https://{host}/favicon.ico`, then `<link rel=icon>` from the homepage head, then the set-1 mark (`/icons/grid-fallback-32.png` and `-64.png`) |
+| Cache | `globalstatus/data/favicons/{hash}.png` and `{hash}-32.png` (content-hash of the 64 px PNG). Index: `data/favicon-index.json` |
+| TTL | 14 days for a good icon; 24 hours before retrying a fallback/error |
+| Conditional GET | `ETag` / `If-Modified-Since` when we already have a source URL |
+| Limits | 200 hosts per pass, 8 at a time, 3 s timeout / 2 s connect, 256 KB body cap, 64 KB homepage cap, max 3 redirects |
+| SSRF | Public DNS hostnames only; localhost, private, and link-local IPs blocked; `javascript:` / `file:` / `data:` dropped |
+| Public URL | `/api/favicons/{hash}.png` (and `-32.png`) with `ETag` and `Cache-Control: public, max-age=604800, stale-while-revalidate=86400`. Unknown hashes serve the set-1 fallback. |
+| Globe | Cesium billboards use the cached 64 px icon with a set-5 status ring (up / down / pending). The feed and selected card show the 32/64 px icon too. Down hosts keep a previously cached icon or the fallback; they are not fetched this pass. |
+
+The live cache is gitignored and is not published by FTP. On GoDaddy the PHP router serves the files (Apache blocks `/data/`). On FrankenPHP, `/api/*` already falls through to `router.php`, so this works without a Caddy change; a later `file_server` shortcut can be added in the poller merge the same way other snapshot caches are served.
+
+Tests: `php scripts/gsa-favicon-test.php` (fixtures only, no live network).
+
 ## Wiring checklist (left for review)
 
-Do **not** do these in this PR without a look at the contact sheets:
+Do **not** do these without a look at the contact sheets:
 
-1. Swap the layer-rail CSS swatches or Cesium billboards for `markers/` glyphs. Keep `icons/adsb-sprites.png` / `adsb-shapes.json` — those are a special sprite sheet.
-2. Replace the older visualizer icons (`visualizer/public/icons/bomb.png`, `ham-radio.png`, `satellite.png`) with the new conflicts / radio / satellite badges.
+1. Swap the layer-rail CSS swatches or Cesium billboards for `markers/` glyphs. Keep `icons/adsb-sprites.png` / `adsb-shapes.json` — those are a special sprite sheet. All glyphs, including firearms, militia, designations, and ham/radio, are approved for that pass.
+2. Replace the older visualizer icons (`visualizer/public/icons/bomb.png`, `ham-radio.png`, `satellite.png`) with the new conflicts / radio / satellite badges (approved to show everywhere).
 3. When `rust/native-core` is merged onto this branch, copy:
    - `icons/android/mipmap/**` and the adaptive XML → `packaging/android/res/`
    - `icons/android/ic_launcher_{foreground,background,monochrome}-432.png` → the xxxhdpi adaptive layers
@@ -127,12 +146,14 @@ Do **not** do these in this PR without a look at the contact sheets:
 
 ## Decisions for Lee or Will
 
+Settled 27 Nov 2026 (America/Chicago): every icon, including firearms, militia, designations, and ham/radio, is approved for all surfaces and for store listings.
+
+Still open:
+
 - **Tagline.** Marketing art uses “The state of the world, by the numbers.” Tagline-free variants live in `store/notagline/` if you would rather ship without it.
 - **Marker colors vs tokens.** Markers follow the live CSS swatches. Three notable mismatches with the WOR-5 tokens: disease is `#ff4d6a` in CSS and `#b78bff` in tokens; hunger is `#af4729` vs token food `#d9b44a`; conflicts are `#d65b29` vs token `#ff5a5f`. Pick one source of truth before wiring markers into the globe.
-- **Designations and radio.** Glyphs are included even though those toggles are not in the current rail. Say if they should wait, or if radio should replace the empty `api/radio.json` work as well.
-- **Firearms / militia glyphs.** These are plain schematic legend marks (side-view shape, flag, three figures). Change or drop any you do not want in a public store listing.
-- **Visualizer bomb / ham / satellite PNGs.** Left untouched so the older Cesium visualizer keeps its current look until you choose to switch it.
 - **Boot video vs static splash.** The video stays; the new poster only covers the first paint and no-video cases. A later pass can switch reduced-motion users to the static splash.
+- **Visualizer icon swap** and **layer-rail wiring** are approved, but not done in this PR (see the checklist).
 
 ## Rebuild
 

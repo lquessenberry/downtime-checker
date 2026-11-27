@@ -136,6 +136,10 @@ function gsa_http_routes()
         exit;
     }
 
+    if (preg_match('#^/api/favicons/([a-f0-9]{16,64})(-32)?\.png$#', $path, $match) && $method === 'GET') {
+        gsa_favicon_http_serve($match[1], (isset($match[2]) && $match[2] === '-32') ? 32 : 64);
+    }
+
     json_out(404, array('error' => 'Not found'));
 }
 
@@ -384,7 +388,11 @@ function run_scheduled_scan($id = 'everything', $country = '', $slice = 0)
     $state['total'] = count($targets);
     $state['startedAt'] = (int) round(microtime(true) * 1000);
     $state['results'] = array_fill(0, count($targets), null);
-    $state = run_scan($state, $targets, $lock, false, microtime(true) + GSA_GRID_MAX_SEC);
+    $deadline = microtime(true) + GSA_GRID_MAX_SEC;
+    $state = run_scan($state, $targets, $lock, false, $deadline);
+    if (empty($state['stopped']) && empty($state['timedOut']) && function_exists('gsa_favicon_refresh_scan')) {
+        $state['favicons'] = gsa_favicon_refresh_scan($state, $deadline);
+    }
     $info = array(
         'up' => $state['up'],
         'down' => $state['down'],
@@ -392,6 +400,7 @@ function run_scheduled_scan($id = 'everything', $country = '', $slice = 0)
         'total' => $state['total'],
         'mode' => $state['mode'] ?? '',
         'ms' => $state['ms'] ?? 0,
+        'favicons' => $state['favicons'] ?? null,
     );
     $problem = gsa_pass_problem($state);
     if ($problem === null && $slice > 0) {

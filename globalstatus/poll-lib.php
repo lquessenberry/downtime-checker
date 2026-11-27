@@ -11,6 +11,8 @@ if (PHP_SAPI !== 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE
 }
 
 // A pass older than this still replays, but the page says how old it is.
+require_once __DIR__ . '/favicon-lib.php';
+
 defined('GSA_GRID_STALE_SEC') || define('GSA_GRID_STALE_SEC', 45 * 60);
 // The runner gives up after this many seconds and keeps the old result.
 defined('GSA_GRID_MAX_SEC') || define('GSA_GRID_MAX_SEC', 8 * 60);
@@ -184,6 +186,9 @@ function gsa_filter_scan_state($snap, $id, $country)
         } else {
             $down++;
         }
+    }
+    if (function_exists('gsa_favicon_attach_results')) {
+        $results = gsa_favicon_attach_results($results);
     }
     $heading = $id === 'country' ? $country : catalog_label($all ? 'everything' : $id);
     return array(

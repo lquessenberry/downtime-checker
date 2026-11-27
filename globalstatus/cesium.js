@@ -170,6 +170,83 @@ const COLORS = {
   pending: Cesium.Color.fromCssColorString("#ffb020"),
 };
 
+const FAVICON_FALLBACK = "/icons/grid-fallback-64.png";
+const FAVICON_FALLBACK_32 = "/icons/grid-fallback-32.png";
+const faviconComposeCache = new Map();
+
+function safeFaviconSrc(url, size) {
+  const s = String(url || "");
+  if (/^\/api\/favicons\/[a-f0-9]{16,64}(-32)?\.png$/.test(s)) return s;
+  if (s === FAVICON_FALLBACK || s === FAVICON_FALLBACK_32) return s;
+  return size === 32 ? FAVICON_FALLBACK_32 : FAVICON_FALLBACK;
+}
+
+function statusRingColor(status) {
+  if (status === "up") return "#3dff9a";
+  if (status === "down") return "#ff4d4d";
+  return "#ffb020";
+}
+
+function composeFaviconMarker(url, status) {
+  const src = safeFaviconSrc(url, 64);
+  const key = src + "|" + (status || "pending");
+  if (faviconComposeCache.has(key)) return faviconComposeCache.get(key);
+  const work = new Promise((resolve) => {
+    const img = new Image();
+    img.decoding = "async";
+    const finish = (source) => {
+      const size = 64;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(source || FAVICON_FALLBACK);
+        return;
+      }
+      const ring = status === "down" ? 5 : 4;
+      const cx = size / 2;
+      ctx.clearRect(0, 0, size, size);
+      ctx.beginPath();
+      ctx.arc(cx, cx, cx - 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#070b10";
+      ctx.fill();
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cx, cx - ring - 1, 0, Math.PI * 2);
+      ctx.clip();
+      if (source) ctx.drawImage(source, ring + 1, ring + 1, size - (ring + 1) * 2, size - (ring + 1) * 2);
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(cx, cx, cx - ring / 2 - 0.5, 0, Math.PI * 2);
+      ctx.strokeStyle = statusRingColor(status);
+      ctx.lineWidth = ring;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cx, cx - 0.75, 0, Math.PI * 2);
+      ctx.strokeStyle = "#2a2e3c";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      resolve(canvas);
+    };
+    img.onload = () => finish(img);
+    img.onerror = () => {
+      if (src !== FAVICON_FALLBACK) {
+        const fb = new Image();
+        fb.onload = () => finish(fb);
+        fb.onerror = () => finish(null);
+        fb.src = FAVICON_FALLBACK;
+        return;
+      }
+      finish(null);
+    };
+    img.src = src;
+  });
+  faviconComposeCache.set(key, work);
+  return work;
+}
+
+
 // Blue hub pin and World Grid scan-line start. There is no default city:
 // a pin appears only after a fresh per-visitor lookup (see locateStartup).
 let visitorOrigin = null;
@@ -1511,23 +1588,43 @@ function upsertArc(result) {
 function upsertPoint(result) {
   if (!state.viewer || !state.scanSource || result.lat == null || result.lon == null) return;
   const color = COLORS[result.status] || COLORS.pending;
-  const pixelSize = result.status === "down" ? 16 : 12;
+  const pixelSize = result.status === "down" ? 32 : 28;
   let entity = state.points.get(result.index);
   const position = Cesium.Cartesian3.fromDegrees(result.lon, result.lat, 0);
+  const billboard = {
+    image: safeFaviconSrc(result.favicon, 64),
+    width: pixelSize,
+    height: pixelSize,
+    color: Cesium.Color.WHITE,
+    disableDepthTestDistance: Number.POSITIVE_INFINITY,
+  };
   if (!entity) {
     entity = state.scanSource.entities.add({
       position,
-      point: markerPoint(color, pixelSize),
+      billboard,
     });
     entity._resultIndex = result.index;
     state.points.set(result.index, entity);
     upsertArc(result);
-    return;
+  } else {
+    entity.position = position;
+    if (!entity.billboard) entity.billboard = billboard;
+    else {
+      entity.billboard.width = pixelSize;
+      entity.billboard.height = pixelSize;
+    }
+    upsertArc(result);
   }
-  entity.position = position;
-  entity.point.pixelSize = pixelSize;
-  entity.point.color = color;
-  upsertArc(result);
+  composeFaviconMarker(result.favicon, result.status).then((image) => {
+    const current = state.points.get(result.index);
+    if (!current || !current.billboard) return;
+    current.billboard.image = image;
+    current.billboard.width = pixelSize;
+    current.billboard.height = pixelSize;
+    if (state.viewer && state.viewer.scene && state.viewer.scene.requestRender) {
+      state.viewer.scene.requestRender();
+    }
+  }).catch(() => {});
 }
 
 function visibleResults() {
@@ -1552,6 +1649,7 @@ function rowEl(result) {
   const row = document.createElement("div");
   row.className = "row";
   row.innerHTML = `
+    <img class="feed-favicon" src="${esc(safeFaviconSrc(result.favicon32 || result.favicon, 32))}" alt="" width="16" height="16" />
     <div class="badge ${esc(result.status)}">${esc(result.status.toUpperCase())}</div>
     <div>
       <div class="name">${esc(result.name)}</div>
@@ -1582,7 +1680,7 @@ function fillSelected(html) {
 
 function showSelected(result) {
   state.selected = result;
-  fillSelected(`<b>${esc(result.status.toUpperCase())}</b> ${esc(result.name)}<br>${esc(result.address)}${result.ip ? " · " + esc(result.ip) : ""}<br>${esc(result.location || result.country || "location pending")}<br>${result.ms || 0}ms · ${esc(result.method || "—")}`);
+  fillSelected(`<img class="feed-favicon selected-favicon" src="${esc(safeFaviconSrc(result.favicon, 64))}" alt="" width="24" height="24" /><b>${esc(result.status.toUpperCase())}</b> ${esc(result.name)}<br>${esc(result.address)}${result.ip ? " · " + esc(result.ip) : ""}<br>${esc(result.location || result.country || "location pending")}<br>${result.ms || 0}ms · ${esc(result.method || "—")}`);
 }
 
 function updateHud() {

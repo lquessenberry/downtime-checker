@@ -15,6 +15,8 @@
 //
 // World Grid: one full pass is saved to data/scan-cache.json. Visitors'
 // LOCK & SCAN replays that file; it never starts a scan.
+// After a finished pass, reachable hosts have favicons refreshed into
+// data/favicons/ (14-day TTL, leftover time from the 8-minute grid budget).
 // Aircraft: one civilian adsb.lol pull each run, plus /v2/mil only when
 // the last mil pull is at least 15 minutes old. Visitors read the cache.
 // Jamming: the same */5 aircraft cron also refreshes GPSInterference.com
