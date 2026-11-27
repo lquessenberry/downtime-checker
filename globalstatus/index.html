@@ -22,10 +22,25 @@
   <!-- Phone numbers in cards stay plain text: no automatic tel: links on phones. -->
   <meta name="format-detection" content="telephone=no, address=no, email=no" />
   <title>Global Status App</title>
-  <link rel="icon" href="/favicon.png?v=20261126h" type="image/png" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20261126h" />
+  <meta name="description" content="The state of the world, by the numbers. Outages, conflicts, hazards and humanitarian crises on one live globe." />
+  <link rel="icon" href="/favicon.svg?v=20261127a" type="image/svg+xml" />
+  <link rel="icon" href="/favicon.png?v=20261127a" type="image/png" sizes="256x256" />
+  <link rel="icon" href="/favicon.ico?v=20261127a" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20261127a" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#070b10" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Global Status" />
+  <meta property="og:title" content="Global Status App" />
+  <meta property="og:description" content="The state of the world, by the numbers. Outages, conflicts, hazards and humanitarian crises on one live globe." />
+  <meta property="og:url" content="https://globalstatus.app/" />
+  <meta property="og:image" content="https://globalstatus.app/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Global Status App" />
+  <meta name="twitter:description" content="The state of the world, by the numbers. Outages, conflicts, hazards and humanitarian crises on one live globe." />
+  <meta name="twitter:image" content="https://globalstatus.app/og-image.png" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Global Status" />
@@ -51,7 +66,7 @@
 <body>
   <div id="boot-splash" class="boot-splash">
     <div class="boot-visual">
-      <video autoplay muted loop playsinline preload="auto" width="736" height="416" aria-label="Satellite above the Earth">
+      <video autoplay muted loop playsinline preload="auto" width="736" height="416" poster="/assets/splash/boot-poster-1280x720.png" aria-label="Satellite above the Earth">
         <source src="/start-satellite.mp4?v=20261126n" type="video/mp4" />
       </video>
     </div>
