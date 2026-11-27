@@ -2457,4 +2457,1852 @@ function gsa_space_snapshot($name)
     return $cached;
 }
 
+// ---------- INTERNET OUTAGES (IODA, Georgia Tech) ----------
+// USA INTERNET OUTAGES and GLOBAL INTERNET OUTAGES read data/ioda-cache.json.
+// The */5 aircraft cron refreshes it when it is at least 10 minutes old
+// (gsa_ioda_refresh); a visitor request only refreshes a cache older than
+// 20 minutes, so IODA sees at most a few calls an hour.
+function gsa_ioda_cache_file()
+{
+    global $dataDir;
+    return $dataDir . '/ioda-cache.json';
+}
+
+function gsa_ioda_cache_read()
+{
+    $file = gsa_ioda_cache_file();
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+function gsa_ioda_signal_label($source)
+{
+    $labels = array(
+        'bgp' => 'BGP (routing)',
+        'ping-slash24' => 'Active probing',
+        'merit-nt' => 'Telescope (darknet traffic)',
+        'gtr' => 'Google traffic',
+        'gtr-norm' => 'Google traffic',
+    );
+    return $labels[$source] ?? $source;
+}
+
+function gsa_ioda_severity($score)
+{
+    if ($score >= 100000) {
+        return 'high';
+    }
+    if ($score >= 5000) {
+        return 'medium';
+    }
+    return 'low';
+}
+
+// Fetch several IODA URLs at once. Returns decoded bodies keyed like $urls, or
+// null when any of them fails.
+function gsa_ioda_fetch_all($urls, $timeout = 50)
+{
+    if (!function_exists('curl_multi_init')) {
+        return null;
+    }
+    $multi = curl_multi_init();
+    $handles = array();
+    foreach ($urls as $key => $url) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, array(
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_HTTPHEADER => array(
+                'Accept: application/json',
+                'User-Agent: GlobalStatusApp/1.0 (+https://globalstatus.app)',
+            ),
+        ));
+        curl_multi_add_handle($multi, $ch);
+        $handles[$key] = $ch;
+    }
+    do {
+        $status = curl_multi_exec($multi, $running);
+        if ($running) {
+            curl_multi_select($multi, 1.0);
+        }
+    } while ($running && $status === CURLM_OK);
+    $out = array();
+    $ok = true;
+    foreach ($handles as $key => $ch) {
+        $body = curl_multi_getcontent($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_multi_remove_handle($multi, $ch);
+        curl_close($ch);
+        $decoded = ($body !== false && $code >= 200 && $code < 300) ? json_decode((string) $body, true) : null;
+        if (!is_array($decoded) || !empty($decoded['error']) || !isset($decoded['data']) || !is_array($decoded['data'])) {
+            $ok = false;
+            continue;
+        }
+        $out[$key] = $decoded['data'];
+    }
+    curl_multi_close($multi);
+    return $ok ? $out : null;
+}
+
+function gsa_ioda_places($events, $summary, $until, $centroid)
+{
+    $places = array();
+    foreach ($summary as $row) {
+        $entity = $row['entity'] ?? array();
+        $code = (string) ($entity['code'] ?? '');
+        if ($code === '') {
+            continue;
+        }
+        $places[$code] = array(
+            'code' => $code,
+            'name' => (string) ($entity['name'] ?? $code),
+            'score' => (float) ($row['scores']['overall'] ?? 0),
+            'events' => (int) ($row['event_cnt'] ?? 0),
+            'signals' => array(),
+        );
+    }
+    foreach ($events as $ev) {
+        $loc = (string) ($ev['location'] ?? '');
+        $code = substr($loc, strpos($loc, '/') + 1);
+        if ($code === '') {
+            continue;
+        }
+        if (!isset($places[$code])) {
+            $places[$code] = array('code' => $code, 'name' => (string) ($ev['location_name'] ?? $code), 'score' => 0.0, 'events' => 0, 'signals' => array());
+        }
+        $start = (int) ($ev['start'] ?? 0);
+        $end = $start + (int) ($ev['duration'] ?? 0);
+        $source = (string) ($ev['datasource'] ?? '');
+        $score = (float) ($ev['score'] ?? 0);
+        $sig = &$places[$code]['signals'][$source];
+        if (!isset($sig)) {
+            $sig = array('source' => $source, 'label' => gsa_ioda_signal_label($source), 'score' => 0.0, 'start' => $start, 'end' => $end);
+        }
+        $sig['score'] = max($sig['score'], $score);
+        $sig['start'] = min($sig['start'], $start);
+        $sig['end'] = max($sig['end'], $end);
+        unset($sig);
+    }
+    $out = array();
+    foreach ($places as $code => $place) {
+        $where = $centroid($place);
+        if (!$where) {
+            continue;
+        }
+        $signals = array_values($place['signals']);
+        $start = 0;
+        $end = 0;
+        $maxSignal = 0.0;
+        foreach ($signals as &$sig) {
+            $sig['ongoing'] = $sig['end'] >= $until - 900;
+            $sig['score'] = round($sig['score'], 1);
+            $start = $start ? min($start, $sig['start']) : $sig['start'];
+            $end = max($end, $sig['end']);
+            $maxSignal = max($maxSignal, $sig['score']);
+        }
+        unset($sig);
+        usort($signals, function ($a, $b) {
+            return $b['score'] <=> $a['score'];
+        });
+        $score = $place['score'] ?: $maxSignal;
+        $out[] = array(
+            'code' => $code,
+            'name' => $where[2] ?? $place['name'],
+            'lat' => $where[0],
+            'lon' => $where[1],
+            'score' => round($score, 1),
+            'severity' => gsa_ioda_severity($score),
+            'ongoing' => $signals ? $end >= $until - 900 : true,
+            'start' => $start ?: null,
+            'end' => $end ?: null,
+            'events' => max($place['events'], count($signals)),
+            'signals' => $signals,
+        );
+    }
+    usort($out, function ($a, $b) {
+        return $b['score'] <=> $a['score'];
+    });
+    return $out;
+}
+
+function gsa_ioda_build()
+{
+    global $root;
+    $until = time();
+    $from = $until - 86400;
+    $base = 'https://api.ioda.inetintel.cc.gatech.edu/v2/outages/';
+    $win = 'from=' . $from . '&until=' . $until;
+    $data = gsa_ioda_fetch_all(array(
+        'countrySummary' => $base . 'summary?entityType=country&' . $win . '&limit=500',
+        'countryEvents' => $base . 'events?entityType=country&' . $win . '&limit=3000',
+        'usSummary' => $base . 'summary?entityType=region&relatedTo=country/US&' . $win . '&limit=500',
+        'usEvents' => $base . 'events?entityType=region&relatedTo=country/US&' . $win . '&limit=3000',
+    ));
+    if ($data === null) {
+        return null;
+    }
+    $cent = json_decode((string) @file_get_contents($root . '/api/internet-centroids.json'), true);
+    $countries = is_array($cent['countries'] ?? null) ? $cent['countries'] : array();
+    $states = is_array($cent['states'] ?? null) ? $cent['states'] : array();
+    // US territories go with USA INTERNET OUTAGES, not the global layer.
+    $usCodes = array('US', 'PR', 'GU', 'VI', 'AS', 'MP', 'UM');
+    $usCountryEvents = array();
+    $usCountrySummary = array();
+    $globalEvents = array();
+    $globalSummary = array();
+    foreach ($data['countryEvents'] as $ev) {
+        $code = substr((string) ($ev['location'] ?? ''), 8);
+        if (in_array($code, $usCodes, true)) {
+            $usCountryEvents[] = $ev;
+        } else {
+            $globalEvents[] = $ev;
+        }
+    }
+    foreach ($data['countrySummary'] as $row) {
+        $code = (string) ($row['entity']['code'] ?? '');
+        if (in_array($code, $usCodes, true)) {
+            $usCountrySummary[] = $row;
+        } else {
+            $globalSummary[] = $row;
+        }
+    }
+    $countryAt = function ($place) use ($countries) {
+        $c = $countries[$place['code']] ?? null;
+        if (!$c) {
+            return null;
+        }
+        if ($place['code'] === 'US') {
+            return array(39.83, -98.58, 'United States (nationwide)');
+        }
+        return $c;
+    };
+    $stateAt = function ($place) use ($states) {
+        $s = $states[$place['name']] ?? null;
+        return $s ? array($s[0], $s[1], $place['name']) : null;
+    };
+    $us = array_merge(
+        gsa_ioda_places($data['usEvents'], $data['usSummary'], $until, $stateAt),
+        gsa_ioda_places($usCountryEvents, $usCountrySummary, $until, $countryAt)
+    );
+    usort($us, function ($a, $b) {
+        return $b['score'] <=> $a['score'];
+    });
+    $global = gsa_ioda_places($globalEvents, $globalSummary, $until, $countryAt);
+    return array(
+        'source' => 'IODA, Georgia Tech',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z', $until),
+        'from' => $from,
+        'until' => $until,
+        'us' => $us,
+        'global' => $global,
+        'counts' => array('us' => count($us), 'global' => count($global)),
+    );
+}
+
+// opts: force (ignore the 10-minute gate), maxAge (seconds).
+function gsa_ioda_refresh($opts = array())
+{
+    global $dataDir;
+    $maxAge = (int) ($opts['maxAge'] ?? 600);
+    $cached = gsa_ioda_cache_read();
+    if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+        return array('ok' => true, 'skipped' => true);
+    }
+    $lock = fopen($dataDir . '/ioda.lock', 'c');
+    if (!$lock) {
+        return array('ok' => false, 'error' => 'no lock file');
+    }
+    $wait = !empty($opts['wait']);
+    if (!flock($lock, $wait ? LOCK_EX : (LOCK_EX | LOCK_NB))) {
+        fclose($lock);
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        // Another request may have refreshed it while this one waited.
+        $cached = gsa_ioda_cache_read();
+        if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+            return array('ok' => true, 'skipped' => true);
+        }
+        $t0 = microtime(true);
+        $built = gsa_ioda_build();
+        if ($built === null) {
+            if ($cached) {
+                $cached['lastError'] = 'IODA did not answer at ' . gmdate('H:i\Z');
+                $cached['lastErrorAt'] = time();
+                gsa_snapshot_put(gsa_ioda_cache_file(), $cached, gsa_source_from_file(gsa_ioda_cache_file()));
+            }
+            return array('ok' => false, 'error' => 'IODA did not answer');
+        }
+        $built['fetchedAt'] = time();
+        gsa_snapshot_put(gsa_ioda_cache_file(), $built, gsa_source_from_file(gsa_ioda_cache_file()));
+        return array('ok' => true, 'us' => $built['counts']['us'], 'global' => $built['counts']['global'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function gsa_ioda_snapshot()
+{
+    $cached = gsa_ioda_cache_read();
+    $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    if ($age > 1200) {
+        // No cron refresh lately: refresh now. With no cache at all, wait for it.
+        gsa_ioda_refresh(array('maxAge' => 1200, 'wait' => !$cached));
+        $cached = gsa_ioda_cache_read();
+        $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    }
+    if (!$cached) {
+        return array(
+            'source' => 'IODA, Georgia Tech',
+            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+            'stale' => false,
+            'error' => 'IODA did not answer. Try again in a few minutes.',
+            'us' => array(),
+            'global' => array(),
+            'counts' => array('us' => 0, 'global' => 0),
+        );
+    }
+    unset($cached['fetchedAt'], $cached['lastErrorAt']);
+    $cached['stale'] = $age > 1800;
+    $cached['ageSeconds'] = $age;
+    return $cached;
+}
+
+// ---------- INTERNET OUTAGES: RIPE Atlas probes that went offline ----------
+// RIPE Atlas (RIPE NCC) test devices that dropped off in the last 24 hours. US
+// probes go in USA INTERNET OUTAGES, the rest in GLOBAL INTERNET OUTAGES, next
+// to the IODA state and country pins. data/ripe-atlas-cache.json is refreshed by
+// the */5 aircraft cron at most every 10 minutes (gsa_ripe_refresh); a visitor
+// request only refreshes a cache older than 20 minutes.
+//
+// Inputs, all public and keyless:
+//   measurement 7000 results  connect / disconnect events for every public probe
+//   /api/v2/probes/?id__in=   location, network and anchor flag for the ones kept
+//   ftp.ripe.net asnames      network names, cached for a day
+// Place names come from geo/world-cities.json (GeoNames, CC BY 4.0).
+const GSA_RIPE_MIN_OFFLINE = 1800;     // still offline: at least 30 minutes
+const GSA_RIPE_MIN_RECOVERED = 3600;   // back online: was out at least 1 hour
+const GSA_RIPE_FLAP_DROPS = 4;         // 4+ drops of 5+ minutes in 24h = flapping, skip
+const GSA_RIPE_FLAP_EVENTS = 12;       // or 12+ disconnects of any length
+
+function gsa_ripe_cache_file()
+{
+    global $dataDir;
+    return $dataDir . '/ripe-atlas-cache.json';
+}
+
+function gsa_ripe_cache_read()
+{
+    $file = gsa_ripe_cache_file();
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+function gsa_ripe_get($url, $timeout = 60)
+{
+    if (!function_exists('curl_init')) {
+        return null;
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, array(
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_ENCODING => '',
+        CURLOPT_HTTPHEADER => array(
+            'Accept: application/json, text/plain',
+            'User-Agent: GlobalStatusApp/1.0 (+https://globalstatus.app)',
+        ),
+    ));
+    $body = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    return ($body !== false && $code >= 200 && $code < 300) ? (string) $body : null;
+}
+
+// ASN => network name, from ftp.ripe.net/ripe/asnames/asn.txt, cached a day.
+// Lines look like "7922 COMCAST-7922 - Comcast Cable Communications, LLC, US".
+function gsa_ripe_asnames()
+{
+    global $dataDir;
+    $file = $dataDir . '/ripe-asnames.json';
+    $cached = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+    if (is_array($cached) && (time() - (int) ($cached['fetchedAt'] ?? 0)) < 86400 && !empty($cached['names'])) {
+        return $cached['names'];
+    }
+    $body = gsa_ripe_get('https://ftp.ripe.net/ripe/asnames/asn.txt', 60);
+    if ($body === null) {
+        return is_array($cached['names'] ?? null) ? $cached['names'] : array();
+    }
+    $names = array();
+    foreach (explode("\n", $body) as $line) {
+        if (!preg_match('/^(\d+)\s+(.+)$/', trim($line), $m)) {
+            continue;
+        }
+        $text = preg_replace('/,\s*[A-Z]{2}$/', '', trim($m[2]));
+        $pos = strpos($text, ' - ');
+        if ($pos !== false) {
+            $text = trim(substr($text, $pos + 3));
+        } elseif (preg_match('/^[A-Z0-9][A-Z0-9_.-]*\s+(.{3,})$/', $text, $mm)) {
+            // RIPE-region style "HANDLE Org Name": keep the org name.
+            $text = trim($mm[1]);
+        }
+        $names[$m[1]] = $text;
+    }
+    if ($names) {
+        gsa_atomic_write($file, json_encode(array('fetchedAt' => time(), 'names' => $names)));
+    }
+    return $names;
+}
+
+// Nearest GeoNames town (population 15,000+) to a point: array(name, region, km).
+function gsa_ripe_nearest_city($rows, $lat, $lon, $cc)
+{
+    $best = null;
+    $bestD = INF;
+    $cosLat = cos(deg2rad($lat));
+    // Rows are sorted by latitude; only look within about 3 degrees.
+    $lo = 0;
+    $hi = count($rows);
+    while ($lo < $hi) {
+        $mid = ($lo + $hi) >> 1;
+        if ($rows[$mid][0] < $lat - 3) {
+            $lo = $mid + 1;
+        } else {
+            $hi = $mid;
+        }
+    }
+    for ($i = $lo, $n = count($rows); $i < $n && $rows[$i][0] <= $lat + 3; $i++) {
+        $r = $rows[$i];
+        $dLat = $r[0] - $lat;
+        $dLon = ($r[1] - $lon) * $cosLat;
+        $d = $dLat * $dLat + $dLon * $dLon;
+        // Prefer a town in the probe's own country.
+        if ($r[3] !== $cc) {
+            $d *= 4;
+        }
+        if ($d < $bestD) {
+            $bestD = $d;
+            $best = $r;
+        }
+    }
+    if (!$best) {
+        return null;
+    }
+    $km = sqrt(pow($best[0] - $lat, 2) + pow(($best[1] - $lon) * $cosLat, 2)) * 111.2;
+    return array($best[2], $best[4], round($km), $best[3]);
+}
+
+// Walk one probe's events (oldest first) into offline spells: array(start, end|null).
+function gsa_ripe_spells($events)
+{
+    usort($events, function ($a, $b) {
+        if ($a[0] === $b[0]) {
+            return $a[1] === 'disconnect' ? -1 : 1;
+        }
+        return $a[0] <=> $b[0];
+    });
+    $spells = array();
+    $down = null;
+    foreach ($events as $ev) {
+        if ($ev[1] === 'disconnect') {
+            if ($down === null) {
+                $down = $ev[0];
+            }
+        } elseif ($ev[1] === 'connect' && $down !== null) {
+            $spells[] = array($down, $ev[0]);
+            $down = null;
+        }
+    }
+    if ($down !== null) {
+        $spells[] = array($down, null);
+    }
+    return $spells;
+}
+
+function gsa_ripe_build()
+{
+    global $root;
+    $until = time();
+    $from = $until - 86400;
+    // Two extra hours so a probe that dropped just before the window still pairs up.
+    $body = gsa_ripe_get('https://atlas.ripe.net/api/v2/measurements/7000/results/?format=json&start=' . ($from - 7200) . '&stop=' . $until, 90);
+    $rows = $body !== null ? json_decode($body, true) : null;
+    unset($body);
+    if (!is_array($rows)) {
+        return null;
+    }
+    $byProbe = array();
+    foreach ($rows as $row) {
+        $id = (int) ($row['prb_id'] ?? 0);
+        $event = (string) ($row['event'] ?? '');
+        if ($id <= 0 || ($event !== 'connect' && $event !== 'disconnect')) {
+            continue;
+        }
+        $byProbe[$id][] = array((int) ($row['timestamp'] ?? 0), $event, (int) ($row['asn'] ?? 0));
+    }
+    unset($rows);
+
+    $candidates = array();
+    $stats = array('probesWithEvents' => count($byProbe), 'flapping' => 0, 'anchors' => 0, 'noLocation' => 0, 'notPublic' => 0);
+    foreach ($byProbe as $id => $events) {
+        $spells = gsa_ripe_spells($events);
+        $drops5 = 0;
+        foreach ($spells as $s) {
+            if ((($s[1] ?? $until) - $s[0]) >= 300) {
+                $drops5++;
+            }
+        }
+        $pick = null;
+        foreach ($spells as $s) {
+            if ($s[0] < $from) {
+                continue;
+            }
+            $len = ($s[1] ?? $until) - $s[0];
+            if (($s[1] === null && $len >= GSA_RIPE_MIN_OFFLINE) || ($s[1] !== null && $len >= GSA_RIPE_MIN_RECOVERED)) {
+                $pick = $s;
+            }
+        }
+        if (!$pick) {
+            continue;
+        }
+        if ($drops5 >= GSA_RIPE_FLAP_DROPS || count($spells) >= GSA_RIPE_FLAP_EVENTS) {
+            $stats['flapping']++;
+            continue;
+        }
+        $asn = 0;
+        foreach ($events as $ev) {
+            if ($ev[2]) {
+                $asn = $ev[2];
+            }
+        }
+        $candidates[$id] = array('start' => $pick[0], 'end' => $pick[1], 'drops' => $drops5, 'asn' => $asn);
+    }
+    unset($byProbe);
+
+    // Probe details, 200 ids per request.
+    $meta = array();
+    $ids = array_keys($candidates);
+    foreach (array_chunk($ids, 200) as $chunk) {
+        $url = 'https://atlas.ripe.net/api/v2/probes/?page_size=500&fields=id,country_code,asn_v4,asn_v6,geometry,is_anchor,is_public,status,status_since,tags&id__in=' . implode(',', $chunk);
+        $page = gsa_ripe_get($url, 60);
+        $decoded = $page !== null ? json_decode($page, true) : null;
+        if (!is_array($decoded) || !isset($decoded['results'])) {
+            return null;
+        }
+        foreach ($decoded['results'] as $p) {
+            $meta[(int) $p['id']] = $p;
+        }
+    }
+
+    $cent = json_decode((string) @file_get_contents($root . '/api/internet-centroids.json'), true);
+    $countries = is_array($cent['countries'] ?? null) ? $cent['countries'] : array();
+    $cityPack = json_decode((string) @file_get_contents($root . '/geo/world-cities.json'), true);
+    $cities = is_array($cityPack['rows'] ?? null) ? $cityPack['rows'] : array();
+    $names = gsa_ripe_asnames();
+    $usCodes = array('US', 'PR', 'GU', 'VI', 'AS', 'MP', 'UM');
+
+    $us = array();
+    $global = array();
+    foreach ($candidates as $id => $c) {
+        $p = $meta[$id] ?? null;
+        if (!$p) {
+            continue;
+        }
+        if (empty($p['is_public'])) {
+            $stats['notPublic']++;
+            continue;
+        }
+        // Anchors sit in data centers: their drop-offs are rarely what people at home see.
+        if (!empty($p['is_anchor'])) {
+            $stats['anchors']++;
+            continue;
+        }
+        $tags = array();
+        foreach ((array) ($p['tags'] ?? array()) as $t) {
+            $tags[] = (string) ($t['slug'] ?? '');
+        }
+        $coords = $p['geometry']['coordinates'] ?? null;
+        // A location guessed only from the country puts the pin at the country middle: skip it.
+        if (!is_array($coords) || count($coords) < 2 || in_array('system-auto-geoip-country', $tags, true)) {
+            $stats['noLocation']++;
+            continue;
+        }
+        $lon = round((float) $coords[0], 3);
+        $lat = round((float) $coords[1], 3);
+        $cc = strtoupper((string) ($p['country_code'] ?? ''));
+        $status = (int) ($p['status']['id'] ?? 0);
+        $end = $c['end'];
+        // The events feed can lag: trust the probe's own status when it says it is back.
+        if ($end === null && $status === 1 && (int) ($p['status_since'] ?? 0) > $c['start']) {
+            $end = (int) $p['status_since'];
+            if ($end - $c['start'] < GSA_RIPE_MIN_RECOVERED) {
+                continue;
+            }
+        }
+        $asn = (int) ($p['asn_v4'] ?: ($p['asn_v6'] ?: $c['asn']));
+        $city = $cities ? gsa_ripe_nearest_city($cities, $lat, $lon, $cc) : null;
+        $countryName = $countries[$cc][2] ?? $cc;
+        if ($city && $city[2] <= 60) {
+            $near = $city[0] . ($city[1] !== '' ? ', ' . $city[1] : '');
+        } else {
+            $near = '';
+        }
+        $item = array(
+            'code' => 'ripe-' . $id,
+            'probe' => $id,
+            'lat' => $lat,
+            'lon' => $lon,
+            'cc' => $cc,
+            'country' => $countryName,
+            'near' => $near,
+            'nearKm' => $city && $near !== '' ? $city[2] : null,
+            'approx' => in_array('system-auto-geoip-city', $tags, true),
+            'asn' => $asn,
+            'network' => $asn ? ($names[(string) $asn] ?? '') : '',
+            'start' => $c['start'],
+            'end' => $end,
+            'ongoing' => $end === null,
+            'drops' => $c['drops'],
+        );
+        if (in_array($cc, $usCodes, true)) {
+            $us[] = $item;
+        } else {
+            $global[] = $item;
+        }
+    }
+    // How many other kept probes on the same network dropped within 15 minutes.
+    $all = array_merge($us, $global);
+    $sameNet = function (&$list) use ($all) {
+        foreach ($list as &$item) {
+            $n = 0;
+            foreach ($all as $other) {
+                if ($other['probe'] !== $item['probe'] && $item['asn'] && $other['asn'] === $item['asn'] && abs($other['start'] - $item['start']) <= 900) {
+                    $n++;
+                }
+            }
+            $item['sameNetwork'] = $n;
+        }
+        unset($item);
+        usort($list, function ($a, $b) {
+            if ($a['ongoing'] !== $b['ongoing']) {
+                return $a['ongoing'] ? -1 : 1;
+            }
+            return $b['start'] <=> $a['start'];
+        });
+    };
+    $sameNet($us);
+    $sameNet($global);
+    return array(
+        'source' => 'RIPE Atlas (RIPE NCC)',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z', $until),
+        'from' => $from,
+        'until' => $until,
+        'us' => $us,
+        'global' => $global,
+        'counts' => array(
+            'us' => count($us),
+            'global' => count($global),
+            'usOffline' => count(array_filter($us, function ($p) { return $p['ongoing']; })),
+            'globalOffline' => count(array_filter($global, function ($p) { return $p['ongoing']; })),
+        ),
+        'skipped' => $stats,
+    );
+}
+
+function gsa_ripe_refresh($opts = array())
+{
+    global $dataDir;
+    $maxAge = (int) ($opts['maxAge'] ?? 600);
+    $cached = gsa_ripe_cache_read();
+    if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+        return array('ok' => true, 'skipped' => true);
+    }
+    $lock = fopen($dataDir . '/ripe-atlas.lock', 'c');
+    if (!$lock) {
+        return array('ok' => false, 'error' => 'no lock file');
+    }
+    $wait = !empty($opts['wait']);
+    if (!flock($lock, $wait ? LOCK_EX : (LOCK_EX | LOCK_NB))) {
+        fclose($lock);
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        $cached = gsa_ripe_cache_read();
+        if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+            return array('ok' => true, 'skipped' => true);
+        }
+        $t0 = microtime(true);
+        $built = gsa_ripe_build();
+        if ($built === null) {
+            if ($cached) {
+                $cached['lastError'] = 'RIPE Atlas did not answer at ' . gmdate('H:i\Z');
+                $cached['lastErrorAt'] = time();
+                gsa_snapshot_put(gsa_ripe_cache_file(), $cached, gsa_source_from_file(gsa_ripe_cache_file()));
+            }
+            return array('ok' => false, 'error' => 'RIPE Atlas did not answer');
+        }
+        $built['fetchedAt'] = time();
+        gsa_snapshot_put(gsa_ripe_cache_file(), $built, gsa_source_from_file(gsa_ripe_cache_file()));
+        return array('ok' => true, 'us' => $built['counts']['us'], 'global' => $built['counts']['global'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function gsa_ripe_snapshot()
+{
+    $cached = gsa_ripe_cache_read();
+    $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    if ($age > 1200) {
+        gsa_ripe_refresh(array('maxAge' => 1200, 'wait' => !$cached));
+        $cached = gsa_ripe_cache_read();
+        $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    }
+    if (!$cached) {
+        return array(
+            'source' => 'RIPE Atlas (RIPE NCC)',
+            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+            'stale' => false,
+            'error' => 'RIPE Atlas did not answer. Try again in a few minutes.',
+            'us' => array(),
+            'global' => array(),
+            'counts' => array('us' => 0, 'global' => 0, 'usOffline' => 0, 'globalOffline' => 0),
+        );
+    }
+    unset($cached['fetchedAt'], $cached['lastErrorAt']);
+    $cached['stale'] = $age > 1800;
+    $cached['ageSeconds'] = $age;
+    return $cached;
+}
+
+// ---------- FAA TFR (temporary flight restrictions) ----------
+// TRANSPORTATION > FAA TFR reads data/tfr-cache.json. The */5 aircraft cron
+// refreshes it when it is at least 10 minutes old (gsa_tfr_refresh); a visitor
+// request only refreshes a cache older than 20 minutes. Sources, all public
+// FAA feeds behind tfr.faa.gov/tfr3:
+//   tfrapi/getTfrList                  every published TFR (id, type, facility, state)
+//   geoserver/TFR/ows  V_TFR_LOC (WFS) the drawn areas, polygons in EPSG:4326
+//   download/detail_<n>_<seq>.xml      per-NOTAM details: times, altitudes, text
+// Detail XML is fetched again only when a TFR's modification time changes.
+function gsa_tfr_cache_file()
+{
+    global $dataDir;
+    return $dataDir . '/tfr-cache.json';
+}
+
+function gsa_tfr_cache_read()
+{
+    $file = gsa_tfr_cache_file();
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+// Fetch URLs at once; returns raw bodies keyed like $urls (null for a failure).
+function gsa_tfr_fetch($urls, $timeout = 40, $batch = 8)
+{
+    $out = array();
+    if (!function_exists('curl_multi_init')) {
+        return $out;
+    }
+    foreach (array_chunk($urls, $batch, true) as $chunk) {
+        $multi = curl_multi_init();
+        $handles = array();
+        foreach ($chunk as $key => $url) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, array(
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_TIMEOUT => $timeout,
+                CURLOPT_ENCODING => '',
+                CURLOPT_HTTPHEADER => array('User-Agent: GlobalStatusApp/1.0 (+https://globalstatus.app)'),
+            ));
+            curl_multi_add_handle($multi, $ch);
+            $handles[$key] = $ch;
+        }
+        do {
+            $status = curl_multi_exec($multi, $running);
+            if ($running) {
+                curl_multi_select($multi, 1.0);
+            }
+        } while ($running && $status === CURLM_OK);
+        foreach ($handles as $key => $ch) {
+            $body = curl_multi_getcontent($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_multi_remove_handle($multi, $ch);
+            curl_close($ch);
+            $out[$key] = ($body !== false && $code >= 200 && $code < 300) ? (string) $body : null;
+        }
+        curl_multi_close($multi);
+    }
+    return $out;
+}
+
+function gsa_tfr_tag($xml, $tag)
+{
+    return preg_match('#<' . $tag . '>(.*?)</' . $tag . '>#s', $xml, $m) ? trim(html_entity_decode($m[1], ENT_QUOTES | ENT_XML1, 'UTF-8')) : '';
+}
+
+// FAA XML times are UTC without a zone: "2026-11-26T20:30:00".
+function gsa_tfr_time($text)
+{
+    if ($text === '') {
+        return null;
+    }
+    $t = strtotime($text . ' UTC');
+    return $t === false ? null : $t;
+}
+
+// One altitude: HEI = above ground, ALT = above sea level, STD / FL = flight level.
+function gsa_tfr_alt($code, $val, $uom)
+{
+    if ($val === '') {
+        return '';
+    }
+    $n = (int) $val;
+    if (strtoupper($uom) === 'FL' || strtoupper($code) === 'STD') {
+        return 'FL' . str_pad((string) $n, 3, '0', STR_PAD_LEFT);
+    }
+    if ($n === 0 && strtoupper($code) === 'HEI') {
+        return 'Surface';
+    }
+    return number_format($n) . ' ft ' . (strtoupper($code) === 'HEI' ? 'AGL' : 'MSL');
+}
+
+function gsa_tfr_parse_detail($xml)
+{
+    $not = preg_match('#<Not>(.*?)<TfrNot>#s', $xml, $m) ? $m[1] : $xml;
+    $areas = array();
+    if (preg_match_all('#<aseTFRArea>(.*?)</aseTFRArea>#s', $xml, $mm)) {
+        foreach ($mm[1] as $a) {
+            $areas[] = array(
+                'name' => gsa_tfr_tag($a, 'txtName'),
+                'floor' => gsa_tfr_alt(gsa_tfr_tag($a, 'codeDistVerLower'), gsa_tfr_tag($a, 'valDistVerLower'), gsa_tfr_tag($a, 'uomDistVerLower')),
+                'ceiling' => gsa_tfr_alt(gsa_tfr_tag($a, 'codeDistVerUpper'), gsa_tfr_tag($a, 'valDistVerUpper'), gsa_tfr_tag($a, 'uomDistVerUpper')),
+                'start' => gsa_tfr_time(gsa_tfr_tag($a, 'dateEffective')),
+                'end' => gsa_tfr_time(gsa_tfr_tag($a, 'dateExpire')),
+            );
+        }
+    }
+    $text = gsa_tfr_tag($xml, 'txtDescrUSNS') ?: gsa_tfr_tag($xml, 'txtDescrTraditional');
+    if (strlen($text) > 3000) {
+        $text = substr($text, 0, 3000) . '…';
+    }
+    $reg = preg_match('#<TfrNot>\s*<codeType>([^<]+)</codeType>#', $xml, $r) ? trim($r[1]) : '';
+    return array(
+        'start' => gsa_tfr_time(gsa_tfr_tag($not, 'dateEffective')),
+        'end' => gsa_tfr_time(gsa_tfr_tag($not, 'dateExpire')),
+        'issued' => gsa_tfr_time(gsa_tfr_tag($not, 'dateIssued')),
+        'zone' => gsa_tfr_tag($not, 'codeTimeZone'),
+        'city' => gsa_tfr_tag($not, 'txtNameCity'),
+        'stateName' => gsa_tfr_tag($not, 'txtNameUSState'),
+        'name' => gsa_tfr_tag($not, 'txtLocalName'),
+        'regulation' => $reg !== '' ? '14 CFR ' . $reg : '',
+        'areas' => $areas,
+        'text' => $text,
+    );
+}
+
+function gsa_tfr_build($previous)
+{
+    $base = 'https://tfr.faa.gov/';
+    $got = gsa_tfr_fetch(array(
+        'list' => $base . 'tfrapi/getTfrList',
+        'wfs' => $base . 'geoserver/TFR/ows?service=WFS&version=1.1.0&request=GetFeature&typeName=TFR:V_TFR_LOC&outputFormat=application/json&srsname=EPSG:4326',
+    ), 45);
+    $list = json_decode((string) ($got['list'] ?? ''), true);
+    $wfs = json_decode((string) ($got['wfs'] ?? ''), true);
+    if (!is_array($list) || !is_array($wfs) || !isset($wfs['features'])) {
+        return null;
+    }
+    // Shapes by NOTAM id ("6/2481-1-FDC-F" -> "6/2481").
+    $shapes = array();
+    foreach ($wfs['features'] as $f) {
+        $key = (string) ($f['properties']['NOTAM_KEY'] ?? '');
+        $id = strtok($key, '-');
+        $geom = $f['geometry'] ?? null;
+        if ($id === '' || !is_array($geom)) {
+            continue;
+        }
+        $polys = $geom['type'] === 'MultiPolygon' ? $geom['coordinates'] : ($geom['type'] === 'Polygon' ? array($geom['coordinates']) : array());
+        foreach ($polys as $poly) {
+            $ring = array();
+            foreach ((array) ($poly[0] ?? array()) as $pt) {
+                $ring[] = array(round((float) $pt[0], 5), round((float) $pt[1], 5));
+            }
+            if (count($ring) >= 3) {
+                $shapes[$id][] = $ring;
+            }
+        }
+    }
+    // Details, reusing the last copy when the TFR has not changed.
+    $prevDetails = array();
+    foreach ((array) ($previous['tfrs'] ?? array()) as $t) {
+        if (!empty($t['detail']) && isset($t['mod'])) {
+            $prevDetails[$t['id'] . '@' . $t['mod']] = $t['detail'];
+        }
+    }
+    foreach ((array) ($previous['textOnly'] ?? array()) as $t) {
+        if (!empty($t['detail']) && isset($t['mod'])) {
+            $prevDetails[$t['id'] . '@' . $t['mod']] = $t['detail'];
+        }
+    }
+    $need = array();
+    foreach ($list as $row) {
+        $id = (string) ($row['notam_id'] ?? '');
+        $mod = (string) ($row['mod_abs_time'] ?? '');
+        if ($id !== '' && !isset($prevDetails[$id . '@' . $mod])) {
+            $need[$id] = $base . 'download/detail_' . str_replace('/', '_', $id) . '.xml';
+        }
+    }
+    $fresh = $need ? gsa_tfr_fetch($need, 30, 8) : array();
+    $tfrs = array();
+    $textOnly = array();
+    $now = time();
+    foreach ($list as $row) {
+        $id = (string) ($row['notam_id'] ?? '');
+        if ($id === '') {
+            continue;
+        }
+        $mod = (string) ($row['mod_abs_time'] ?? '');
+        $detail = $prevDetails[$id . '@' . $mod] ?? null;
+        if ($detail === null && !empty($fresh[$id])) {
+            $detail = gsa_tfr_parse_detail($fresh[$id]);
+        }
+        $item = array(
+            'id' => $id,
+            'type' => strtoupper(trim((string) ($row['type'] ?? ''))) ?: 'OTHER',
+            'facility' => trim((string) ($row['facility'] ?? '')),
+            'state' => trim((string) ($row['state'] ?? '')),
+            'title' => trim((string) ($row['description'] ?? '')),
+            'mod' => $mod,
+            'detail' => $detail,
+        );
+        $start = $detail['start'] ?? null;
+        $end = $detail['end'] ?? null;
+        $item['status'] = ($start && $start > $now) ? 'upcoming' : (($end && $end < $now) ? 'expired' : 'active');
+        if (isset($shapes[$id])) {
+            $item['areas'] = $shapes[$id];
+            // Center: mean of the largest ring's points.
+            $big = $shapes[$id][0];
+            foreach ($shapes[$id] as $ring) {
+                if (count($ring) > count($big)) {
+                    $big = $ring;
+                }
+            }
+            $sx = 0.0;
+            $sy = 0.0;
+            foreach ($big as $pt) {
+                $sx += $pt[0];
+                $sy += $pt[1];
+            }
+            $item['lon'] = round($sx / count($big), 5);
+            $item['lat'] = round($sy / count($big), 5);
+            $tfrs[] = $item;
+        } else {
+            $textOnly[] = $item;
+        }
+    }
+    $byType = array();
+    $active = 0;
+    foreach ($tfrs as $t) {
+        $byType[$t['type']] = ($byType[$t['type']] ?? 0) + 1;
+        if ($t['status'] === 'active') {
+            $active++;
+        }
+    }
+    arsort($byType);
+    return array(
+        'source' => 'FAA, tfr.faa.gov',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z', $now),
+        'tfrs' => $tfrs,
+        'textOnly' => $textOnly,
+        'counts' => array('mapped' => count($tfrs), 'active' => $active, 'upcoming' => count($tfrs) - $active, 'textOnly' => count($textOnly), 'byType' => $byType),
+        'detailFetched' => count($need),
+    );
+}
+
+function gsa_tfr_refresh($opts = array())
+{
+    global $dataDir;
+    $maxAge = (int) ($opts['maxAge'] ?? 600);
+    $cached = gsa_tfr_cache_read();
+    if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+        return array('ok' => true, 'skipped' => true);
+    }
+    $lock = fopen($dataDir . '/tfr.lock', 'c');
+    if (!$lock) {
+        return array('ok' => false, 'error' => 'no lock file');
+    }
+    $wait = !empty($opts['wait']);
+    if (!flock($lock, $wait ? LOCK_EX : (LOCK_EX | LOCK_NB))) {
+        fclose($lock);
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        $cached = gsa_tfr_cache_read();
+        if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+            return array('ok' => true, 'skipped' => true);
+        }
+        $t0 = microtime(true);
+        $built = gsa_tfr_build($cached);
+        if ($built === null) {
+            if ($cached) {
+                $cached['lastError'] = 'The FAA TFR feed did not answer at ' . gmdate('H:i\Z');
+                $cached['lastErrorAt'] = time();
+                gsa_snapshot_put(gsa_tfr_cache_file(), $cached, gsa_source_from_file(gsa_tfr_cache_file()));
+            }
+            return array('ok' => false, 'error' => 'FAA TFR feed did not answer');
+        }
+        $built['fetchedAt'] = time();
+        gsa_snapshot_put(gsa_tfr_cache_file(), $built, gsa_source_from_file(gsa_tfr_cache_file()));
+        return array('ok' => true, 'mapped' => $built['counts']['mapped'], 'details' => $built['detailFetched'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function gsa_tfr_snapshot()
+{
+    $cached = gsa_tfr_cache_read();
+    $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    if ($age > 1200) {
+        gsa_tfr_refresh(array('maxAge' => 1200, 'wait' => !$cached));
+        $cached = gsa_tfr_cache_read();
+        $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    }
+    if (!$cached) {
+        return array(
+            'source' => 'FAA, tfr.faa.gov',
+            'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+            'stale' => false,
+            'error' => 'The FAA TFR feed did not answer. Try again in a few minutes.',
+            'tfrs' => array(),
+            'textOnly' => array(),
+            'counts' => array('mapped' => 0, 'active' => 0, 'upcoming' => 0, 'textOnly' => 0, 'byType' => array()),
+        );
+    }
+    unset($cached['fetchedAt'], $cached['lastErrorAt'], $cached['detailFetched']);
+    $cached['stale'] = $age > 1800;
+    $cached['ageSeconds'] = $age;
+    return $cached;
+}
+
+// ---------- FAA NAS Status (flight delays) ----------
+// TRANSPORTATION > FLIGHT DELAYS reads data/flight-delays-cache.json. The */5 aircraft
+// cron refreshes it when it is at least ~5 minutes old (gsa_fd_refresh); a visitor
+// request only refreshes a cache older than 10 minutes, and it is flagged stale after
+// 20 minutes. Sources, both public FAA feeds behind nasstatus.faa.gov:
+//   api/airport-events               JSON, one object per airport with an event (ground
+//                                    stops, ground delay programs, arrival / departure
+//                                    delays, closures, deicing, NOTAM notices) + coordinates
+//   api/airport-status-information   the classic XML: airspace flow programs, and a second
+//                                    source for ground stops and delays the JSON lacks
+// Names, cities and states come from geo/us-airports.json (OurAirports) when needed.
+function gsa_fd_cache_file()
+{
+    global $dataDir;
+    return $dataDir . '/flight-delays-cache.json';
+}
+
+function gsa_fd_cache_read()
+{
+    $file = gsa_fd_cache_file();
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+// "3 hours and 34 minutes", "16 minutes", "15", 214.0 -> minutes (null when unknown).
+function gsa_fd_minutes($v)
+{
+    if ($v === null || $v === '') {
+        return null;
+    }
+    if (is_int($v) || is_float($v) || preg_match('/^\s*\d+(\.\d+)?\s*$/', (string) $v)) {
+        return (int) round((float) $v);
+    }
+    $s = strtolower((string) $v);
+    $m = 0;
+    $hit = false;
+    if (preg_match('/(\d+)\s*hour/', $s, $h)) {
+        $m += 60 * (int) $h[1];
+        $hit = true;
+    }
+    if (preg_match('/(\d+)\s*min/', $s, $mm)) {
+        $m += (int) $mm[1];
+        $hit = true;
+    }
+    return $hit ? $m : null;
+}
+
+function gsa_fd_time($v)
+{
+    if (!is_string($v) || $v === '') {
+        return null;
+    }
+    $t = strtotime($v);
+    return $t === false ? null : $t;
+}
+
+function gsa_fd_str($v)
+{
+    return is_string($v) ? trim($v) : (is_numeric($v) ? (string) $v : '');
+}
+
+function gsa_fd_xml_tag($xml, $tag)
+{
+    return preg_match('#<' . $tag . '(?:\s[^>]*)?>(.*?)</' . $tag . '>#s', $xml, $m) ? trim(html_entity_decode($m[1], ENT_QUOTES | ENT_XML1, 'UTF-8')) : '';
+}
+
+// One normalized event list per airport from the JSON feed.
+function gsa_fd_events_json($a)
+{
+    $ev = array();
+    $gs = $a['groundStop'] ?? null;
+    if (is_array($gs)) {
+        $ev[] = array(
+            'kind' => 'groundstop',
+            'reason' => gsa_fd_str($gs['impactingCondition'] ?? ($gs['reason'] ?? '')),
+            'start' => gsa_fd_time($gs['startTime'] ?? null),
+            'end' => gsa_fd_time($gs['endTime'] ?? null),
+            'updated' => gsa_fd_time($gs['updatedAt'] ?? ($gs['sourceTimeStamp'] ?? null)),
+            'center' => gsa_fd_str($gs['center'] ?? ''),
+            'scope' => gsa_fd_str($gs['departureScope'] ?? ''),
+            'avg' => gsa_fd_minutes($gs['avgDelay'] ?? null),
+            'max' => gsa_fd_minutes($gs['maxDelay'] ?? null),
+        );
+    }
+    $gd = $a['groundDelay'] ?? null;
+    if (is_array($gd)) {
+        $ev[] = array(
+            'kind' => 'gdp',
+            'reason' => gsa_fd_str($gd['impactingCondition'] ?? ($gd['reason'] ?? '')),
+            'avg' => gsa_fd_minutes($gd['avgDelay'] ?? null),
+            'max' => gsa_fd_minutes($gd['maxDelay'] ?? null),
+            'start' => gsa_fd_time($gd['startTime'] ?? null),
+            'end' => gsa_fd_time($gd['endTime'] ?? null),
+            'updated' => gsa_fd_time($gd['updatedAt'] ?? ($gd['sourceTimeStamp'] ?? null)),
+            'center' => gsa_fd_str($gd['center'] ?? ''),
+            'scope' => gsa_fd_str($gd['departureScope'] ?? ''),
+        );
+    }
+    foreach (array('arrivalDelay' => 'arrival', 'departureDelay' => 'departure') as $field => $kind) {
+        $d = $a[$field] ?? null;
+        if (!is_array($d)) {
+            continue;
+        }
+        $ad = is_array($d['arrivalDeparture'] ?? null) ? $d['arrivalDeparture'] : array();
+        $ev[] = array(
+            'kind' => $kind,
+            'reason' => gsa_fd_str($d['reason'] ?? ''),
+            'min' => gsa_fd_minutes($ad['min'] ?? null),
+            'max' => gsa_fd_minutes($ad['max'] ?? ($d['maxDelay'] ?? null)),
+            'avg' => gsa_fd_minutes($d['averageDelay'] ?? null),
+            'trend' => gsa_fd_str($ad['trend'] ?? ($d['trend'] ?? '')),
+            'updated' => gsa_fd_time($d['updateTime'] ?? ($d['updatedAt'] ?? null)),
+        );
+    }
+    $cl = $a['airportClosure'] ?? null;
+    if (is_array($cl)) {
+        $ev[] = array(
+            'kind' => 'closure',
+            'reason' => gsa_fd_str($cl['text'] ?? ''),
+            'text' => gsa_fd_str($cl['simpleText'] ?? ''),
+            'start' => gsa_fd_time($cl['startTime'] ?? null),
+            'end' => gsa_fd_time($cl['endTime'] ?? null),
+            'updated' => gsa_fd_time($cl['updatedAt'] ?? null),
+            'daily' => preg_match('/\bDLY\s+(\d{4})-(\d{4})\b/', (string) ($cl['text'] ?? ($cl['simpleText'] ?? '')), $dm) ? array($dm[1], $dm[2]) : null,
+        );
+    }
+    $de = $a['deicing'] ?? null;
+    if (is_array($de)) {
+        $ev[] = array(
+            'kind' => 'deicing',
+            'reason' => 'Deicing in progress',
+            'start' => gsa_fd_time($de['eventTime'] ?? null),
+            'end' => gsa_fd_time($de['expTime'] ?? null),
+            'updated' => gsa_fd_time($de['updatedAt'] ?? null),
+        );
+    }
+    $ff = $a['freeForm'] ?? null;
+    if (is_array($ff)) {
+        $ev[] = array(
+            'kind' => 'notice',
+            'reason' => gsa_fd_str($ff['text'] ?? ''),
+            'text' => gsa_fd_str($ff['simpleText'] ?? ''),
+            'start' => gsa_fd_time($ff['startTime'] ?? null),
+            'end' => gsa_fd_time($ff['endTime'] ?? null),
+            'updated' => gsa_fd_time($ff['updatedAt'] ?? null),
+        );
+    }
+    return $ev;
+}
+
+// Ground stops, ground delays and arrival / departure delays from the XML, keyed by airport,
+// plus airspace flow programs (no single airport).
+function gsa_fd_events_xml($xml)
+{
+    $by = array();
+    $afp = array();
+    if (!preg_match_all('#<Delay_type>(.*?)</Delay_type>#s', $xml, $types)) {
+        return array($by, $afp);
+    }
+    foreach ($types[1] as $block) {
+        $name = strtolower(gsa_fd_xml_tag($block, 'Name'));
+        if (strpos($name, 'airspace flow') !== false) {
+            if (preg_match_all('#<Airspace_Flow>(.*?)</Airspace_Flow>#s', $block, $mm)) {
+                foreach ($mm[1] as $r) {
+                    $afp[] = array(
+                        'element' => gsa_fd_xml_tag($r, 'CTL_Element'),
+                        'reason' => gsa_fd_xml_tag($r, 'Reason'),
+                        'avg' => gsa_fd_minutes(gsa_fd_xml_tag($r, 'Avg')),
+                        'start' => gsa_fd_xml_tag($r, 'AFP_StartTime'),
+                        'end' => gsa_fd_xml_tag($r, 'AFP_EndTime'),
+                    );
+                }
+            }
+            continue;
+        }
+        if (strpos($name, 'ground stop') !== false) {
+            $kind = 'groundstop';
+        } elseif (strpos($name, 'ground delay') !== false) {
+            $kind = 'gdp';
+        } elseif (strpos($name, 'arrival/departure') !== false) {
+            $kind = 'arrdep';
+        } else {
+            continue; // closures come from the JSON, with real times
+        }
+        if (!preg_match_all('#<(Program|Ground_Delay|Delay)>(.*?)</\1>#s', $block, $mm)) {
+            continue;
+        }
+        foreach ($mm[2] as $r) {
+            $arpt = strtoupper(gsa_fd_xml_tag($r, 'ARPT'));
+            if ($arpt === '') {
+                continue;
+            }
+            if ($kind === 'arrdep') {
+                $type = preg_match('#<Arrival_Departure\s+Type="([^"]+)"#', $r, $t) ? strtolower($t[1]) : 'departure';
+                $by[$arpt][] = array(
+                    'kind' => strpos($type, 'arr') === 0 ? 'arrival' : 'departure',
+                    'reason' => gsa_fd_xml_tag($r, 'Reason'),
+                    'min' => gsa_fd_minutes(gsa_fd_xml_tag($r, 'Min')),
+                    'max' => gsa_fd_minutes(gsa_fd_xml_tag($r, 'Max')),
+                    'trend' => gsa_fd_xml_tag($r, 'Trend'),
+                );
+            } else {
+                $by[$arpt][] = array(
+                    'kind' => $kind,
+                    'reason' => gsa_fd_xml_tag($r, 'Reason'),
+                    'avg' => gsa_fd_minutes(gsa_fd_xml_tag($r, 'Avg')),
+                    'max' => gsa_fd_minutes(gsa_fd_xml_tag($r, 'Max')),
+                    'endText' => gsa_fd_xml_tag($r, 'End_Time'),
+                );
+            }
+        }
+    }
+    return array($by, $afp);
+}
+
+function gsa_fd_airports()
+{
+    static $map = null;
+    if ($map === null) {
+        $file = __DIR__ . '/geo/us-airports.json';
+        $body = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+        $map = is_array($body) && isset($body['airports']) ? $body['airports'] : array();
+    }
+    return $map;
+}
+
+// $base is only changed by local tests that serve saved FAA files.
+function gsa_fd_build($base = 'https://nasstatus.faa.gov/api/')
+{
+    $got = gsa_tfr_fetch(array('events' => $base . 'airport-events', 'xml' => $base . 'airport-status-information'), 30);
+    $events = json_decode((string) ($got['events'] ?? ''), true);
+    $xml = (string) ($got['xml'] ?? '');
+    $xmlOk = strpos($xml, '<AIRPORT_STATUS_INFORMATION') !== false;
+    if (!is_array($events) && !$xmlOk) {
+        return null;
+    }
+    list($xmlBy, $afp) = $xmlOk ? gsa_fd_events_xml($xml) : array(array(), array());
+    $feedTime = $xmlOk ? gsa_fd_time(preg_replace('/\s+GMT$/', ' UTC', gsa_fd_xml_tag($xml, 'Update_Time'))) : null;
+    $lookup = gsa_fd_airports();
+    $airports = array();
+    foreach ((is_array($events) ? $events : array()) as $a) {
+        $id = strtoupper(gsa_fd_str($a['airportId'] ?? ''));
+        if ($id === '') {
+            continue;
+        }
+        $airports[$id] = array('code' => $id, 'name' => gsa_fd_str($a['airportLongName'] ?? ''), 'lat' => is_numeric($a['latitude'] ?? null) ? (float) $a['latitude'] : null,
+            'lon' => is_numeric($a['longitude'] ?? null) ? (float) $a['longitude'] : null, 'events' => gsa_fd_events_json($a));
+        $cfg = $a['airportConfig'] ?? null;
+        if (is_array($cfg)) {
+            $airports[$id]['config'] = array('arr' => gsa_fd_str($cfg['arrivalRunwayConfig'] ?? ''), 'dep' => gsa_fd_str($cfg['departureRunwayConfig'] ?? ''), 'rate' => is_numeric($cfg['arrivalRate'] ?? null) ? (int) $cfg['arrivalRate'] : null);
+        }
+    }
+    // XML events the JSON does not already carry (same airport and kind).
+    foreach ($xmlBy as $id => $list) {
+        if (!isset($airports[$id])) {
+            $airports[$id] = array('code' => $id, 'name' => '', 'lat' => null, 'lon' => null, 'events' => array());
+        }
+        $have = array();
+        foreach ($airports[$id]['events'] as $e) {
+            $have[$e['kind']] = true;
+        }
+        foreach ($list as $e) {
+            if (empty($have[$e['kind']])) {
+                $airports[$id]['events'][] = $e;
+            }
+        }
+    }
+    $rank = array('closure' => 6, 'groundstop' => 5, 'gdp' => 4, 'arrival' => 3, 'departure' => 3, 'deicing' => 2, 'notice' => 1);
+    $out = array();
+    $noLocation = array();
+    $counts = array('closure' => 0, 'groundstop' => 0, 'gdp' => 0, 'arrival' => 0, 'departure' => 0, 'deicing' => 0, 'notice' => 0);
+    foreach ($airports as $id => $a) {
+        if (!$a['events']) {
+            continue;
+        }
+        $k = $lookup[$id] ?? null;
+        if ($a['lat'] === null && $k) {
+            $a['lat'] = (float) $k[3];
+            $a['lon'] = (float) $k[4];
+        }
+        $a['name'] = $a['name'] !== '' ? $a['name'] : ($k ? $k[0] : '');
+        $a['city'] = $k ? $k[1] : '';
+        $a['state'] = $k ? $k[2] : '';
+        usort($a['events'], function ($x, $y) use ($rank) {
+            return ($rank[$y['kind']] ?? 0) - ($rank[$x['kind']] ?? 0);
+        });
+        $a['top'] = $a['events'][0]['kind'];
+        foreach ($a['events'] as $e) {
+            $counts[$e['kind']] = ($counts[$e['kind']] ?? 0) + 1;
+        }
+        if ($a['lat'] === null || $a['lon'] === null) {
+            $noLocation[] = $a;
+            continue;
+        }
+        $out[] = $a;
+    }
+    usort($out, function ($x, $y) use ($rank) {
+        return ($rank[$y['top']] ?? 0) - ($rank[$x['top']] ?? 0) ?: strcmp($x['code'], $y['code']);
+    });
+    $delayed = 0;
+    foreach (array_merge($out, $noLocation) as $a) {
+        if ($a['top'] !== 'notice') {
+            $delayed++;
+        }
+    }
+    return array(
+        'source' => 'FAA National Airspace System Status (nasstatus.faa.gov)',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'feedUpdated' => $feedTime ? gmdate('Y-m-d\TH:i:s\Z', $feedTime) : null,
+        'airports' => $out,
+        'noLocation' => $noLocation,
+        'afp' => $afp,
+        'counts' => array('airports' => count($out) + count($noLocation), 'withDelays' => $delayed, 'events' => $counts, 'afp' => count($afp)),
+        'feeds' => array('json' => is_array($events), 'xml' => $xmlOk),
+    );
+}
+
+function gsa_fd_refresh($opts = array())
+{
+    global $dataDir;
+    $maxAge = (int) ($opts['maxAge'] ?? 300);
+    $cached = gsa_fd_cache_read();
+    if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+        return array('ok' => true, 'skipped' => true);
+    }
+    $lock = fopen($dataDir . '/flight-delays.lock', 'c');
+    if (!$lock) {
+        return array('ok' => false, 'error' => 'no lock file');
+    }
+    if (!flock($lock, !empty($opts['wait']) ? LOCK_EX : (LOCK_EX | LOCK_NB))) {
+        fclose($lock);
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        $cached = gsa_fd_cache_read();
+        if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+            return array('ok' => true, 'skipped' => true);
+        }
+        $t0 = microtime(true);
+        $built = gsa_fd_build();
+        if ($built === null) {
+            if ($cached) {
+                $cached['lastError'] = 'The FAA NAS Status feed did not answer at ' . gmdate('H:i\Z');
+                gsa_snapshot_put(gsa_fd_cache_file(), $cached, gsa_source_from_file(gsa_fd_cache_file()));
+            }
+            return array('ok' => false, 'error' => 'FAA NAS Status feed did not answer');
+        }
+        $built['fetchedAt'] = time();
+        gsa_snapshot_put(gsa_fd_cache_file(), $built, gsa_source_from_file(gsa_fd_cache_file()));
+        return array('ok' => true, 'airports' => $built['counts']['airports'], 'delayed' => $built['counts']['withDelays'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function gsa_fd_snapshot()
+{
+    $cached = gsa_fd_cache_read();
+    $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    if ($age > 600) {
+        gsa_fd_refresh(array('maxAge' => 600, 'wait' => !$cached));
+        $cached = gsa_fd_cache_read();
+        $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    }
+    if (!$cached) {
+        return array('source' => 'FAA National Airspace System Status (nasstatus.faa.gov)', 'updated' => gmdate('Y-m-d\TH:i:s\Z'), 'stale' => false,
+            'error' => 'The FAA NAS Status feed did not answer. Try again in a few minutes.', 'airports' => array(), 'noLocation' => array(), 'afp' => array(),
+            'counts' => array('airports' => 0, 'withDelays' => 0, 'events' => array(), 'afp' => 0));
+    }
+    unset($cached['fetchedAt']);
+    $cached['stale'] = $age > 1200;
+    $cached['ageSeconds'] = $age;
+    return $cached;
+}
+
+// ---------------------------------------------------------------------------
+// HEALTH & HUMANITARIAN > USA AIR QUALITY
+// EPA AirNow current monitors (ozone, PM2.5, PM10; ArcGIS FeatureServer, hourly)
+// plus NOAA Hazard Mapping System smoke plumes (daily KML, updated through the day).
+// Cache: data/airquality-cache.json, refreshed by the */5 aircraft cron about every
+// 15 minutes (gsa_aq_refresh), served at /api/air-quality.
+// ---------------------------------------------------------------------------
+
+function gsa_aq_cache_file()
+{
+    global $dataDir;
+    return $dataDir . '/airquality-cache.json';
+}
+
+function gsa_aq_cache_read()
+{
+    $file = gsa_aq_cache_file();
+    if (!is_file($file)) {
+        return null;
+    }
+    $cached = json_decode((string) file_get_contents($file), true);
+    return is_array($cached) ? $cached : null;
+}
+
+// US state / territory FIPS codes -> postal abbreviations.
+function gsa_aq_fips()
+{
+    return array(
+        '01' => 'AL', '02' => 'AK', '04' => 'AZ', '05' => 'AR', '06' => 'CA', '08' => 'CO', '09' => 'CT', '10' => 'DE', '11' => 'DC',
+        '12' => 'FL', '13' => 'GA', '15' => 'HI', '16' => 'ID', '17' => 'IL', '18' => 'IN', '19' => 'IA', '20' => 'KS', '21' => 'KY',
+        '22' => 'LA', '23' => 'ME', '24' => 'MD', '25' => 'MA', '26' => 'MI', '27' => 'MN', '28' => 'MS', '29' => 'MO', '30' => 'MT',
+        '31' => 'NE', '32' => 'NV', '33' => 'NH', '34' => 'NJ', '35' => 'NM', '36' => 'NY', '37' => 'NC', '38' => 'ND', '39' => 'OH',
+        '40' => 'OK', '41' => 'OR', '42' => 'PA', '44' => 'RI', '45' => 'SC', '46' => 'SD', '47' => 'TN', '48' => 'TX', '49' => 'UT',
+        '50' => 'VT', '51' => 'VA', '53' => 'WA', '54' => 'WV', '55' => 'WI', '56' => 'WY', '60' => 'AS', '66' => 'GU', '69' => 'MP',
+        '72' => 'PR', '78' => 'VI',
+    );
+}
+
+// The AirNow layer also carries Canada, Mexico, and U.S. embassy monitors abroad.
+// Keep US monitors only: 9-character AQS ids that start with a US state / territory
+// code, 12-character ids with the US (840) or Puerto Rico (630) country code, and
+// tribal monitors (TT...). Returns the state code, '' for tribal, or null for non-US.
+function gsa_aq_us_state($aqsid)
+{
+    $id = (string) $aqsid;
+    $fips = gsa_aq_fips();
+    if (strlen($id) === 9 && ctype_digit($id)) {
+        return $fips[substr($id, 0, 2)] ?? null;
+    }
+    if (strlen($id) === 12 && substr($id, 0, 3) === '840') {
+        return $fips[substr($id, 3, 2)] ?? null;
+    }
+    if (strlen($id) === 12 && substr($id, 0, 3) === '630') {
+        return 'PR';
+    }
+    if (strncmp($id, 'TT', 2) === 0) {
+        return '';
+    }
+    return null;
+}
+
+function gsa_aq_num($v)
+{
+    if ($v === null || $v === '' || !is_numeric($v)) {
+        return null;
+    }
+    return (int) round((float) $v);
+}
+
+function gsa_aq_airnow()
+{
+    $base = 'https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/Air_Now_Current_Monitors_Ozone_and_PM/FeatureServer/0/query';
+    $fields = 'AQSID,SiteName,DataSource,ReportingArea_PipeDelimited,OZONEPM_AQI,OZONE_AQI,PM25_AQI,PM10_AQI,PM25,OZONE,PM10,ValidTime,LocalTimeString,MonitorType,Status';
+    $rows = array();
+    $page = 2000;
+    for ($offset = 0, $guard = 0; $guard < 10; $guard++, $offset += $page) {
+        $url = $base . '?' . http_build_query(array(
+            'where' => "Status='Active'", 'outFields' => $fields, 'outSR' => 4326, 'returnGeometry' => 'true',
+            'orderByFields' => 'ObjectId', 'resultOffset' => $offset, 'resultRecordCount' => $page, 'f' => 'json',
+        ));
+        $got = gsa_tfr_fetch(array('p' => $url), 40, 1);
+        $body = $got['p'] ?? null;
+        $data = $body ? json_decode($body, true) : null;
+        if (!is_array($data) || !isset($data['features']) || isset($data['error'])) {
+            return null;
+        }
+        foreach ($data['features'] as $f) {
+            $rows[] = $f;
+        }
+        if (empty($data['exceededTransferLimit']) && count($data['features']) < $page) {
+            break;
+        }
+    }
+    $monitors = array();
+    $tribal = array();
+    foreach ($rows as $f) {
+        $a = $f['attributes'] ?? array();
+        $g = $f['geometry'] ?? array();
+        $state = gsa_aq_us_state($a['AQSID'] ?? '');
+        if ($state === null || !isset($g['x'], $g['y'])) {
+            continue;
+        }
+        $aqi = gsa_aq_num($a['OZONEPM_AQI'] ?? null);
+        $parts = array('Ozone' => gsa_aq_num($a['OZONE_AQI'] ?? null), 'PM2.5' => gsa_aq_num($a['PM25_AQI'] ?? null), 'PM10' => gsa_aq_num($a['PM10_AQI'] ?? null));
+        $primary = null;
+        if ($aqi !== null) {
+            $best = -1;
+            foreach ($parts as $name => $v) {
+                if ($v !== null && $v > $best) {
+                    $best = $v;
+                    $primary = $name;
+                }
+            }
+        }
+        $area = trim((string) ($a['ReportingArea_PipeDelimited'] ?? ''));
+        if ($area !== '') {
+            $area = trim(explode('|', $area)[0]);
+        }
+        $m = array(
+            'id' => (string) $a['AQSID'],
+            'name' => trim((string) ($a['SiteName'] ?? '')),
+            'agency' => trim((string) ($a['DataSource'] ?? '')),
+            'area' => $area,
+            'state' => $state,
+            'lat' => round((float) $g['y'], 4),
+            'lon' => round((float) $g['x'], 4),
+            'aqi' => $aqi,
+            'primary' => $primary,
+            'o3' => $parts['Ozone'],
+            'pm25' => $parts['PM2.5'],
+            'pm10' => $parts['PM10'],
+            'time' => !empty($a['ValidTime']) ? (int) floor($a['ValidTime'] / 1000) : null,
+            'temp' => ($a['MonitorType'] ?? '') === 'Temporary',
+        );
+        if ($state === '') {
+            $tribal[] = count($monitors);
+        }
+        $monitors[] = $m;
+    }
+    // Tribal monitors have no state in their id; the card names the tribe (agency) and area.
+    foreach ($tribal as $i) {
+        $monitors[$i]['tribal'] = true;
+    }
+    // Compact: agency names repeat, so send each once and point to it by index.
+    $agencies = array();
+    $agencyIndex = array();
+    foreach ($monitors as $i => $m) {
+        if (!isset($agencyIndex[$m['agency']])) {
+            $agencyIndex[$m['agency']] = count($agencies);
+            $agencies[] = $m['agency'];
+        }
+        $m['ag'] = $agencyIndex[$m['agency']];
+        unset($m['agency']);
+        foreach (array('o3', 'pm25', 'pm10', 'primary', 'aqi') as $k) {
+            if ($m[$k] === null) {
+                unset($m[$k]);
+            }
+        }
+        if (empty($m['temp'])) {
+            unset($m['temp']);
+        }
+        if ($m['area'] === '') {
+            unset($m['area']);
+        }
+        $monitors[$i] = $m;
+    }
+    return array('monitors' => $monitors, 'agencies' => $agencies, 'feedCount' => count($rows));
+}
+
+// "2026329 1610UTC" (year, day of year, HHMM) -> unix seconds.
+function gsa_aq_hms_time($text)
+{
+    if (!preg_match('/(\d{4})(\d{3})\s+(\d{2})(\d{2})/', (string) $text, $m)) {
+        return null;
+    }
+    return gmmktime((int) $m[3], (int) $m[4], 0, 1, (int) $m[2], (int) $m[1]);
+}
+
+// Douglas-Peucker on [lon, lat] points (degrees).
+function gsa_aq_simplify($pts, $tol)
+{
+    $n = count($pts);
+    if ($n < 3) {
+        return $pts;
+    }
+    $keep = array_fill(0, $n, false);
+    $keep[0] = $keep[$n - 1] = true;
+    $stack = array(array(0, $n - 1));
+    while ($stack) {
+        list($s, $e) = array_pop($stack);
+        $ax = $pts[$s][0];
+        $ay = $pts[$s][1];
+        $dx = $pts[$e][0] - $ax;
+        $dy = $pts[$e][1] - $ay;
+        $len = sqrt($dx * $dx + $dy * $dy);
+        $maxD = 0;
+        $idx = -1;
+        for ($i = $s + 1; $i < $e; $i++) {
+            $px = $pts[$i][0] - $ax;
+            $py = $pts[$i][1] - $ay;
+            $d = $len > 0 ? abs($dx * $py - $dy * $px) / $len : sqrt($px * $px + $py * $py);
+            if ($d > $maxD) {
+                $maxD = $d;
+                $idx = $i;
+            }
+        }
+        if ($idx > 0 && $maxD > $tol) {
+            $keep[$idx] = true;
+            $stack[] = array($s, $idx);
+            $stack[] = array($idx, $e);
+        }
+    }
+    $out = array();
+    foreach ($pts as $i => $p) {
+        if ($keep[$i]) {
+            $out[] = $p;
+        }
+    }
+    return $out;
+}
+
+function gsa_aq_smoke_parse($kml)
+{
+    $plumes = array();
+    if (!preg_match_all('#<Placemark>(.*?)</Placemark>#s', $kml, $pm)) {
+        return $plumes;
+    }
+    foreach ($pm[1] as $block) {
+        $desc = preg_match('#<description>(.*?)</description>#s', $block, $m) ? $m[1] : '';
+        $desc = strip_tags(str_replace(array('<br>', '<br/>', '<br />'), "\n", html_entity_decode(str_replace(array('<![CDATA[', ']]>'), '', $desc), ENT_QUOTES | ENT_XML1, 'UTF-8')));
+        $density = preg_match('/Density:\s*(Light|Medium|Heavy)/i', $desc, $m) ? ucfirst(strtolower($m[1])) : null;
+        if ($density === null && preg_match('#<styleUrl>\#?Smoke_(Light|Medium|Heavy)#', $block, $m)) {
+            $density = $m[1];
+        }
+        if ($density === null) {
+            continue;
+        }
+        $start = preg_match('/Start Time:\s*([0-9]{7}\s+[0-9]{4})/i', $desc, $m) ? gsa_aq_hms_time($m[1]) : null;
+        $end = preg_match('/End Time:\s*([0-9]{7}\s+[0-9]{4})/i', $desc, $m) ? gsa_aq_hms_time($m[1]) : null;
+        $sat = preg_match('/Satellite:\s*([^\n]+)/i', $desc, $m) ? trim($m[1]) : '';
+        if (!preg_match_all('#<outerBoundaryIs>.*?<coordinates>(.*?)</coordinates>#s', $block, $rings)) {
+            continue;
+        }
+        foreach ($rings[1] as $text) {
+            $pts = array();
+            foreach (preg_split('/\s+/', trim($text)) as $tok) {
+                $xy = explode(',', $tok);
+                if (count($xy) >= 2 && is_numeric($xy[0]) && is_numeric($xy[1])) {
+                    $pts[] = array((float) $xy[0], (float) $xy[1]);
+                }
+            }
+            if (count($pts) < 4) {
+                continue;
+            }
+            $simple = gsa_aq_simplify($pts, 0.03);
+            if (count($simple) < 4) {
+                $simple = gsa_aq_simplify($pts, 0.005);
+            }
+            if (count($simple) < 4) {
+                continue;
+            }
+            $ring = array();
+            $sx = $sy = 0;
+            foreach ($simple as $p) {
+                $ring[] = array(round($p[0], 3), round($p[1], 3));
+                $sx += $p[0];
+                $sy += $p[1];
+            }
+            $plumes[] = array(
+                'density' => $density,
+                'start' => $start,
+                'end' => $end,
+                'satellite' => $sat,
+                'lat' => round($sy / count($simple), 3),
+                'lon' => round($sx / count($simple), 3),
+                'ring' => $ring,
+            );
+        }
+    }
+    return $plumes;
+}
+
+// Today's UTC file is posted once analysts start mapping (usually mid-morning ET);
+// until then, use yesterday's.
+function gsa_aq_smoke()
+{
+    $base = 'https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/KML/';
+    foreach (array(0, 1) as $back) {
+        $t = time() - $back * 86400;
+        $day = gmdate('Ymd', $t);
+        $url = $base . gmdate('Y/m', $t) . '/hms_smoke' . $day . '.kml';
+        $got = gsa_tfr_fetch(array('k' => $url), 40, 1);
+        $kml = $got['k'] ?? null;
+        if (!$kml || strpos($kml, '<kml') === false) {
+            continue;
+        }
+        return array('date' => substr($day, 0, 4) . '-' . substr($day, 4, 2) . '-' . substr($day, 6, 2), 'plumes' => gsa_aq_smoke_parse($kml));
+    }
+    return null;
+}
+
+function gsa_aq_band($aqi)
+{
+    if ($aqi === null) {
+        return 'none';
+    }
+    if ($aqi <= 50) {
+        return 'good';
+    }
+    if ($aqi <= 100) {
+        return 'moderate';
+    }
+    if ($aqi <= 150) {
+        return 'usg';
+    }
+    if ($aqi <= 200) {
+        return 'unhealthy';
+    }
+    if ($aqi <= 300) {
+        return 'veryunhealthy';
+    }
+    return 'hazardous';
+}
+
+function gsa_aq_build($previous = null)
+{
+    $air = gsa_aq_airnow();
+    if ($air === null) {
+        return null;
+    }
+    $smoke = gsa_aq_smoke();
+    $smokeError = null;
+    if ($smoke === null) {
+        $smokeError = 'NOAA HMS smoke file did not answer at ' . gmdate('H:i\Z');
+        $smoke = ($previous && isset($previous['smoke'])) ? $previous['smoke'] : array('date' => null, 'plumes' => array());
+    }
+    $bands = array('good' => 0, 'moderate' => 0, 'usg' => 0, 'unhealthy' => 0, 'veryunhealthy' => 0, 'hazardous' => 0, 'none' => 0);
+    $obs = 0;
+    foreach ($air['monitors'] as $m) {
+        $bands[gsa_aq_band($m['aqi'] ?? null)]++;
+        if ($m['time'] && $m['time'] > $obs) {
+            $obs = $m['time'];
+        }
+    }
+    $dens = array('Light' => 0, 'Medium' => 0, 'Heavy' => 0);
+    foreach ($smoke['plumes'] as $p) {
+        $dens[$p['density']]++;
+    }
+    $out = array(
+        'source' => 'EPA AirNow & NOAA HMS Smoke',
+        'updated' => gmdate('Y-m-d\TH:i:s\Z'),
+        'observed' => $obs ? gmdate('Y-m-d\TH:i:s\Z', $obs) : null,
+        'monitors' => $air['monitors'],
+        'agencies' => $air['agencies'],
+        'smoke' => $smoke,
+        'counts' => array('monitors' => count($air['monitors']), 'feedMonitors' => $air['feedCount'], 'bands' => $bands, 'plumes' => count($smoke['plumes']), 'density' => $dens),
+    );
+    if ($smokeError) {
+        $out['smokeError'] = $smokeError;
+    }
+    return $out;
+}
+
+function gsa_aq_refresh($opts = array())
+{
+    global $dataDir;
+    $maxAge = (int) ($opts['maxAge'] ?? 870);
+    $cached = gsa_aq_cache_read();
+    if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+        return array('ok' => true, 'skipped' => true);
+    }
+    $lock = fopen($dataDir . '/airquality.lock', 'c');
+    if (!$lock) {
+        return array('ok' => false, 'error' => 'no lock file');
+    }
+    if (!flock($lock, !empty($opts['wait']) ? LOCK_EX : (LOCK_EX | LOCK_NB))) {
+        fclose($lock);
+        return array('ok' => true, 'busy' => true);
+    }
+    try {
+        $cached = gsa_aq_cache_read();
+        if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
+            return array('ok' => true, 'skipped' => true);
+        }
+        $t0 = microtime(true);
+        $built = gsa_aq_build($cached);
+        if ($built === null) {
+            if ($cached) {
+                $cached['lastError'] = 'EPA AirNow did not answer at ' . gmdate('H:i\Z');
+                gsa_snapshot_put(gsa_aq_cache_file(), $cached, gsa_source_from_file(gsa_aq_cache_file()));
+            }
+            return array('ok' => false, 'error' => 'EPA AirNow did not answer');
+        }
+        $built['fetchedAt'] = time();
+        gsa_snapshot_put(gsa_aq_cache_file(), $built, gsa_source_from_file(gsa_aq_cache_file()));
+        return array('ok' => true, 'monitors' => $built['counts']['monitors'], 'plumes' => $built['counts']['plumes'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function gsa_aq_snapshot()
+{
+    $cached = gsa_aq_cache_read();
+    $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    if ($age > 1800) {
+        gsa_aq_refresh(array('maxAge' => 1800, 'wait' => !$cached));
+        $cached = gsa_aq_cache_read();
+        $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
+    }
+    if (!$cached) {
+        return array('source' => 'EPA AirNow & NOAA HMS Smoke', 'updated' => gmdate('Y-m-d\TH:i:s\Z'), 'stale' => false,
+            'error' => 'EPA AirNow did not answer. Try again in a few minutes.', 'monitors' => array(), 'agencies' => array(), 'smoke' => array('date' => null, 'plumes' => array()),
+            'counts' => array('monitors' => 0, 'bands' => array(), 'plumes' => 0, 'density' => array()));
+    }
+    unset($cached['fetchedAt']);
+    $cached['stale'] = $age > 3600;
+    $cached['ageSeconds'] = $age;
+    return $cached;
+}
+
 require __DIR__ . '/poll-cache.php';

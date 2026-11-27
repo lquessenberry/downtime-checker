@@ -6,7 +6,7 @@ const state = {
   up: 0,
   down: 0,
   startedAt: 0,
-  heading: "AWAITING TASKING",
+  heading: "",
   filter: "all",
   selected: null,
   viewer: null,
@@ -14,14 +14,25 @@ const state = {
   arcs: new Map(),
   origin: null,
   outageSource: null,
+  ukOutSource: null,
+  caOutSource: null,
+  auOutSource: null,
   hungerSource: null,
   streamSource: null,
   conflictSource: null,
   highlightSource: null,
   countryIndex: null,
   scanSource: null,
+  mapReady: false,
+  gridTester: false,
+  catalogSearches: [],
   outagePoints: [],
   outageMeta: null,
+  regionOut: {
+    ukout: { api: "/api/outages-uk", points: [], meta: null },
+    caout: { api: "/api/outages-ca", points: [], meta: null },
+    auout: { api: "/api/outages-au", points: [], meta: null },
+  },
   hungerPoints: [],
   hungerMeta: null,
   streamPoints: [],
@@ -54,6 +65,9 @@ const state = {
   },
   layers: {
     outages: false,
+    ukout: false,
+    caout: false,
+    auout: false,
     hunger: false,
     stream: false,
     jamming: false,
@@ -86,19 +100,39 @@ const state = {
     celltowers: false,
     // GLOBAL POWER PLANTS (infra.js): WRI + EIA plants, point primitives in tiles.
     powerplants: false,
+    // EMERGENCY SERVICES (infra.js): USGS police, sheriff and fire / EMS stations, point primitives in tiles.
+    police: false,
+    sheriff: false,
+    fire: false,
+    hospitals: false,
     // USA POWER LINES (powerlines.js): HIFLD transmission lines, batched polylines.
     powerlines: false,
     // FIREARMS (firearms.js): saved static pin layers, not a live feed.
     gunsusa: false,
     gunsworld: false,
+    // USA CONCEALED CARRY RECIPROCITY (ccw.js): saved state rules, colored by a chosen permit state.
+    ccw: false,
+    // INTERNET OUTAGES (internet.js): live IODA (Georgia Tech) outage pins.
+    inetusa: false,
+    inetglobal: false,
+    // FAA TFR (tfr.js): live FAA temporary flight restriction areas.
+    tfr: false,
+    // FLIGHT DELAYS (delays.js): live FAA NAS Status airport delays.
+    delays: false,
+    // USA AIR QUALITY (airquality.js): live EPA AirNow monitors + NOAA HMS smoke.
+    airquality: false,
     // MILITIAS (militias.js): saved static pin layers, not a live feed.
     militianational: false,
     militiastate: false,
     militialocal: false,
     militiainactive: false,
+    // PARANORMAL (paranormal.js): UFO reports and Bigfoot sightings.
+    ufo: false,
+    bigfoot: false,
   },
   openKind: "",
   openId: "",
+  openLayer: "",
   feedMode: "outages",
   airFilter: "all",
   aircraftFeed: [],
@@ -162,10 +196,16 @@ async function fetchLayer(name, url) {
 // SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
 const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
 // INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
-const INFRA_KEYS = ["airports", "bases", "celltowers", "powerplants"];
+const INFRA_KEYS = ["airports", "bases", "celltowers", "powerplants", "police", "sheriff", "fire", "hospitals"];
 const FIREARMS_KEYS = ["gunsusa", "gunsworld"];
+const CCW_KEYS = ["ccw"];
 const MILITIAS_KEYS = ["militianational", "militiastate", "militialocal", "militiainactive"];
+const INTERNET_KEYS = ["inetusa", "inetglobal"];
+const TFR_KEYS = ["tfr"];
+const DELAYS_KEYS = ["delays"];
+const AIRQUALITY_KEYS = ["airquality"];
 const POWERLINES_KEYS = ["powerlines"];
+const PARANORMAL_KEYS = ["ufo", "bigfoot"];
 
 const COLORS = {
   up: Cesium.Color.fromCssColorString("#3dff9a"),
@@ -233,40 +273,77 @@ function esc(value) {
   })[ch]);
 }
 
+function dismissBootSplash() {
+  const splash = document.getElementById("boot-splash");
+  if (!splash || splash.dataset.done === "1") return;
+  if (!window.__bootLogDone) {
+    window.setTimeout(dismissBootSplash, 200);
+    return;
+  }
+  splash.dataset.done = "1";
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  splash.classList.add("is-done");
+  const remove = () => { if (splash.parentNode) splash.remove(); };
+  if (reduce) remove();
+  else {
+    splash.addEventListener("transitionend", remove, { once: true });
+    window.setTimeout(remove, 1000);
+  }
+}
+
 async function boot() {
-  const [catalog] = await Promise.all([
-    fetch("/api/catalog").then((response) => response.json()),
-    startGlobe(),
-  ]);
-  renderSearches(catalog);
-  fillCountries(catalog.countries);
-  hookUi();
-  // LOCK & SCAN replays the server's scheduled pass (#34), so the page no
-  // longer holds the /api/events stream open. connectEvents() is kept for
-  // debugging a live pass.
-  tickClock();
-  setInterval(syncCheckedNote, 30000);
-  // Scanners (1.5 MB) and the aircraft/GPS-jamming feed load when
-  // their layer or list is opened, not at startup.
-  Promise.allSettled([
-    loadOutages(),
-    loadHunger(),
-    loadConflicts(),
-  ]).then((results) => {
-    const failed = results.find((result) => result.status === "rejected");
-    if (failed) statusLive(failed.reason?.message || String(failed.reason));
-    else statusLive();
-  });
-  setInterval(() => {
-    if (!document.hidden && state.layers.aircraft) pollAircraft().catch((error) => statusLive(error.message || String(error)));
-  }, 45000);
-  setInterval(() => {
-    if (!document.hidden && state.layers.jamming) pollJamming().catch((error) => statusLive(error.message || String(error)));
-  }, 60000);
-  setInterval(tickAircraft, 1000);
-  setInterval(() => {
-    loadOutages().catch((error) => statusLive(error.message || String(error)));
-  }, 180000);
+  try {
+    const [catalog] = await Promise.all([
+      fetch("/api/catalog").then((response) => response.json()),
+      startGlobe(),
+    ]);
+    renderSearches(catalog);
+    fillCountries(catalog.countries);
+    hookUi();
+    // LOCK & SCAN replays the server's scheduled pass (#34), so the page no
+    // longer holds the /api/events stream open. connectEvents() is kept for
+    // debugging a live pass.
+    tickClock();
+    setInterval(syncCheckedNote, 30000);
+    // Scanners (1.5 MB) and the aircraft/GPS-jamming feed load when
+    // their layer or list is opened, not at startup.
+    Promise.allSettled([
+      loadOutages(),
+      loadHunger(),
+      loadStreams(),
+      loadConflicts(),
+      pollLiveFeeds(),
+    ]).then((results) => {
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed) statusLive(failed.reason?.message || String(failed.reason));
+      else statusLive();
+    });
+    setInterval(() => {
+      if (!document.hidden && state.layers.aircraft) pollAircraft().catch((error) => statusLive(error.message || String(error)));
+    }, 45000);
+    setInterval(() => {
+      if (!document.hidden && state.layers.jamming) pollJamming().catch((error) => statusLive(error.message || String(error)));
+    }, 60000);
+    setInterval(tickAircraft, 1000);
+    setInterval(() => {
+      if (document.hidden) return;
+      loadOutages().catch((error) => statusLive(error.message || String(error)));
+      for (const key of ["ukout", "caout", "auout"]) {
+        if (state.regionOut[key].meta) {
+          loadRegionOutages(key).catch((error) => statusLive(error.message || String(error)));
+        }
+      }
+    }, 600000);
+  } catch (error) {
+    const log = document.getElementById("boot-log");
+    if (log && !log.querySelector("[data-boot-error]")) {
+      const row = document.createElement("p");
+      row.dataset.bootError = "1";
+      row.textContent = "> THE GLOBE DID NOT OPEN. REFRESH THE PAGE.";
+      log.appendChild(row);
+    }
+    throw error;
+  }
 }
 
 function phoneLayout() {
@@ -389,7 +466,11 @@ function setViewOpen(open) {
   const panel = document.getElementById("view-settings");
   const reopen = document.getElementById("open-view");
   if (panel) panel.classList.toggle("is-closed", !open);
-  if (reopen) reopen.hidden = open;
+  if (reopen) {
+    reopen.classList.toggle("is-on", open);
+    reopen.setAttribute("aria-pressed", open ? "true" : "false");
+    reopen.setAttribute("aria-label", open ? "Close view" : "View");
+  }
 }
 
 function setPanel(which) {
@@ -401,6 +482,10 @@ function setPanel(which) {
   rail.classList.toggle("is-open", openMenu);
   feed.classList.toggle("is-open", openList);
   backdrop.hidden = !(openMenu || openList);
+  const menuBtn = document.getElementById("open-menu");
+  const listBtn = document.getElementById("open-list");
+  if (menuBtn) menuBtn.classList.toggle("is-on", openMenu);
+  if (listBtn) listBtn.classList.toggle("is-on", openList);
 }
 
 async function startGlobe() {
@@ -456,16 +541,23 @@ async function startGlobe() {
   const basemapSelect = document.getElementById("basemap");
   if (basemapSelect) basemapSelect.value = startupMap;
   state.outageSource = new Cesium.CustomDataSource("outages");
+  state.ukOutSource = new Cesium.CustomDataSource("ukout");
+  state.caOutSource = new Cesium.CustomDataSource("caout");
+  state.auOutSource = new Cesium.CustomDataSource("auout");
   state.hungerSource = new Cesium.CustomDataSource("hunger");
   state.streamSource = new Cesium.CustomDataSource("hpdb-streams");
   state.conflictSource = new Cesium.CustomDataSource("conflicts");
   state.scanSource = new Cesium.CustomDataSource("scan");
   state.scanSource.show = true;
   viewer.dataSources.add(state.outageSource);
+  viewer.dataSources.add(state.ukOutSource);
+  viewer.dataSources.add(state.caOutSource);
+  viewer.dataSources.add(state.auOutSource);
   viewer.dataSources.add(state.hungerSource);
   viewer.dataSources.add(state.streamSource);
   viewer.dataSources.add(state.conflictSource);
   viewer.dataSources.add(state.scanSource);
+  viewer.camera.changed.addEventListener(refreshPhoneArcs);
   for (const key of ["jamming", "aircraft", "ships", "mesh", "disease", "animal", "amfm", "effects", "quakes", "sats", ...SPACE_KEYS]) {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
@@ -478,6 +570,7 @@ async function startGlobe() {
   viewer.selectedEntityChanged.addEventListener(kickRender);
   viewer.scene.preRender.addEventListener(cullAircraftHorizon);
   viewer.scene.preRender.addEventListener(keepFlatMapIntact);
+  viewer.scene.preRender.addEventListener(placeCreditBehindGlobe);
   viewer.camera.moveEnd.addEventListener(() => {
     if (state.layers.ships) scheduleShips();
   });
@@ -528,6 +621,41 @@ async function startGlobe() {
       statusLive: () => statusLive(),
     });
   }
+  if (window.GsaCcw) {
+    window.GsaCcw.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaInternet) {
+    window.GsaInternet.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaDelays) {
+    window.GsaDelays.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaAirQuality) {
+    window.GsaAirQuality.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  if (window.GsaTfr) {
+    window.GsaTfr.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
   if (window.GsaMilitias) {
     window.GsaMilitias.init({
       viewer: () => state.viewer,
@@ -542,10 +670,37 @@ async function startGlobe() {
       statusLive: () => statusLive(),
     });
   }
+  if (window.GsaParanormal) {
+    window.GsaParanormal.init({
+      viewer: () => state.viewer,
+      setCount,
+      statusLive: () => statusLive(),
+    });
+  }
+  // EXTRA LAYERS (extra-layers.js): ClimateViewer-equivalent packs, NASA GIBS, live feeds.
+  if (window.GsaExtraLayers) {
+    window.GsaExtraLayers.init({ viewer: () => state.viewer });
+  }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
+  state.mapReady = true;
   viewer.camera.setView({
     destination: Cesium.Rectangle.fromDegrees(-168, -48, 150, 72),
   });
+  // First launch view picker (welcome.js): turns on preset layers and flies the camera.
+  if (window.GsaWelcome) {
+    window.GsaWelcome.init({
+      viewer: () => state.viewer,
+      setLayer,
+      phone: phoneLayout,
+      setBasemap: (id) => applyBasemap(id),
+      closePanels: () => setPanel(""),
+      openGridTester,
+      syncGridTester: syncGridTesterButton,
+      syncLayers: syncLayersButton,
+    });
+  }
+  initEarthSpin(viewer);
+  dismissBootSplash();
   // Do not pin a hardcoded city. Place the blue hub only after a fresh lookup.
   if (window.GsaSearch && window.GsaSearch.locateStartup) {
     window.GsaSearch.locateStartup().then((info) => {
@@ -569,6 +724,20 @@ async function startGlobe() {
       if (viewer.selectedEntity) viewer.selectedEntity = undefined;
       closeMapPopups();
       window.GsaPowerLines.open(powerHit, showLive);
+      return;
+    }
+    const paranormalHit = window.GsaParanormal && window.GsaParanormal.pick(click.position);
+    if (paranormalHit) {
+      if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+      closeMapPopups();
+      showLive(paranormalHit);
+      return;
+    }
+    const extraHit = window.GsaExtraLayers && window.GsaExtraLayers.pick(click.position);
+    if (extraHit) {
+      if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+      closeMapPopups();
+      showLive(extraHit);
       return;
     }
     if (pickedMapPin(click.position)) return;
@@ -681,6 +850,7 @@ function renderSearches(catalog) {
   });
   grid.append(caption, toggle, scan, menu);
   fillUsTests(unitedStates);
+  fillGridTester(catalog);
   document.querySelector(".country-pick").before(grid);
 }
 
@@ -704,6 +874,67 @@ function syncUsTests() {
   if (!show) tests.value = "";
 }
 
+function syncLayersButton() {
+  const arrow = document.getElementById("open-menu");
+  if (arrow) {
+    arrow.classList.remove("is-on");
+    arrow.setAttribute("aria-pressed", "false");
+    arrow.setAttribute("aria-label", "Reset map");
+  }
+  const btn = document.getElementById("open-categories");
+  if (!btn) return;
+  btn.setAttribute("aria-label", "Layers");
+  const on = Boolean(window.GsaWelcome && window.GsaWelcome.isOpen && window.GsaWelcome.isOpen());
+  btn.classList.toggle("is-on", on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+
+function syncGridTesterButton() {
+  const btn = document.getElementById("open-grid-tester");
+  if (!btn) return;
+  const welcome = document.getElementById("welcome");
+  const grid = document.getElementById("grid-tester");
+  const overlayOpen = Boolean(welcome && !welcome.hidden);
+  const gridOpen = Boolean(grid && !grid.hidden && overlayOpen);
+  btn.hidden = !state.gridTester || gridOpen || overlayOpen;
+}
+
+function openGridTester() {
+  const welcome = document.getElementById("welcome");
+  const grid = document.getElementById("grid-tester");
+  const home = welcome && welcome.querySelector("[data-welcome-home]");
+  if (!welcome || !grid) return;
+  if (window.GsaWelcome && window.GsaWelcome.releaseCamera) window.GsaWelcome.releaseCamera();
+  if (home) home.hidden = true;
+  grid.hidden = false;
+  welcome.hidden = false;
+  welcome.setAttribute("aria-labelledby", "grid-tester-title");
+  document.documentElement.classList.remove("welcome-pending");
+  document.body.classList.add("welcome-open");
+  state.gridTester = true;
+  grid.scrollTop = 0;
+  syncGridTesterButton();
+}
+
+function fillGridTester(catalog) {
+  const list = document.getElementById("grid-tester-list");
+  if (!list || !catalog) return;
+  state.catalogSearches = catalog.searches || [];
+  const icon = '<span class="welcome-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true" focusable="false"><circle cx="12" cy="6.4" r="3.5"/><path d="M12 3.1v6.6M9.1 5.1h5.8M9.4 7.7h5.2M12 9.9v2M4.2 11.9h15.6M4.2 11.9v1.8M12 11.9v1.8M19.8 11.9v1.8M2.2 18.5h4.6M9.7 18.5h4.6M17.2 18.5h4.6"/><rect x="2.2" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="9.7" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="17.2" y="14.3" width="4.6" height="3.4" rx="0.7"/></svg></span>';
+  const row = (item) => `<button type="button" class="welcome-row" data-grid-test="${esc(item.id)}">${icon}<span class="welcome-text"><strong>${esc(item.label)}</strong></span><span class="welcome-arrow" aria-hidden="true">→</span></button>`;
+  const global = state.catalogSearches.filter((item) => item.group === "global");
+  const us = state.catalogSearches.filter((item) => item.group === "us");
+  list.innerHTML = `<p class="welcome-section">GLOBAL</p>${global.map(row).join("")}<p class="welcome-section">UNITED STATES</p>${us.map(row).join("")}`;
+  if (list.dataset.bound === "1") return;
+  list.dataset.bound = "1";
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-grid-test]");
+    if (!button) return;
+    for (const el of list.querySelectorAll("[data-grid-test]")) el.classList.toggle("is-primary", el === button);
+    startScan(button.dataset.gridTest);
+  });
+}
+
 function fillCountries(list) {
   const select = document.getElementById("country");
   const options = [`<option value="">Choose a Country</option>`];
@@ -723,12 +954,126 @@ function bindEffectsHud() {
   }
 }
 
+// ROTATE EARTH button: a slow continuous spin the visitor turns on and off.
+// Any touch, click, drag or wheel on the globe, any camera flight, or the welcome
+// picker stops it. Reduced motion is respected by default, but a press of this
+// button is an explicit request, so it still spins (at the same gentle pace).
+const earthSpin = { on: false, frame: 0, last: 0, viewer: null };
+
+function earthSpinRate(camera) {
+  // Degrees per second: one turn a minute from far out, slower as the camera nears the ground.
+  const h = camera.positionCartographic ? camera.positionCartographic.height : 2e7;
+  return Math.max(0.05, Math.min(6, (6 * h) / 6.0e6));
+}
+
+function earthSpinStep(now) {
+  if (!earthSpin.on) return;
+  const v = earthSpin.viewer;
+  const b = document.body.classList;
+  if (!v || b.contains("welcome-open") || b.contains("welcome-intro") || b.contains("welcome-spin")) {
+    stopEarthSpin();
+    return;
+  }
+  if (earthSpin.last) {
+    const dt = Math.min(0.1, (now - earthSpin.last) / 1000);
+    const cam = v.camera;
+    if (!Cesium.Matrix4.equals(cam.transform, Cesium.Matrix4.IDENTITY)) cam.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    cam.rotate(Cesium.Cartesian3.UNIT_Z, Cesium.Math.toRadians(earthSpinRate(cam) * dt));
+    if (v.scene.requestRender) v.scene.requestRender();
+  }
+  earthSpin.last = now;
+  earthSpin.frame = requestAnimationFrame(earthSpinStep);
+}
+
+function paintEarthSpin() {
+  const btn = document.getElementById("earth-spin");
+  if (!btn) return;
+  btn.setAttribute("aria-pressed", earthSpin.on ? "true" : "false");
+  btn.setAttribute("aria-label", earthSpin.on ? "Stop rotating Earth" : "Rotate Earth");
+  btn.title = earthSpin.on ? "Stop rotating Earth" : "Rotate Earth";
+}
+
+function startEarthSpin() {
+  const v = earthSpin.viewer;
+  if (!v || earthSpin.on) return;
+  if (window.GsaWelcome && window.GsaWelcome.stopSpin) window.GsaWelcome.stopSpin();
+  v.camera.cancelFlight();
+  earthSpin.on = true;
+  earthSpin.last = 0;
+  earthSpin.frame = requestAnimationFrame(earthSpinStep);
+  paintEarthSpin();
+}
+
+function stopEarthSpin() {
+  if (earthSpin.frame) cancelAnimationFrame(earthSpin.frame);
+  earthSpin.frame = 0;
+  earthSpin.last = 0;
+  if (!earthSpin.on) return;
+  earthSpin.on = false;
+  paintEarthSpin();
+}
+
+// Safety net: if any camera update (a wheel zoom right after the spin, for example) ever
+// leaves the camera at NaN, Cesium stops rendering for good. Put the camera back on the
+// last good pose before the frame draws, so the globe keeps working.
+function guardCameraFinite(viewer) {
+  const finite = (v) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+  const good = { p: new Cesium.Cartesian3(), d: new Cesium.Cartesian3(), u: new Cesium.Cartesian3(), ok: false };
+  viewer.scene.preRender.addEventListener(() => {
+    const c = viewer.camera;
+    if (finite(c.positionWC) && finite(c.directionWC) && finite(c.upWC)) {
+      Cesium.Cartesian3.clone(c.positionWC, good.p);
+      Cesium.Cartesian3.clone(c.directionWC, good.d);
+      Cesium.Cartesian3.clone(c.upWC, good.u);
+      good.ok = true;
+      return;
+    }
+    if (!good.ok) return;
+    stopEarthSpin();
+    c.cancelFlight();
+    c.setView({
+      destination: Cesium.Cartesian3.clone(good.p),
+      orientation: { direction: Cesium.Cartesian3.clone(good.d), up: Cesium.Cartesian3.clone(good.u) },
+      endTransform: Cesium.Matrix4.IDENTITY,
+    });
+  });
+}
+
+function initEarthSpin(viewer) {
+  earthSpin.viewer = viewer;
+  const btn = document.getElementById("earth-spin");
+  if (btn) btn.addEventListener("click", () => (earthSpin.on ? stopEarthSpin() : startEarthSpin()));
+  const canvas = viewer.scene && viewer.scene.canvas;
+  if (canvas) {
+    ["pointerdown", "mousedown", "touchstart", "wheel"].forEach((type) => {
+      canvas.addEventListener(type, stopEarthSpin, { capture: true, passive: true });
+    });
+  }
+  window.addEventListener("keydown", (event) => {
+    if (/^Arrow|^[+\-=wasdqe]$/i.test(event.key) && event.target === document.body) stopEarthSpin();
+  });
+  // Every flight (presets, search, pins, welcome) goes through camera.flyTo; stop the spin first.
+  const cam = viewer.camera;
+  const flyTo = cam.flyTo.bind(cam);
+  cam.flyTo = (options) => {
+    stopEarthSpin();
+    return flyTo(options);
+  };
+  guardCameraFinite(viewer);
+  window.GsaEarthSpin = { start: startEarthSpin, stop: stopEarthSpin, isOn: () => earthSpin.on };
+}
+
 function hookUi() {
   document.getElementById("btn-stop").addEventListener("click", stopReplay);
   document.getElementById("btn-reset").addEventListener("click", resetMap);
   document.getElementById("reset-mobile").addEventListener("click", resetMap);
   document.getElementById("close-view").addEventListener("click", () => setViewOpen(false));
-  document.getElementById("open-view").addEventListener("click", () => setViewOpen(true));
+  document.getElementById("open-view").addEventListener("click", () => {
+    const panel = document.getElementById("view-settings");
+    setViewOpen(panel.classList.contains("is-closed"));
+  });
+  const openGrid = document.getElementById("open-grid-tester");
+  if (openGrid) openGrid.addEventListener("click", openGridTester);
   document.getElementById("open-grid-results").addEventListener("click", () => setGridResultsOpen(true));
   document.getElementById("close-grid-results").addEventListener("click", () => setGridResultsOpen(false));
   hookServiceWorker();
@@ -775,7 +1120,9 @@ function hookUi() {
     closeMapPopups();
     if (state.viewer && state.viewer.selectedEntity) state.viewer.selectedEntity = undefined;
   });
-  document.getElementById("effects-hud-close").addEventListener("click", () => setLayer("effects", false));
+  document.getElementById("effects-hud-close").addEventListener("click", () => {
+    if (window.GsaEffectsRadius && window.GsaEffectsRadius.hideHud) window.GsaEffectsRadius.hideHud();
+  });
   document.getElementById("ac-close").addEventListener("click", closeAircraft);
   document.getElementById("mode-3d").addEventListener("click", () => setSceneMode("3d"));
   document.getElementById("mode-2d").addEventListener("click", () => setSceneMode("2d"));
@@ -787,9 +1134,22 @@ function hookUi() {
   });
   document.getElementById("close-menu").addEventListener("click", () => setPanel(""));
   document.getElementById("close-list").addEventListener("click", () => setPanel(""));
-  document.getElementById("open-menu").addEventListener("click", () => {
-    const open = document.querySelector(".rail").classList.contains("is-open");
-    setPanel(open ? "" : "menu");
+  document.getElementById("open-menu").addEventListener("click", resetMap);
+  document.getElementById("open-categories").addEventListener("click", () => {
+    setPanel("");
+    if (!window.GsaWelcome) return;
+    const dock = !phoneLayout();
+    const welcome = document.getElementById("welcome");
+    const docked = Boolean(welcome && welcome.classList.contains("is-docked"));
+    if (window.GsaWelcome.isOpen()) {
+      if (dock && !docked) {
+        window.GsaWelcome.open({ spin: false, noFocus: true, dock: true });
+        return;
+      }
+      window.GsaWelcome.close();
+      return;
+    }
+    window.GsaWelcome.open({ spin: false, dock: dock });
   });
   document.getElementById("open-list").addEventListener("click", () => {
     const open = document.querySelector(".feed-col").classList.contains("is-open");
@@ -798,6 +1158,9 @@ function hookUi() {
   document.getElementById("panel-backdrop").addEventListener("click", () => setPanel(""));
   window.addEventListener("resize", () => {
     tuneQuality(state.basemap || "natural");
+    restyleArcs();
+    syncGridTesterButton();
+    syncLayersButton();
     if (!phoneLayout()) {
       setGridResultsOpen(false);
     } else syncGridResultsButton();
@@ -836,6 +1199,7 @@ function hookUi() {
 
 async function startScan(id, country) {
   if (state.running) return;
+  noteScanView(id, country);
   state.scanWanted = true;
   let response;
   let body = {};
@@ -926,9 +1290,8 @@ function replayScan(snap) {
   state.up = 0;
   state.down = 0;
   state.startedAt = Date.now();
-  state.heading = snap.heading || "GRID";
   state.selected = null;
-  document.getElementById("heading").textContent = state.heading.toUpperCase();
+  paintHeading(snap.heading || "GRID");
   document.getElementById("btn-stop").hidden = false;
   if (state.scanSource) state.scanSource.show = true;
   setFeedMode("returns");
@@ -1009,9 +1372,8 @@ function connectEvents() {
       state.up = 0;
       state.down = 0;
       state.startedAt = Date.now();
-      state.heading = event.heading;
       state.selected = null;
-      document.getElementById("heading").textContent = event.heading.toUpperCase();
+      paintHeading(event.heading);
       document.getElementById("btn-stop").hidden = false;
       if (state.scanSource) state.scanSource.show = true;
       setFeedMode("returns");
@@ -1067,8 +1429,7 @@ function applySnapshot(snap) {
   state.done = snap.done || 0;
   state.up = snap.up || 0;
   state.down = snap.down || 0;
-  state.heading = snap.heading || state.heading;
-  document.getElementById("heading").textContent = (state.heading || "AWAITING TASKING").toUpperCase();
+  paintHeading(snap.heading || state.heading);
   document.getElementById("btn-stop").hidden = !snap.running;
   for (const result of state.results) {
     if (result) upsertPoint(result);
@@ -1161,30 +1522,61 @@ function arcMaterial(color) {
   return new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.28, color });
 }
 
+function arcStyle(color) {
+  // Phone GPUs bake a glowing polyline into the screen. A solid color stays on the globe.
+  if (phoneLayout()) return { width: 2.5, material: color, depthFail: color };
+  const glow = arcMaterial(color);
+  return { width: 4, material: glow, depthFail: arcMaterial(color) };
+}
+
+function applyArcStyle(entity) {
+  if (!entity || !entity.polyline || !entity._arcColor) return;
+  const style = arcStyle(entity._arcColor);
+  entity.polyline.width = style.width;
+  entity.polyline.material = style.material;
+  entity.polyline.depthFailMaterial = style.depthFail;
+  if (entity._arcPositions) entity.polyline.positions = entity._arcPositions.slice();
+}
+
+function restyleArcs() {
+  for (const entity of state.arcs.values()) applyArcStyle(entity);
+}
+
+function refreshPhoneArcs() {
+  if (!phoneLayout() || !state.arcs.size) return;
+  for (const entity of state.arcs.values()) {
+    if (!entity._arcPositions || !entity.polyline) continue;
+    entity.polyline.positions = entity._arcPositions.slice();
+  }
+  if (state.viewer && state.viewer.scene.requestRender) state.viewer.scene.requestRender();
+}
+
 function upsertArc(result) {
   if (!state.viewer || !state.scanSource || result.lat == null || result.lon == null) return;
   state.scanSource.show = true;
   const positions = arcPositions(result.lat, result.lon);
   if (!positions) return;
   const color = COLORS[result.status] || COLORS.pending;
-  const material = arcMaterial(color);
+  const style = arcStyle(color);
   let entity = state.arcs.get(result.index);
   if (!entity) {
     entity = state.scanSource.entities.add({
       polyline: {
-        positions,
-        width: 4,
-        material,
-        depthFailMaterial: arcMaterial(color),
+        positions: positions.slice(),
+        width: style.width,
+        material: style.material,
+        depthFailMaterial: style.depthFail,
         arcType: Cesium.ArcType.NONE,
       },
     });
+    entity._arcPositions = positions;
+    entity._arcColor = color;
     state.arcs.set(result.index, entity);
     return;
   }
-  entity.polyline.positions = positions;
-  entity.polyline.material = material;
-  entity.polyline.depthFailMaterial = arcMaterial(color);
+  entity._arcPositions = positions;
+  entity._arcColor = color;
+  applyArcStyle(entity);
 }
 
 function upsertPoint(result) {
@@ -1275,6 +1667,16 @@ function updateHud() {
   setCount("scan", state.results.filter(Boolean).length);
 }
 
+function paintHeading(text) {
+  const heading = document.getElementById("heading");
+  const value = String(text || "").trim();
+  const idle = !value || value.toUpperCase() === "AWAITING TASKING";
+  state.heading = idle ? "" : value;
+  if (!heading) return;
+  heading.textContent = idle ? "" : state.heading.toUpperCase();
+  heading.hidden = idle;
+}
+
 function setStatus(text) {
   const track = document.getElementById("status-track");
   if (track) track.textContent = text;
@@ -1300,7 +1702,7 @@ function setFeedMode(mode) {
     button.classList.toggle("on", button.dataset.feed === state.feedMode);
   }
   const title = document.getElementById("feed-title");
-  if (state.feedMode === "outages") title.textContent = `POWER OUTAGES ${state.outagePoints.length}`;
+  if (state.feedMode === "outages") title.textContent = `POWER OUTAGES ${outageListPoints().length}`;
   else if (state.feedMode === "hunger") title.textContent = `GLOBAL HUNGER ${state.hungerPoints.length}`;
   else if (state.feedMode === "stream") title.textContent = `SCANNERS ${state.streamPoints.length}`;
   else if (state.feedMode === "conflicts") title.textContent = `CONFLICT TRACKER ${state.conflicts.length}`;
@@ -1310,11 +1712,18 @@ function setFeedMode(mode) {
 
 function sourceFor(layer) {
   if (layer === "outages") return state.outageSource;
+  if (layer === "ukout") return state.ukOutSource;
+  if (layer === "caout") return state.caOutSource;
+  if (layer === "auout") return state.auOutSource;
   if (layer === "hunger") return state.hungerSource;
   if (layer === "conflicts") return state.conflictSource;
   if (layer === "stream") return state.streamSource;
   if (layer === "scan") return state.scanSource;
   if (state.live[layer]?.source) return state.live[layer].source;
+  if (window.GsaCcw && window.GsaCcw.sourceFor) {
+    const ccwSource = window.GsaCcw.sourceFor(layer);
+    if (ccwSource) return ccwSource;
+  }
   if (window.GsaFirearms && window.GsaFirearms.sourceFor) {
     const firearmsSource = window.GsaFirearms.sourceFor(layer);
     if (firearmsSource) return firearmsSource;
@@ -1322,6 +1731,22 @@ function sourceFor(layer) {
   if (window.GsaMilitias && window.GsaMilitias.sourceFor) {
     const militiasSource = window.GsaMilitias.sourceFor(layer);
     if (militiasSource) return militiasSource;
+  }
+  if (window.GsaInternet && window.GsaInternet.sourceFor) {
+    const internetSource = window.GsaInternet.sourceFor(layer);
+    if (internetSource) return internetSource;
+  }
+  if (window.GsaTfr && window.GsaTfr.sourceFor) {
+    const tfrSource = window.GsaTfr.sourceFor(layer);
+    if (tfrSource) return tfrSource;
+  }
+  if (window.GsaDelays && window.GsaDelays.sourceFor) {
+    const delaysSource = window.GsaDelays.sourceFor(layer);
+    if (delaysSource) return delaysSource;
+  }
+  if (window.GsaAirQuality && window.GsaAirQuality.sourceFor) {
+    const aqSource = window.GsaAirQuality.sourceFor(layer);
+    if (aqSource) return aqSource;
   }
   return null;
 }
@@ -1333,6 +1758,7 @@ function setCount(key, value) {
 }
 
 function resetMap() {
+  stopEarthSpin();
   // Local view only. The scheduled server pass is never stopped from a page.
   stopReplay();
   state.scanCheckedAt = 0;
@@ -1345,11 +1771,9 @@ function resetMap() {
   state.up = 0;
   state.down = 0;
   state.selected = null;
-  state.heading = "AWAITING TASKING";
+  paintHeading("");
   const stop = document.getElementById("btn-stop");
   if (stop) stop.hidden = true;
-  const heading = document.getElementById("heading");
-  if (heading) heading.textContent = "AWAITING TASKING";
   const grid = document.getElementById("grid-status");
   if (grid) {
     grid.textContent = "Choose a test";
@@ -1369,6 +1793,7 @@ function resetMap() {
   // It is not a map layer, and RESET should not fall back to a default city.
   if (state.viewer) state.viewer.selectedEntity = undefined;
   for (const key of Object.keys(state.layers)) setLayer(key, false);
+  if (window.GsaExtraLayers) window.GsaExtraLayers.clearAll();
   closeAircraft();
   closeConflict();
   hideOutageCard();
@@ -1453,19 +1878,85 @@ function syncLayerGroups() {
   for (const group of document.querySelectorAll(".rail .layer-group")) {
     const el = group.querySelector(".layer-group-count");
     if (!el) continue;
-    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"]').length;
+    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"], [data-xl-toggle][aria-pressed="true"]').length;
     el.textContent = n ? `${n} ON` : "";
   }
 }
 window.gsSyncLayerGroups = syncLayerGroups;
 
-function setLayer(layer, on) {
+function clearLayers() {
+  closeMapPopups();
+  if (state.viewer && state.viewer.selectedEntity) state.viewer.selectedEntity = undefined;
+  for (const key of Object.keys(state.layers)) {
+    if (state.layers[key]) setLayer(key, false);
+  }
+  if (window.GsaExtraLayers) window.GsaExtraLayers.clearAll();
+}
+
+const VIEW_US = [-127, 22, -65, 51];
+const VIEW_UK = [-9, 49.5, 2.5, 61];
+const VIEW_CA = [-141, 41, -52, 72];
+const VIEW_AU = [112, -44, 154, -10];
+const VIEW_WORLD = [-168, -48, 150, 72];
+const VIEW_NUKE = [-128, 18, -62, 54];
+const VIEW_NUKE_PHONE = [-132, -8, -60, 56];
+const US_LAYERS = new Set([
+  "tfr", "delays", "nwsalerts", "rivers", "coastal", "outages", "inetusa", "stream",
+  "celltowers", "powerlines", "police", "sheriff", "fire", "hospitals", "airquality",
+  "gunsusa", "ccw", "militianational", "militiastate", "militialocal", "militiainactive",
+  "bigfoot",
+]);
+
+function flyOverview(rect) {
+  const viewer = state.viewer;
+  if (!viewer || !rect || !window.Cesium) return;
+  if (window.GsaWelcome && window.GsaWelcome.releaseCamera) window.GsaWelcome.releaseCamera();
+  else viewer.camera.cancelFlight();
+  viewer.camera.flyTo({
+    destination: Cesium.Rectangle.fromDegrees(rect[0], rect[1], rect[2], rect[3]),
+    orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+    duration: 1.6,
+  });
+}
+
+function layerOverview(layer) {
+  if (layer === "effects") return phoneLayout() ? VIEW_NUKE_PHONE : VIEW_NUKE;
+  if (layer === "ukout") return VIEW_UK;
+  if (layer === "caout") return VIEW_CA;
+  if (layer === "auout") return VIEW_AU;
+  if (US_LAYERS.has(layer)) return VIEW_US;
+  return VIEW_WORLD;
+}
+
+function flyLayerOverview(layer) {
+  flyOverview(layerOverview(layer));
+}
+
+function noteScanView(id, country) {
+  state.gridTester = true;
+  const key = String(id || "");
+  const us = key === "united-states" || key.startsWith("us-") || country === "United States";
+  flyOverview(us ? VIEW_US : VIEW_WORLD);
+  const toggle = document.getElementById("grid-status");
+  if (toggle && key && key !== "country") {
+    toggle.dataset.scanId = key;
+    const item = (state.catalogSearches || []).find((entry) => entry.id === key);
+    if (item) toggle.textContent = item.label;
+  }
+  syncGridTesterButton();
+}
+
+function setLayer(layer, on, options) {
   if (!Object.prototype.hasOwnProperty.call(state.layers, layer)) return;
+  const wasOn = Boolean(state.layers[layer]);
+  const fly = !options || options.fly !== false;
   state.layers[layer] = Boolean(on);
   const source = sourceFor(layer);
   if (source) source.show = state.layers[layer];
   if (layer === "conflicts" && !state.layers.conflicts) closeConflict();
-  if (layer === "outages" && !state.layers.outages) hideOutageCard();
+  if ((layer === "outages" || layer === "ukout" || layer === "caout" || layer === "auout") && !state.layers[layer]) {
+    if (state.openKind === "outage" && (state.openLayer === layer || (layer === "outages" && !state.openLayer))) hideOutageCard();
+  }
   if (layer === "hunger" && !state.layers.hunger) hideHungerCard();
   for (const button of document.querySelectorAll(`[data-layer-toggle="${layer}"]`)) {
     button.classList.toggle("on", layerShown(layer));
@@ -1528,11 +2019,29 @@ function setLayer(layer, on) {
   if (FIREARMS_KEYS.includes(layer) && window.GsaFirearms) {
     window.GsaFirearms.setActive(layer, state.layers[layer]);
   }
+  if (CCW_KEYS.includes(layer) && window.GsaCcw) {
+    window.GsaCcw.setActive(layer, state.layers[layer]);
+  }
   if (MILITIAS_KEYS.includes(layer) && window.GsaMilitias) {
     window.GsaMilitias.setActive(layer, state.layers[layer]);
   }
+  if (INTERNET_KEYS.includes(layer) && window.GsaInternet) {
+    window.GsaInternet.setActive(layer, state.layers[layer]);
+  }
+  if (TFR_KEYS.includes(layer) && window.GsaTfr) {
+    window.GsaTfr.setActive(layer, state.layers[layer]);
+  }
+  if (DELAYS_KEYS.includes(layer) && window.GsaDelays) {
+    window.GsaDelays.setActive(layer, state.layers[layer]);
+  }
+  if (AIRQUALITY_KEYS.includes(layer) && window.GsaAirQuality) {
+    window.GsaAirQuality.setActive(layer, state.layers[layer]);
+  }
   if (POWERLINES_KEYS.includes(layer) && window.GsaPowerLines) {
     window.GsaPowerLines.setActive(layer, state.layers[layer]);
+  }
+  if (PARANORMAL_KEYS.includes(layer) && window.GsaParanormal) {
+    window.GsaParanormal.setActive(layer, state.layers[layer]);
   }
   if ((layer === "quakes" || layer === "sats") && window.GsaSpaceWeather && window.GsaSpaceWeather.renderGroupCount) {
     window.GsaSpaceWeather.renderGroupCount();
@@ -1548,11 +2057,17 @@ function setLayer(layer, on) {
   if (layer === "outages" && state.layers.outages && !state.outageMeta) {
     loadOutages().catch((error) => statusLive(error.message || String(error)));
   }
+  if ((layer === "ukout" || layer === "caout" || layer === "auout") && state.layers[layer] && !state.regionOut[layer].meta) {
+    loadRegionOutages(layer).catch((error) => statusLive(error.message || String(error)));
+  }
+  if (layer === "ukout" || layer === "caout" || layer === "auout") paintRegionOutageNote(layer);
   if (layer === "hunger" && state.layers.hunger && !state.hungerMeta) {
     loadHunger().catch((error) => statusLive(error.message || String(error)));
   }
   syncMobilePick(layer);
   kickRender();
+  if (window.GsaWelcome && window.GsaWelcome.syncSwitches) window.GsaWelcome.syncSwitches();
+  if (state.mapReady && fly && state.layers[layer] && !wasOn) flyLayerOverview(layer);
 }
 
 function kickRender() {
@@ -1561,42 +2076,57 @@ function kickRender() {
 
 const LAYER_LABEL = {
   outages: "POWER OUTAGES",
+  ukout: "UNITED KINGDOM POWER OUTAGES",
+  caout: "CANADA POWER OUTAGES",
+  auout: "AUSTRALIA POWER OUTAGES",
   stream: "SCANNERS",
-  jamming: "JAMMED GPS SIGNALS",
+  jamming: "GLOBAL JAMMED GPS SIGNALS",
   aircraft: "LIVE AIR TRAFFIC",
-  ships: "MARITIME TRAFFIC",
-  conflicts: "CONFLICT TRACKER",
+  ships: "GLOBAL MARITIME TRAFFIC",
+  conflicts: "GLOBAL CONFLICT TRACKER",
   hunger: "GLOBAL HUNGER",
-  mesh: "MESH NODES",
-  disease: "DISEASE OUTBREAK",
-  animal: "ANIMAL DISEASE OUTBREAK",
-  amfm: "AM FM TOWERS",
+  mesh: "GLOBAL MESH NODES",
+  disease: "GLOBAL DISEASE OUTBREAK",
+  animal: "GLOBAL ANIMAL DISEASE OUTBREAK",
+  amfm: "GLOBAL AM FM TOWERS",
   effects: "NUKE SIMULATOR",
-  quakes: "EARTHQUAKES",
+  quakes: "GLOBAL EARTHQUAKES",
   daynight: "DAY / NIGHT",
   sats: "SATELLITES",
   iss: "ISS POSITION",
   volcanoes: "VOLCANO ALERTS",
   disasters: "GLOBAL DISASTERS",
-  radar: "WEATHER RADAR",
+  radar: "GLOBAL WEATHER RADAR",
   nwsalerts: "US WEATHER ALERTS",
   aurora: "AURORA / SPACE WEATHER",
   hurricanes: "HURRICANES",
-  wildfires: "WILDFIRES",
+  wildfires: "GLOBAL WILDFIRES",
   rivers: "RIVER GAUGES IN FLOOD (US)",
   coastal: "COASTAL WATER LEVELS (US)",
   tsunami: "TSUNAMI ALERTS",
-  airports: "AIRPORTS",
-  bases: "MILITARY BASES",
+  airports: "GLOBAL AIRPORTS",
+  bases: "GLOBAL MILITARY BASES",
   celltowers: "USA CELL TOWERS",
   powerlines: "USA POWER LINES",
   powerplants: "GLOBAL POWER PLANTS",
+  police: "USA POLICE DEPARTMENTS",
+  sheriff: "USA SHERIFF DEPARTMENTS",
+  fire: "USA FIRE DEPARTMENTS",
+  hospitals: "USA HOSPITALS & TRAUMA CENTERS",
   gunsusa: "USA GUN OWNERSHIP",
   gunsworld: "GLOBAL GUN OWNERSHIP",
+  ccw: "USA CONCEALED CARRY RECIPROCITY",
+  inetusa: "USA INTERNET OUTAGES",
+  inetglobal: "GLOBAL INTERNET OUTAGES",
+  tfr: "FAA TFR",
+  delays: "FLIGHT DELAYS",
+  airquality: "USA AIR QUALITY",
   militianational: "NATIONAL GROUPS",
   militiastate: "STATEWIDE GROUPS",
   militialocal: "LOCAL GROUPS",
   militiainactive: "INACTIVE GROUPS",
+  ufo: "UFO SIGHTINGS",
+  bigfoot: "BIGFOOT SIGHTINGS",
 };
 
 function setupLegendScroll() {
@@ -1617,7 +2147,7 @@ function setupLegendScroll() {
 function syncMobilePick(just) {
   const line = document.getElementById("mobile-pick");
   if (!line) return;
-  const order = ["outages", "stream", "jamming", "aircraft", "ships", "conflicts", "hunger", "mesh", "disease", "animal", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "gunsusa", "gunsworld", "militianational", "militiastate", "militialocal", "militiainactive"];
+  const order = ["outages", "ukout", "caout", "auout", "inetusa", "inetglobal", "stream", "jamming", "aircraft", "ships", "tfr", "delays", "conflicts", "hunger", "mesh", "disease", "animal", "airquality", "amfm", "effects", "daynight", "iss", "sats", "volcanoes", "disasters", "quakes", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires", "airports", "bases", "celltowers", "powerlines", "powerplants", "police", "sheriff", "fire", "hospitals", "gunsusa", "gunsworld", "ccw", "militianational", "militiastate", "militialocal", "militiainactive", "ufo", "bigfoot"];
   const on = order.filter((key) => layerShown(key));
   if (just && layerShown(just)) {
     const rest = on.filter((key) => key !== just);
@@ -1631,6 +2161,66 @@ function syncMobilePick(just) {
   }
   line.hidden = false;
   line.textContent = on.map((key) => LAYER_LABEL[key] || key).join(" · ");
+}
+
+// Screen disk of the 3D globe, in canvas pixels. Credit text uses it as a mask
+// so the line is visible in the space beside the earth and hidden across it.
+function globeScreenDisk(viewer) {
+  const C = window.Cesium;
+  const scene = viewer.scene;
+  if (!C || scene.mode !== C.SceneMode.SCENE3D) return null;
+  const camera = scene.camera;
+  const radius = scene.globe.ellipsoid.maximumRadius;
+  const cam = camera.positionWC;
+  const dist = C.Cartesian3.magnitude(cam);
+  if (!(dist > radius + 1000)) return null;
+  const center = C.SceneTransforms.worldToWindowCoordinates(scene, C.Cartesian3.ZERO);
+  if (!center) return null;
+  const dist2 = dist * dist;
+  const side = new C.Cartesian3();
+  C.Cartesian3.cross(cam, camera.upWC, side);
+  if (C.Cartesian3.magnitudeSquared(side) < 1) C.Cartesian3.cross(cam, camera.rightWC, side);
+  if (C.Cartesian3.magnitudeSquared(side) < 1) return null;
+  C.Cartesian3.normalize(side, side);
+  const along = C.Cartesian3.multiplyByScalar(cam, (radius * radius) / dist2, new C.Cartesian3());
+  const perp = (radius / dist) * Math.sqrt(dist2 - radius * radius);
+  const limb = C.Cartesian3.add(along, C.Cartesian3.multiplyByScalar(side, perp, new C.Cartesian3()), new C.Cartesian3());
+  const edge = C.SceneTransforms.worldToWindowCoordinates(scene, limb);
+  if (!edge) return null;
+  const px = Math.hypot(edge.x - center.x, edge.y - center.y);
+  if (!(px > 2)) return null;
+  return { x: center.x, y: center.y, r: px };
+}
+
+let creditMaskAt = 0;
+function placeCreditBehindGlobe() {
+  const now = performance.now();
+  if (now - creditMaskAt < 80) return;
+  creditMaskAt = now;
+  const viewer = state.viewer;
+  if (!viewer) return;
+  const lines = document.querySelectorAll(".ship-credit, .air-credit, .jam-credit, .sw-credit, .infra-credit");
+  let visible = false;
+  for (const el of lines) {
+    if (!el.hidden) visible = true;
+  }
+  if (!visible) return;
+  const disk = globeScreenDisk(viewer);
+  const canvas = viewer.scene.canvas.getBoundingClientRect();
+  for (const el of lines) {
+    if (el.hidden || el.getClientRects().length === 0 || !disk) {
+      el.classList.remove("is-behind-globe");
+      el.style.removeProperty("--globe-x");
+      el.style.removeProperty("--globe-y");
+      el.style.removeProperty("--globe-r");
+      continue;
+    }
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty("--globe-x", `${(canvas.left + disk.x - rect.left).toFixed(1)}px`);
+    el.style.setProperty("--globe-y", `${(canvas.top + disk.y - rect.top).toFixed(1)}px`);
+    el.style.setProperty("--globe-r", `${disk.r.toFixed(1)}px`);
+    el.classList.add("is-behind-globe");
+  }
 }
 
 function syncTrafficBars() {
@@ -1679,11 +2269,40 @@ function outageColor(customers) {
   return "#f6c27a";
 }
 
+function outageListPoints() {
+  const rows = state.outagePoints.map((point) => Object.assign({ layer: "outages" }, point));
+  for (const key of ["ukout", "caout", "auout"]) {
+    const pack = state.regionOut[key];
+    if (!pack || !pack.meta || !state.layers[key]) continue;
+    for (const point of pack.points) rows.push(Object.assign({ layer: key }, point));
+  }
+  return rows;
+}
+
+function paintRegionOutageNote(key) {
+  const note = document.querySelector(`[data-outage-note="${key}"]`);
+  const pack = state.regionOut[key];
+  if (!note || !pack) return;
+  if (!layerShown(key) || !pack.meta) {
+    note.hidden = true;
+    note.textContent = "";
+    return;
+  }
+  const body = pack.meta;
+  const failed = (body.feeds || []).filter((feed) => feed && feed.ok === false).map((feed) => feed.name);
+  const bits = [];
+  if (body.note) bits.push(body.note);
+  if (failed.length) bits.push(`Temporarily unavailable: ${failed.join(", ")}.`);
+  if (body.error && !failed.length) bits.push(body.error);
+  note.hidden = bits.length === 0;
+  note.textContent = bits.join(" ");
+}
+
 async function loadOutages() {
   const got = await fetchLayer("outages", "/api/outages");
   if (got.skipped) return;
   const body = got.body;
-  state.outagePoints = Array.isArray(body.points) ? body.points : [];
+  state.outagePoints = (Array.isArray(body.points) ? body.points : []).map((point) => Object.assign({ layer: "outages" }, point));
   state.outageMeta = body;
   setCount("outages", state.outagePoints.length);
   placeOutageMarkers();
@@ -1695,7 +2314,23 @@ async function loadOutages() {
     credit.textContent = `${stale}${outageCustomers(body.customers)} customers across ${state.outagePoints.length} pins. ${note}${when}`;
   }
   renderOutageList();
-  layerStatus(body.stale ? "OUTAGES CACHED" : "");
+  layerStatus(body.stale ? "OUTAGES CACHED" : (body.error ? "US OUTAGES UNAVAILABLE" : ""));
+}
+
+async function loadRegionOutages(key) {
+  const pack = state.regionOut[key];
+  if (!pack) return;
+  const response = await fetch(pack.api);
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "Power outages failed");
+  pack.points = (Array.isArray(body.points) ? body.points : []).map((point) => Object.assign({ layer: key }, point));
+  pack.meta = body;
+  setCount(key, pack.points.length);
+  placeRegionOutageMarkers(key);
+  paintRegionOutageNote(key);
+  renderOutageList();
+  if (body.error) layerStatus(`${LAYER_LABEL[key] || "OUTAGES"} UNAVAILABLE`);
+  else if (body.stale) layerStatus("OUTAGES CACHED");
 }
 
 function placeOutageMarkers() {
@@ -1714,6 +2349,23 @@ function placeOutageMarkers() {
   }
   const host = document.getElementById("cesium");
   if (host) host.dataset.outages = String(source.entities.values.length);
+}
+
+function placeRegionOutageMarkers(key) {
+  const pack = state.regionOut[key];
+  const source = sourceFor(key);
+  if (!state.viewer || !pack || !source) return;
+  source.entities.removeAll();
+  source.show = Boolean(state.layers[key]);
+  for (const point of pack.points) {
+    if (point.lat == null || point.lon == null) continue;
+    const entity = source.entities.add({
+      name: outagePlace(point),
+      position: Cesium.Cartesian3.fromDegrees(Number(point.lon), Number(point.lat), 0),
+      point: markerPoint(outageColor(point.customers)),
+    });
+    entity._outage = point;
+  }
 }
 
 async function loadConflicts() {
@@ -1782,10 +2434,10 @@ function renderOutageList() {
   const list = document.getElementById("outage-list");
   if (!list) return;
   const query = (document.getElementById("outage-filter").value || "").trim().toLowerCase();
-  const points = state.outagePoints
+  const points = outageListPoints()
     .filter((point) => {
       if (!query) return true;
-      const hay = `${point.name} ${point.state} ${point.country || ""} ${(point.utilities || []).join(" ")} ${point.source || ""}`.toLowerCase();
+      const hay = `${point.name} ${point.state} ${point.country || ""} ${(point.utilities || []).join(" ")} ${point.source || ""} ${point.detail || ""} ${point.ref || ""}`.toLowerCase();
       return hay.includes(query);
     })
     .slice()
@@ -1795,9 +2447,10 @@ function renderOutageList() {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "sdr-row";
-    if (state.openKind === "outage" && point.id === state.openId) row.classList.add("on");
+    if (state.openKind === "outage" && point.id === state.openId && point.layer === state.openLayer) row.classList.add("on");
     const utils = (point.utilities || []).slice(0, 2).join(", ");
-    row.innerHTML = `<div class="name">${esc(outagePlace(point))}</div><div class="host">${outageCustomers(point.customers)} customers${utils ? " · " + esc(utils) : ""}</div>`;
+    const count = Number(point.customers) > 0 ? `${outageCustomers(point.customers)} customers` : "Customers not reported";
+    row.innerHTML = `<div class="name">${esc(outagePlace(point))}</div><div class="host">${esc(count)}${utils ? " · " + esc(utils) : ""}</div>`;
     row.addEventListener("click", () => openOutage(point, { fly: true }));
     list.append(row);
   }
@@ -1806,10 +2459,13 @@ function renderOutageList() {
   }
 }
 
-function findOutageEntity(id) {
-  if (!state.outageSource) return null;
-  for (const entity of state.outageSource.entities.values) {
-    if (entity._outage && entity._outage.id === id) return entity;
+function findOutageEntity(id, layer) {
+  const sources = layer ? [sourceFor(layer)] : [state.outageSource, state.ukOutSource, state.caOutSource, state.auOutSource];
+  for (const source of sources) {
+    if (!source) continue;
+    for (const entity of source.entities.values) {
+      if (entity._outage && entity._outage.id === id) return entity;
+    }
   }
   return null;
 }
@@ -1820,15 +2476,24 @@ function hideOutageCard() {
   if (state.openKind === "outage") {
     state.openKind = "";
     state.openId = "";
+    state.openLayer = "";
     renderOutageList();
   }
 }
 
-// Outage card text (also listed in the nearby card's pin list).
+// Outage card text (also listed in the nearby card's pin list). No links leave the site.
 function outageText(point) {
+  const n = Number(point.customers) || 0;
+  const customers = n > 0 ? `${outageCustomers(n)} customers out` : "Customer count not reported";
   const utils = (point.utilities || []).join(", ");
   const sourceName = point.source || "DOE/ORNL ODIN";
-  return `${outageCustomers(point.customers)} customers out${utils ? " · " + utils : ""}${sourceName !== utils ? " · " + sourceName : ""}`;
+  const bits = [customers];
+  if (utils && utils !== sourceName) bits.push(utils);
+  if (sourceName) bits.push(sourceName);
+  if (point.detail) bits.push(point.detail);
+  if (point.etr) bits.push(`Estimated restoration ${point.etr}`);
+  if (point.ref) bits.push(`Reference ${point.ref}`);
+  return bits.join(" · ").replace(/https?:\/\/\S+/gi, "").replace(/\btel:\S+/gi, "");
 }
 
 function openOutage(point, options = {}) {
@@ -1837,9 +2502,11 @@ function openOutage(point, options = {}) {
   closeAircraft();
   closePin();
   hideHungerCard();
+  const key = point.layer && state.layers[point.layer] !== undefined ? point.layer : "outages";
   state.openKind = "outage";
   state.openId = point.id;
-  if (state.layers.outages === false) setLayer("outages", true);
+  state.openLayer = key;
+  if (state.layers[key] === false) setLayer(key, true, { fly: false });
   setFeedMode("outages");
   const selected = document.getElementById("selected");
   if (selected) selected.hidden = true;
@@ -1852,7 +2519,7 @@ function openOutage(point, options = {}) {
     card.hidden = false;
   }
   renderOutageList();
-  const entity = findOutageEntity(point.id);
+  const entity = findOutageEntity(point.id, key);
   if (entity && state.viewer && state.viewer.selectedEntity !== entity) {
     state.viewer.selectedEntity = entity;
   }
@@ -3166,16 +3833,53 @@ function cullAircraftHorizon() {
     state.live.coastal.source,
     state.live.tsunami.source,
     state.outageSource,
+    state.ukOutSource,
+    state.caOutSource,
+    state.auOutSource,
     state.hungerSource,
   ];
   // FIREARMS use the same depth-test-off point markers. Without this cull,
   // pins on the far side of the earth show through and look stuck on the
   // screen when the globe is panned or rotated. USA state pins usually
   // looked fine because they sit together on one side of the globe.
+  // USA CONCEALED CARRY RECIPROCITY state shapes (each carries its state center).
+  if (window.GsaCcw && window.GsaCcw.KEYS) {
+    for (const key of window.GsaCcw.KEYS) {
+      const ccwSource = window.GsaCcw.sourceFor(key);
+      if (ccwSource) sources.push(ccwSource);
+    }
+  }
   if (window.GsaFirearms && window.GsaFirearms.KEYS) {
     for (const key of window.GsaFirearms.KEYS) {
       const firearmsSource = window.GsaFirearms.sourceFor(key);
       if (firearmsSource) sources.push(firearmsSource);
+    }
+  }
+  if (window.GsaInternet && window.GsaInternet.KEYS) {
+    for (const key of window.GsaInternet.KEYS) {
+      const internetSource = window.GsaInternet.sourceFor(key);
+      if (internetSource) sources.push(internetSource);
+    }
+  }
+  // FLIGHT DELAYS airport pins and code labels.
+  if (window.GsaDelays && window.GsaDelays.KEYS) {
+    for (const key of window.GsaDelays.KEYS) {
+      const delaysSource = window.GsaDelays.sourceFor(key);
+      if (delaysSource) sources.push(delaysSource);
+    }
+  }
+  // USA AIR QUALITY monitor pins and smoke plumes (plumes carry their center).
+  if (window.GsaAirQuality && window.GsaAirQuality.KEYS) {
+    for (const key of window.GsaAirQuality.KEYS) {
+      const aqSource = window.GsaAirQuality.sourceFor(key);
+      if (aqSource) sources.push(aqSource);
+    }
+  }
+  // FAA TFR center pins (and their flat areas, which carry the same center).
+  if (window.GsaTfr && window.GsaTfr.KEYS) {
+    for (const key of window.GsaTfr.KEYS) {
+      const tfrSource = window.GsaTfr.sourceFor(key);
+      if (tfrSource) sources.push(tfrSource);
     }
   }
   if (window.GsaMilitias && window.GsaMilitias.KEYS) {
@@ -3439,11 +4143,32 @@ function liveHtml(item, opts = {}) {
   else if (item.firearms && window.GsaFirearms) {
     extra = window.GsaFirearms.popupHtml(item, opts);
   }
+  else if (item.ccw && window.GsaCcw) {
+    extra = window.GsaCcw.popupHtml(item, opts);
+  }
   else if (item.militias && window.GsaMilitias) {
     extra = window.GsaMilitias.popupHtml(item, opts);
   }
+  else if (item.internet && window.GsaInternet) {
+    extra = window.GsaInternet.popupHtml(item, opts);
+  }
+  else if (item.tfr && window.GsaTfr) {
+    extra = window.GsaTfr.popupHtml(item, opts);
+  }
+  else if (item.delays && window.GsaDelays) {
+    extra = window.GsaDelays.popupHtml(item, opts);
+  }
+  else if (item.airquality && window.GsaAirQuality) {
+    extra = window.GsaAirQuality.popupHtml(item, opts);
+  }
   else if (item.power && window.GsaPowerLines) {
     extra = window.GsaPowerLines.popupHtml(item, opts);
+  }
+  else if (item.xl && window.GsaExtraLayers) {
+    extra = window.GsaExtraLayers.popupHtml(item, opts);
+  }
+  else if (item.paranormal && window.GsaParanormal) {
+    extra = window.GsaParanormal.popupHtml(item, opts);
   }
   else if (item.layer === "quakes") {
     const mag = item.mag != null ? `Magnitude ${Number(item.mag).toFixed(1)}` : "";
@@ -3803,35 +4528,35 @@ function statusLive(error) {
   const shipPick = shipDrawList(shipPoints);
   const shipLabel = shipNames[state.shipFilter] || "";
   const ships = !state.layers.ships && !shipPoints.length
-    ? "MARITIME TRAFFIC"
+    ? "GLOBAL MARITIME TRAFFIC"
     : shipPick.matched > shipPick.draw.length
-      ? `MARITIME TRAFFIC ${shipPick.draw.length} OF ${shipPick.matched} ${shipLabel}`.trim()
-      : `MARITIME TRAFFIC ${shipPick.draw.length} ${shipLabel}`.trim();
-  const war = state.conflictsReady ? `CONFLICT TRACKER ${state.conflicts.length}` : "CONFLICT TRACKER …";
+      ? `GLOBAL MARITIME TRAFFIC ${shipPick.draw.length} OF ${shipPick.matched} ${shipLabel}`.trim()
+      : `GLOBAL MARITIME TRAFFIC ${shipPick.draw.length} ${shipLabel}`.trim();
+  const war = state.conflictsReady ? `GLOBAL CONFLICT TRACKER ${state.conflicts.length}` : "GLOBAL CONFLICT TRACKER …";
   const parts = [
     state.outagePoints.length
       ? `POWER OUTAGES ${state.outagePoints.length} COUNTIES · ${outageCustomers(state.outageMeta && state.outageMeta.customers)}`
       : "POWER OUTAGES",
     `${state.streamPoints.length} SCANNERS`,
-    `JAMMED GPS SIGNALS ${jam}`,
+    `GLOBAL JAMMED GPS SIGNALS ${jam}`,
     air,
     ships,
     war,
     state.live.disease.points.length
-      ? `DISEASE OUTBREAK ${state.live.disease.points.length}`
-      : "DISEASE OUTBREAK",
+      ? `GLOBAL DISEASE OUTBREAK ${state.live.disease.points.length}`
+      : "GLOBAL DISEASE OUTBREAK",
     state.live.animal.points.length
-      ? `ANIMAL DISEASE OUTBREAK ${state.live.animal.points.length}`
-      : "ANIMAL DISEASE OUTBREAK",
+      ? `GLOBAL ANIMAL DISEASE OUTBREAK ${state.live.animal.points.length}`
+      : "GLOBAL ANIMAL DISEASE OUTBREAK",
     state.amfmReady
-      ? `AM FM TOWERS ${amfmVisibleCount(state.live.amfm.points)}`
-      : "AM FM TOWERS",
+      ? `GLOBAL AM FM TOWERS ${amfmVisibleCount(state.live.amfm.points)}`
+      : "GLOBAL AM FM TOWERS",
     state.layers.effects && window.GsaEffectsRadius && window.GsaEffectsRadius.hasResult()
       ? "NUKE SIMULATOR 1"
       : "NUKE SIMULATOR",
     state.live.quakes.points.length
-      ? `EARTHQUAKES ${state.live.quakes.points.length}`
-      : "EARTHQUAKES",
+      ? `GLOBAL EARTHQUAKES ${state.live.quakes.points.length}`
+      : "GLOBAL EARTHQUAKES",
     state.layers.daynight ? "DAY / NIGHT ON" : "DAY / NIGHT",
     state.live.sats.points.length
       ? `SATELLITES ${state.live.sats.points.length}`
@@ -3840,7 +4565,12 @@ function statusLive(error) {
   if (window.GsaSpaceWeather) parts.push(...window.GsaSpaceWeather.statusParts());
   if (window.GsaInfra) parts.push(...window.GsaInfra.statusParts());
   if (window.GsaFirearms) parts.push(...window.GsaFirearms.statusParts());
+  if (window.GsaCcw) parts.push(...window.GsaCcw.statusParts());
   if (window.GsaMilitias) parts.push(...window.GsaMilitias.statusParts());
+  if (window.GsaInternet) parts.push(...window.GsaInternet.statusParts());
+  if (window.GsaTfr) parts.push(...window.GsaTfr.statusParts());
+  if (window.GsaDelays) parts.push(...window.GsaDelays.statusParts());
+  if (window.GsaAirQuality) parts.push(...window.GsaAirQuality.statusParts());
   if (window.GsaPowerLines) parts.push(...window.GsaPowerLines.statusParts());
   if (error) parts.push(error);
   setStatus(parts.join(" · "));

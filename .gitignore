@@ -25,6 +25,15 @@ globalstatus/data/aircraft-live.json
 globalstatus/data/adsb-step.json
 globalstatus/data/disease-cache.json
 globalstatus/data/animal-cache.json
+globalstatus/data/ioda-cache.json
+globalstatus/data/ripe-atlas-cache.json
+globalstatus/data/ripe-asnames.json
+globalstatus/data/tfr-cache.json
+globalstatus/data/flight-delays-cache.json
+globalstatus/data/airquality-cache.json
+globalstatus/data/outages-uk-cache.json
+globalstatus/data/outages-ca-cache.json
+globalstatus/data/outages-au-cache.json
 globalstatus/.ftpquota
 
 # Designation claims (#60): live jsonl stays local. SPLC exports must never be committed.
@@ -37,3 +46,6 @@ data/designations/geo/*.geojson
 
 # Raw downloads for scripts/build_infra_layers.py
 .infra-raw/
+
+# Local QA screenshots (verify_all_layers / Playwright). Never committed.
+screenshots/

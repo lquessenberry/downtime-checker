@@ -1,0 +1,1011 @@
+{
+ "title": "USA CONCEALED CARRY RECIPROCITY",
+ "verified": "Nov 2026",
+ "source": "State Attorney General & State Police reciprocity lists (public records)",
+ "disclaimer": "Not legal advice. Verify with state authorities before traveling.",
+ "states": {
+  "AL": {
+   "name": "Alabama",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 19 and older who may legally have a handgun.",
+   "minAge": "Adults 19 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "AK": {
+   "name": "Alaska",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older who may legally have a handgun.",
+   "minAge": "Adults 21 and older who may legally have a handgun",
+   "inform": "Yes. Tell the officer right away that you are carrying, on any official contact.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "AZ": {
+   "name": "Arizona",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older who may legally have a handgun.",
+   "minAge": "Adults 21 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "AR": {
+   "name": "Arkansas",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 19 and older who may legally have a handgun.",
+   "minAge": "Adults 19 and older who may legally have a handgun",
+   "inform": "Yes. When an officer asks for identification, show your license and say you have a handgun.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "CA": {
+   "name": "California",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "Not by state law, but many local permits require it as a permit condition.",
+   "places": "California added a long list of sensitive places in 2024, including parks, public transit, bars, hospitals and many public gatherings. Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "none"
+   },
+   "noPermits": false
+  },
+  "CO": {
+   "name": "Colorado",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "list",
+    "resident": true,
+    "age21": true,
+    "list": [
+     "AL",
+     "AK",
+     "AZ",
+     "AR",
+     "DE",
+     "FL",
+     "GA",
+     "ID",
+     "IA",
+     "IN",
+     "KS",
+     "KY",
+     "LA",
+     "MI",
+     "MN",
+     "MS",
+     "MO",
+     "MT",
+     "NE",
+     "NH",
+     "NM",
+     "NC",
+     "ND",
+     "OH",
+     "OK",
+     "PA",
+     "SD",
+     "TN",
+     "TX",
+     "UT",
+     "VA",
+     "WV",
+     "WI",
+     "WY"
+    ],
+    "note": "Colorado honors permits only from states that honor Colorado's, only for residents of the issuing state (with a matching state ID), age 21 and older."
+   },
+   "noPermits": false
+  },
+  "CT": {
+   "name": "Connecticut",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "none"
+   },
+   "noPermits": false
+  },
+  "DE": {
+   "name": "Delaware",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "list",
+    "list": [
+     "AK",
+     "AZ",
+     "AR",
+     "CO",
+     "FL",
+     "ID",
+     "KS",
+     "KY",
+     "ME",
+     "MI",
+     "MO",
+     "NM",
+     "NC",
+     "ND",
+     "OH",
+     "OK",
+     "SD",
+     "TN",
+     "TX",
+     "UT",
+     "WV"
+    ],
+    "cls": {
+     "ID": "Idaho enhanced permits only",
+     "ND": "North Dakota Class 1 permits only",
+     "SD": "South Dakota enhanced permits only"
+    },
+    "note": "Delaware honors resident and nonresident permits from the listed states."
+   },
+   "noPermits": false
+  },
+  "DC": {
+   "name": "District of Columbia",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "Yes. On any stop, say you are carrying, show your license and registration, and say where the pistol is.",
+   "places": "D.C. bans carry on public transit, near the White House and Capitol, in parks, bars and many other places. Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "none"
+   },
+   "noPermits": false
+  },
+  "FL": {
+   "name": "Florida",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Visitors 21 and older (18 for service members and honorably discharged veterans) who meet Florida's license criteria, or who carry a resident license from their home state. Florida residents 18 and older after a June 2026 appeals court ruling.",
+   "minAge": "Visitors 21 and older (18 for service members and honorably discharged veterans) who meet Florida's license criteria, or who carry a resident license from their home state",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "GA": {
+   "name": "Georgia",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older (18 for military) who may legally have a handgun.",
+   "minAge": "Adults 21 and older (18 for military) who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "HI": {
+   "name": "Hawaii",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "Yes. Tell the officer right away that you are carrying when you are stopped, including in a vehicle.",
+   "places": "Hawaii lists many sensitive places, including beaches, parks, bars, banks and public transit. Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "none"
+   },
+   "noPermits": false
+  },
+  "ID": {
+   "name": "Idaho",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "U.S. citizens and current military members 18 and older who may legally have a handgun.",
+   "minAge": "U",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "IL": {
+   "name": "Illinois",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Illinois bans carry on public transit, in parks, bars, hospitals, stadiums, libraries and many other places. Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "vehicle",
+    "note": "Illinois honors no out-of-state permits. A visitor who may legally carry at home can keep a loaded handgun concealed in their own vehicle only, and locked in the vehicle if they leave it."
+   },
+   "noPermits": false
+  },
+  "IN": {
+   "name": "Indiana",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "IA": {
+   "name": "Iowa",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "KS": {
+   "name": "Kansas",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older who may legally have a handgun.",
+   "minAge": "Adults 21 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "KY": {
+   "name": "Kentucky",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older who may legally have a handgun.",
+   "minAge": "Adults 21 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "LA": {
+   "name": "Louisiana",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "Yes. Tell any officer who approaches you officially that you are carrying.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "ME": {
+   "name": "Maine",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older (18 for active-duty and honorably discharged military) who may legally have a handgun.",
+   "minAge": "Adults 21 and older (18 for active-duty and honorably discharged military) who may legally have a handgun",
+   "inform": "Yes if you carry without a permit: tell the officer right away on any stop or detention.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "MD": {
+   "name": "Maryland",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Maryland lists many sensitive places, including museums, stadiums, health care facilities, public transit and bars. Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "none"
+   },
+   "noPermits": false
+  },
+  "MA": {
+   "name": "Massachusetts",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Massachusetts bans carry in many government buildings, schools, polling places and some public gatherings. Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "none"
+   },
+   "noPermits": false
+  },
+  "MI": {
+   "name": "Michigan",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "Yes. Tell the officer right away that you are carrying when you are stopped.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "all",
+    "resident": true,
+    "note": "Michigan recognizes a concealed pistol license issued by the holder's state of residence."
+   },
+   "noPermits": false
+  },
+  "MN": {
+   "name": "Minnesota",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "list",
+    "list": [
+     "AK",
+     "AR",
+     "CA",
+     "CO",
+     "CT",
+     "DE",
+     "HI",
+     "ID",
+     "IL",
+     "KS",
+     "KY",
+     "LA",
+     "MD",
+     "MA",
+     "MI",
+     "MS",
+     "MO",
+     "MT",
+     "NE",
+     "NV",
+     "NJ",
+     "NM",
+     "NY",
+     "NC",
+     "ND",
+     "OH",
+     "OK",
+     "RI",
+     "SC",
+     "SD",
+     "TN",
+     "TX",
+     "WV"
+    ],
+    "cls": {
+     "CO": "Colorado permits issued or renewed on or after Aug 1, 2024 only",
+     "MA": "Massachusetts permits issued or renewed on or after Aug 1, 2024 only",
+     "ID": "Idaho enhanced permits only",
+     "MS": "Mississippi enhanced permits only",
+     "MT": "Montana enhanced permits only",
+     "ND": "North Dakota Class 1 permits only",
+     "SD": "South Dakota enhanced permits only",
+     "TN": "Tennessee enhanced permits only"
+    },
+    "note": "Minnesota honors permits from states whose laws it finds similar to its own."
+   },
+   "noPermits": false
+  },
+  "MS": {
+   "name": "Mississippi",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "MO": {
+   "name": "Missouri",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 19 and older (18 for military) who may legally have a handgun.",
+   "minAge": "Adults 19 and older (18 for military) who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "MT": {
+   "name": "Montana",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "NE": {
+   "name": "Nebraska",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older (18 for military) who may legally have a handgun.",
+   "minAge": "Adults 21 and older (18 for military) who may legally have a handgun",
+   "inform": "Yes. Tell police or emergency services right away that you are carrying.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "NV": {
+   "name": "Nevada",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "list",
+    "list": [
+     "AK",
+     "AZ",
+     "AR",
+     "FL",
+     "ID",
+     "IL",
+     "KS",
+     "KY",
+     "LA",
+     "MA",
+     "MN",
+     "MS",
+     "MT",
+     "NE",
+     "NM",
+     "NC",
+     "ND",
+     "OH",
+     "OK",
+     "SC",
+     "SD",
+     "TN",
+     "TX",
+     "UT",
+     "VA",
+     "WV",
+     "WI",
+     "WY"
+    ],
+    "cls": {
+     "ID": "Idaho enhanced permits only",
+     "MS": "Mississippi enhanced permits only",
+     "ND": "North Dakota Class 1 permits only",
+     "SD": "South Dakota enhanced permits only"
+    },
+    "note": "Nevada honors permits from the states on its Department of Public Safety list."
+   },
+   "noPermits": false
+  },
+  "NH": {
+   "name": "New Hampshire",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "NJ": {
+   "name": "New Jersey",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "Yes. Tell the officer right away that you are carrying when you are stopped.",
+   "places": "New Jersey lists many sensitive places, including parks, beaches, public transit, bars, theaters and health care facilities. Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "none"
+   },
+   "noPermits": false
+  },
+  "NM": {
+   "name": "New Mexico",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "list",
+    "list": [
+     "AZ",
+     "AR",
+     "CO",
+     "DE",
+     "FL",
+     "KS",
+     "MI",
+     "MS",
+     "MO",
+     "NE",
+     "NV",
+     "NC",
+     "ND",
+     "OH",
+     "OK",
+     "SC",
+     "SD",
+     "TX",
+     "VA",
+     "WY"
+    ],
+    "note": "New Mexico honors licenses from the states on its Department of Public Safety reciprocity table, for visitors who are not New Mexico residents."
+   },
+   "noPermits": false
+  },
+  "NY": {
+   "name": "New York",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "New York lists many sensitive places, including Times Square, public transit, parks, bars, theaters and houses of worship. Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "none"
+   },
+   "noPermits": false
+  },
+  "NC": {
+   "name": "North Carolina",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "Yes. Tell the officer right away that you are carrying when approached or addressed.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "all",
+    "note": "North Carolina recognizes valid concealed handgun permits issued by every other state."
+   },
+   "noPermits": false
+  },
+  "ND": {
+   "name": "North Dakota",
+   "permitless": true,
+   "permitlessResidentsOnly": true,
+   "permitlessRule": "North Dakota residents 18 and older only. Visitors need a permit North Dakota honors.",
+   "minAge": "North Dakota residents 18 and older only",
+   "inform": "Yes if you carry without a permit: tell any officer who contacts you in person.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "list",
+    "list": [
+     "AL",
+     "AK",
+     "AZ",
+     "AR",
+     "CO",
+     "DE",
+     "FL",
+     "GA",
+     "ID",
+     "IN",
+     "IA",
+     "KS",
+     "KY",
+     "LA",
+     "ME",
+     "MI",
+     "MN",
+     "MS",
+     "MO",
+     "MT",
+     "NE",
+     "NV",
+     "NH",
+     "NM",
+     "NC",
+     "OH",
+     "OK",
+     "PA",
+     "SC",
+     "SD",
+     "TN",
+     "TX",
+     "UT",
+     "VT",
+     "VA",
+     "WA",
+     "WV",
+     "WI",
+     "WY"
+    ],
+    "note": "North Dakota honors resident and nonresident permits from states that honor North Dakota's."
+   },
+   "noPermits": false
+  },
+  "OH": {
+   "name": "Ohio",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older (18 for military) who may legally have a handgun.",
+   "minAge": "Adults 21 and older (18 for military) who may legally have a handgun",
+   "inform": "Only when an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "OK": {
+   "name": "Oklahoma",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older (18 for military) who may legally have a handgun.",
+   "minAge": "Adults 21 and older (18 for military) who may legally have a handgun",
+   "inform": "Only when an officer asks during an arrest, detention or traffic stop.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "OR": {
+   "name": "Oregon",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "none"
+   },
+   "noPermits": false
+  },
+  "PA": {
+   "name": "Pennsylvania",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "list",
+    "resident": true,
+    "age21": true,
+    "list": [
+     "AL",
+     "AK",
+     "AR",
+     "CO",
+     "FL",
+     "GA",
+     "ID",
+     "IN",
+     "IA",
+     "KS",
+     "KY",
+     "LA",
+     "MI",
+     "MS",
+     "MO",
+     "MT",
+     "NH",
+     "NC",
+     "ND",
+     "OH",
+     "OK",
+     "SD",
+     "TN",
+     "TX",
+     "UT",
+     "VA",
+     "WV",
+     "WI",
+     "WY"
+    ],
+    "cls": {
+     "ID": "Idaho enhanced permits only",
+     "ND": "North Dakota Class 1 permits only",
+     "UT": "Utah regular permits only (not provisional)"
+    },
+    "note": "Pennsylvania honors permits from these states only for residents of the issuing state, age 21 and older."
+   },
+   "noPermits": false
+  },
+  "RI": {
+   "name": "Rhode Island",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "none"
+   },
+   "noPermits": false
+  },
+  "SC": {
+   "name": "South Carolina",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "Only when an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "SD": {
+   "name": "South Dakota",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "TN": {
+   "name": "Tennessee",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older (18 for military) who may legally have a handgun.",
+   "minAge": "Adults 21 and older (18 for military) who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "TX": {
+   "name": "Texas",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older who may legally have a handgun.",
+   "minAge": "Adults 21 and older who may legally have a handgun",
+   "inform": "Yes when asked for ID: show your license to carry along with your ID.",
+   "places": "Texas businesses can ban carry with posted signs, and carry is banned where alcohol is 51% of sales. Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "UT": {
+   "name": "Utah",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 21 and older who may legally have a handgun.",
+   "minAge": "Adults 21 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "VT": {
+   "name": "Vermont",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun. Vermont issues no carry permits.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": true
+  },
+  "VA": {
+   "name": "Virginia",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "all",
+    "age21": true,
+    "note": "Virginia recognizes permits from every state for holders 21 and older who carry government photo ID (current law through June 30, 2027)."
+   },
+   "noPermits": false
+  },
+  "WA": {
+   "name": "Washington",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "list",
+    "age21": true,
+    "list": [
+     "ID",
+     "KS",
+     "LA",
+     "MI",
+     "MT",
+     "NC",
+     "ND",
+     "OH",
+     "SD",
+     "UT"
+    ],
+    "cls": {
+     "ID": "Idaho enhanced permits only",
+     "KS": "Kansas standard licenses only",
+     "MT": "Montana enhanced permits only (not the restricted permit for ages 18 to 20)",
+     "ND": "North Dakota Class 1 permits only",
+     "SD": "South Dakota unrestricted enhanced and gold permits only",
+     "UT": "Utah regular permits only (not provisional)"
+    },
+    "note": "Washington honors permits only from states that honor Washington's, issue only to people 21 and older, and require fingerprint and mental health background checks."
+   },
+   "noPermits": false
+  },
+  "WV": {
+   "name": "West Virginia",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  },
+  "WI": {
+   "name": "Wisconsin",
+   "permitless": false,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "No. A permit is required to carry a concealed handgun.",
+   "minAge": "A permit is required; most states issue permits at 21.",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "list",
+    "age21": true,
+    "list": [
+     "AL",
+     "AK",
+     "AZ",
+     "AR",
+     "CA",
+     "CO",
+     "CT",
+     "DE",
+     "DC",
+     "FL",
+     "GA",
+     "HI",
+     "ID",
+     "IL",
+     "IN",
+     "IA",
+     "KS",
+     "KY",
+     "LA",
+     "MD",
+     "MA",
+     "MI",
+     "MN",
+     "MS",
+     "MO",
+     "MT",
+     "NE",
+     "NH",
+     "NV",
+     "NM",
+     "NY",
+     "NC",
+     "ND",
+     "OH",
+     "OK",
+     "PA",
+     "RI",
+     "SC",
+     "SD",
+     "TN",
+     "TX",
+     "UT",
+     "VA",
+     "WA",
+     "WV",
+     "WY"
+    ],
+    "cls": {
+     "FL": "Florida NONRESIDENT licenses only; a Florida resident license is not honored",
+     "VA": "Virginia NONRESIDENT licenses only; a Virginia resident license is not honored",
+     "ID": "Idaho regular or enhanced licenses (not emergency)",
+     "MO": "Missouri regular licenses (not provisional)",
+     "WV": "West Virginia regular licenses (not provisional)"
+    },
+    "note": "Wisconsin honors permits from the states on its Department of Justice list for visitors 21 and older who are not Wisconsin residents."
+   },
+   "noPermits": false
+  },
+  "WY": {
+   "name": "Wyoming",
+   "permitless": true,
+   "permitlessResidentsOnly": false,
+   "permitlessRule": "Adults 18 and older who may legally have a handgun.",
+   "minAge": "Adults 18 and older who may legally have a handgun",
+   "inform": "No duty to volunteer it, but show your permit and ID if an officer asks.",
+   "places": "Commonly off-limits: schools, courthouses, police stations and jails, airport secure areas, federal buildings, and private property where the owner bans guns. Many states add bars, polling places, sports venues and government meetings.",
+   "honors": {
+    "type": "permitless"
+   },
+   "noPermits": false
+  }
+ }
+}

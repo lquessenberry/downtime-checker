@@ -1,5 +1,5 @@
 <?php
-// Scheduled jobs. On GoDaddy these are two cPanel crons. On Fly FrankenPHP
+// Scheduled jobs. On GoDaddy these are cPanel crons. On Fly FrankenPHP
 // start.sh runs: php poll-runner.php loop
 //
 //   php poll-runner.php grid
@@ -8,6 +8,11 @@
 //   php poll-runner.php jamming [--force-jam]
 //   php poll-runner.php space [--force-space] [--only=nws,hurricanes,wildfires,tsunami,rivers,coastal]
 //   php poll-runner.php outages|mesh|disease|animal
+//   php poll-runner.php ioda [--force-ioda]
+//   php poll-runner.php ripe [--force-ripe]
+//   php poll-runner.php tfr [--force-tfr]
+//   php poll-runner.php delays [--force-delays]
+//   php poll-runner.php airquality [--force-aq]
 //   php poll-runner.php grid --slice=40     (test: first 40 sites only, never published)
 //   php poll-runner.php loop                (Fly: grid every 10 min, aircraft every 5 min)
 //
@@ -23,6 +28,15 @@
 // levels (15 min). Each feed is time-gated in poll-lib.php (gsa_space_refresh).
 // Outages, mesh, disease (5 min) and animal (10 min) piggyback on the
 // aircraft job the same way. HTTP visitors only read the caches.
+// Internet outages: the loop refreshes the IODA (Georgia Tech) cache
+// when it is at least 10 minutes old (gsa_ioda_refresh), and the RIPE Atlas
+// probe cache on the same 10-minute gate (gsa_ripe_refresh), and the FAA TFR
+// cache on the same gate (gsa_tfr_refresh), and the FAA NAS Status flight delays
+// cache at least every 5 minutes (gsa_fd_refresh).
+// USA AIR QUALITY: the loop refreshes the EPA AirNow monitors and NOAA HMS
+// smoke plumes about every 15 minutes (gsa_aq_refresh); AirNow updates hourly.
+// Power outages: the loop refreshes the US, United Kingdom, Canada, and
+// Australia outage caches when they are at least 10 minutes old.
 
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
@@ -50,6 +64,16 @@ $skipSpace = false;
 $skipLayers = false;
 $solo = false;
 $onlySpace = array();
+$forceIoda = false;
+$skipIoda = false;
+$forceRipe = false;
+$skipRipe = false;
+$forceTfr = false;
+$skipTfr = false;
+$forceDelays = false;
+$skipDelays = false;
+$forceAq = false;
+$skipAq = false;
 foreach ($argv as $arg) {
     if (strpos($arg, '--slice=') === 0) {
         $slice = (int) substr($arg, 8);
@@ -77,6 +101,26 @@ foreach ($argv as $arg) {
         $GLOBALS['GSA_SPACE_MOCK_TSUNAMI'] = substr($arg, 15);
     } elseif (strpos($arg, '--mock-coops=') === 0) {
         $GLOBALS['GSA_SPACE_MOCK_COOPS'] = substr($arg, 13);
+    } elseif ($arg === '--force-aq') {
+        $forceAq = true;
+    } elseif ($arg === '--skip-aq') {
+        $skipAq = true;
+    } elseif ($arg === '--force-delays') {
+        $forceDelays = true;
+    } elseif ($arg === '--skip-delays') {
+        $skipDelays = true;
+    } elseif ($arg === '--force-tfr') {
+        $forceTfr = true;
+    } elseif ($arg === '--skip-tfr') {
+        $skipTfr = true;
+    } elseif ($arg === '--force-ripe') {
+        $forceRipe = true;
+    } elseif ($arg === '--skip-ripe') {
+        $skipRipe = true;
+    } elseif ($arg === '--force-ioda') {
+        $forceIoda = true;
+    } elseif ($arg === '--skip-ioda') {
+        $skipIoda = true;
     } elseif ($arg === '--skip-aircraft') {
         $skipAircraft = true;
     } elseif (strpos($arg, '--mock=') === 0) {
@@ -151,7 +195,82 @@ function runner_space($force, $only)
     return $out;
 }
 
-// Outages / mesh / disease every 5 min, animal every 10 min. The runner
+function runner_ioda($force)
+{
+    $t0 = microtime(true);
+    try {
+        $info = gsa_ioda_refresh(array('force' => $force));
+    } catch (Throwable $e) {
+        $info = array('ok' => false, 'error' => $e->getMessage());
+    }
+    $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+    if (empty($info['busy']) && empty($info['skipped'])) {
+        gsa_poll_status_note('ioda', $info);
+    }
+    return $info;
+}
+
+function runner_ripe($force)
+{
+    $t0 = microtime(true);
+    try {
+        $info = gsa_ripe_refresh(array('force' => $force));
+    } catch (Throwable $e) {
+        $info = array('ok' => false, 'error' => $e->getMessage());
+    }
+    $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+    if (empty($info['busy']) && empty($info['skipped'])) {
+        gsa_poll_status_note('ripe', $info);
+    }
+    return $info;
+}
+
+function runner_tfr($force)
+{
+    $t0 = microtime(true);
+    try {
+        $info = gsa_tfr_refresh(array('force' => $force));
+    } catch (Throwable $e) {
+        $info = array('ok' => false, 'error' => $e->getMessage());
+    }
+    $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+    if (empty($info['busy']) && empty($info['skipped'])) {
+        gsa_poll_status_note('tfr', $info);
+    }
+    return $info;
+}
+
+function runner_delays($force)
+{
+    $t0 = microtime(true);
+    try {
+        $info = gsa_fd_refresh(array('force' => $force, 'maxAge' => 300));
+    } catch (Throwable $e) {
+        $info = array('ok' => false, 'error' => $e->getMessage());
+    }
+    $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+    if (empty($info['busy']) && empty($info['skipped'])) {
+        gsa_poll_status_note('delays', $info);
+    }
+    return $info;
+}
+
+function runner_aq($force)
+{
+    $t0 = microtime(true);
+    try {
+        $info = gsa_aq_refresh(array('force' => $force));
+    } catch (Throwable $e) {
+        $info = array('ok' => false, 'error' => $e->getMessage());
+    }
+    $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+    if (empty($info['busy']) && empty($info['skipped'])) {
+        gsa_poll_status_note('airquality', $info);
+    }
+    return $info;
+}
+
+// Outages / mesh / disease every 5–10 min, animal every 10 min. The runner
 // time-gates; a skip does not rewrite poll-status (so the clock stays put).
 function runner_layer($name, $ttl, $fn)
 {
@@ -179,7 +298,6 @@ function runner_layers($force = false)
 {
     $out = array();
     $jobs = array(
-        'outages' => array(300, function () { return outages_snapshot(); }),
         'mesh' => array(300, function () { return mesh_snapshot(); }),
         'disease' => array(300, function () { return disease_snapshot(); }),
         'animal' => array(600, function () { return animal_snapshot(); }),
@@ -211,6 +329,36 @@ function runner_layers($force = false)
     return $out;
 }
 
+function runner_outages_regions()
+{
+    $t0 = microtime(true);
+    try {
+        $info = outages_regions_refresh();
+    } catch (Throwable $e) {
+        $info = array('ok' => false, 'error' => $e->getMessage());
+    }
+    if (!isset($info['ok']) && is_array($info)) {
+        $ok = true;
+        $skipped = true;
+        foreach ($info as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $ok = $ok && runner_ok($row);
+            $skipped = $skipped && !empty($row['skipped']);
+        }
+        $info['ok'] = $ok;
+        if ($skipped) {
+            $info['skipped'] = true;
+        }
+    }
+    $info['ms'] = $info['ms'] ?? (int) round((microtime(true) - $t0) * 1000);
+    if (empty($info['skipped'])) {
+        gsa_poll_status_note('outages', $info);
+    }
+    return $info;
+}
+
 function runner_aircraft($opts)
 {
     $out = array();
@@ -240,6 +388,24 @@ function runner_aircraft($opts)
     }
     if (empty($opts['skipLayers'])) {
         $out['layers'] = runner_layers();
+        if (empty($opts['skipOutages'])) {
+            $out['outages'] = runner_outages_regions();
+        }
+    }
+    if (empty($opts['skipIoda'])) {
+        $out['ioda'] = runner_ioda(!empty($opts['forceIoda']));
+    }
+    if (empty($opts['skipRipe'])) {
+        $out['ripe'] = runner_ripe(!empty($opts['forceRipe']));
+    }
+    if (empty($opts['skipTfr'])) {
+        $out['tfr'] = runner_tfr(!empty($opts['forceTfr']));
+    }
+    if (empty($opts['skipDelays'])) {
+        $out['delays'] = runner_delays(!empty($opts['forceDelays']));
+    }
+    if (empty($opts['skipAq'])) {
+        $out['airquality'] = runner_aq(!empty($opts['forceAq']));
     }
     return $out;
 }
@@ -262,6 +428,7 @@ function runner_grid($slice)
 function runner_aircraft_opts()
 {
     global $forceMil, $skipMil, $forceJam, $skipJam, $skipAircraft, $forceSpace, $skipSpace, $skipLayers, $onlySpace;
+    global $forceIoda, $skipIoda, $forceRipe, $skipRipe, $forceTfr, $skipTfr, $forceDelays, $skipDelays, $forceAq, $skipAq;
     return array(
         'forceMil' => $forceMil,
         'skipMil' => $skipMil,
@@ -271,7 +438,18 @@ function runner_aircraft_opts()
         'forceSpace' => $forceSpace,
         'skipSpace' => $skipSpace,
         'skipLayers' => $skipLayers,
+        'skipOutages' => $skipLayers,
         'onlySpace' => $onlySpace,
+        'forceIoda' => $forceIoda,
+        'skipIoda' => $skipIoda,
+        'forceRipe' => $forceRipe,
+        'skipRipe' => $skipRipe,
+        'forceTfr' => $forceTfr,
+        'skipTfr' => $skipTfr,
+        'forceDelays' => $forceDelays,
+        'skipDelays' => $skipDelays,
+        'forceAq' => $forceAq,
+        'skipAq' => $skipAq,
     );
 }
 
@@ -296,11 +474,44 @@ if ($job === 'jamming') {
     exit(runner_ok($info) ? 0 : 2);
 }
 
-if ($job === 'outages' || $job === 'mesh' || $job === 'disease' || $job === 'animal') {
+if ($job === 'ioda') {
+    $info = runner_ioda($forceIoda);
+    runner_print(array('ioda' => $info));
+    exit(runner_ok($info) ? 0 : 2);
+}
+
+if ($job === 'ripe') {
+    $info = runner_ripe($forceRipe);
+    runner_print(array('ripe' => $info));
+    exit(runner_ok($info) ? 0 : 2);
+}
+
+if ($job === 'tfr') {
+    $info = runner_tfr($forceTfr);
+    runner_print(array('tfr' => $info));
+    exit(runner_ok($info) ? 0 : 2);
+}
+
+if ($job === 'delays') {
+    $info = runner_delays($forceDelays);
+    runner_print(array('delays' => $info));
+    exit(runner_ok($info) ? 0 : 2);
+}
+
+if ($job === 'airquality') {
+    $info = runner_aq($forceAq);
+    runner_print(array('airquality' => $info));
+    exit(runner_ok($info) ? 0 : 2);
+}
+
+if ($job === 'outages') {
+    $info = runner_outages_regions();
+    runner_print(array('outages' => $info));
+    exit(runner_ok($info) ? 0 : 2);
+}
+
+if ($job === 'mesh' || $job === 'disease' || $job === 'animal') {
     $info = runner_layer($job, 0, function () use ($job) {
-        if ($job === 'outages') {
-            return outages_snapshot();
-        }
         if ($job === 'mesh') {
             return mesh_snapshot();
         }
@@ -319,6 +530,12 @@ if ($job === 'aircraft') {
         $opts['skipJam'] = true;
         $opts['skipSpace'] = true;
         $opts['skipLayers'] = true;
+        $opts['skipOutages'] = true;
+        $opts['skipIoda'] = true;
+        $opts['skipRipe'] = true;
+        $opts['skipTfr'] = true;
+        $opts['skipDelays'] = true;
+        $opts['skipAq'] = true;
     }
     $out = runner_aircraft($opts);
     runner_print($out);
@@ -342,6 +559,11 @@ function runner_http_jobs()
         'mesh',
         'disease',
         'animal',
+        'ioda',
+        'ripe',
+        'tfr',
+        'delays',
+        'airquality',
     );
 }
 
@@ -431,7 +653,7 @@ if ($job === 'loop') {
 }
 
 if ($job !== 'grid') {
-    fwrite(STDERR, "Unknown job: $job (use grid, aircraft, jamming, space, outages, mesh, disease, animal, loop, or status)\n");
+    fwrite(STDERR, "Unknown job: $job (use grid, aircraft, jamming, space, outages, mesh, disease, animal, ioda, ripe, tfr, delays, airquality, loop, or status)\n");
     exit(1);
 }
 

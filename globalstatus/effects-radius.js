@@ -282,6 +282,42 @@ function formatYield(kt) {
   var blastSeq = 0;
   var currentBlast = null;
   var shownBlast = null;
+  var savedBlast = null;
+
+  function syncReopen() {
+    var hudBtn = el("open-effects-hud");
+    var blastBtn = el("open-effects-results");
+    var hud = el("effects-hud");
+    var popup = el("effects-results");
+    if (hudBtn) hudBtn.hidden = !(active && hud && hud.hidden);
+    if (blastBtn) blastBtn.hidden = !(active && savedBlast && popup && popup.hidden);
+  }
+
+  function hideHud() {
+    var hud = el("effects-hud");
+    if (hud) hud.hidden = true;
+    syncReopen();
+  }
+
+  function showHud() {
+    if (!active) return;
+    var hud = el("effects-hud");
+    if (hud) hud.hidden = false;
+    if (isMobile()) {
+      var popup = el("effects-results");
+      if (popup && !popup.hidden) {
+        if (shownBlast) savedBlast = shownBlast;
+        shownBlast = null;
+        popup.hidden = true;
+        popup.classList.remove("mobile-sheet");
+      }
+    }
+    syncReopen();
+  }
+
+  function showSavedResults() {
+    if (savedBlast) openBlast(savedBlast);
+  }
 
   function isMobile() {
     return window.matchMedia && window.matchMedia("(max-width: 800px)").matches;
@@ -304,12 +340,13 @@ function formatYield(kt) {
 
   function hidePopup() {
     var popup = el("effects-results");
+    if (shownBlast) savedBlast = shownBlast;
     shownBlast = null;
-    if (!popup) return;
-    popup.hidden = true;
-    popup.classList.remove("mobile-sheet");
-    var hud = el("effects-hud");
-    if (hud && active) hud.hidden = false;
+    if (popup) {
+      popup.hidden = true;
+      popup.classList.remove("mobile-sheet");
+    }
+    syncReopen();
   }
 
   function removeEntities(list) {
@@ -360,6 +397,8 @@ function formatYield(kt) {
     if (typeof cancelLaunch === "function") cancelLaunch();
     clearRings();
     clearMarker();
+    savedBlast = null;
+    shownBlast = null;
     hidePopup();
     updateLede();
     if (typeof hooks.statusLive === "function") hooks.statusLive();
@@ -558,12 +597,14 @@ function formatYield(kt) {
     if (rows) rows.innerHTML = effects.html;
     if (!popup) return;
     shownBlast = blast || null;
+    if (shownBlast) savedBlast = shownBlast;
     popup.hidden = false;
-    // The results open where the settings panel sits, so close the settings.
+    // On a phone the results sheet covers the settings, so close the settings.
     var hud = el("effects-hud");
-    if (hud) hud.hidden = true;
+    if (isMobile() && hud) hud.hidden = true;
     if (isMobile()) popup.classList.add("mobile-sheet");
     positionPopup();
+    syncReopen();
   }
 
   // ---- Launch sounds -------------------------------------------------------
@@ -821,10 +862,12 @@ function formatYield(kt) {
     if (hud) hud.hidden = true;
     var popup = el("effects-results");
     if (popup && !popup.hidden) {
+      if (shownBlast) savedBlast = shownBlast;
       popup.hidden = true;
       popup.classList.remove("mobile-sheet");
       shownBlast = null;
     }
+    syncReopen();
     launchSeq += 1;
     var job = {
       id: launchSeq,
@@ -926,6 +969,7 @@ function formatYield(kt) {
     // brings the settings back.
     cancelLaunch();
     hidePopup();
+    showHud();
     setGroundZero(
       Cesium.Math.toDegrees(carto.longitude),
       Cesium.Math.toDegrees(carto.latitude)
@@ -956,6 +1000,7 @@ function formatYield(kt) {
       warmMedia();
     }
     if (source) source.show = active;
+    syncReopen();
   }
 
   function bind(opts) {
@@ -989,6 +1034,10 @@ function formatYield(kt) {
       });
     }
     if (closeBtn) closeBtn.addEventListener("click", hidePopup);
+    var openHud = el("open-effects-hud");
+    var openResults = el("open-effects-results");
+    if (openHud) openHud.addEventListener("click", showHud);
+    if (openResults) openResults.addEventListener("click", showSavedResults);
     var goBtn = el("effects-go");
     if (goBtn && /^\s*submit\s*$/i.test(goBtn.textContent)) goBtn.textContent = "Launch Nuke";
     var hudBox = el("effects-hud");
@@ -1064,6 +1113,9 @@ function formatYield(kt) {
     computeEffects: computeEffects,
     bind: bind,
     setActive: setActive,
+    hideHud: hideHud,
+    showHud: showHud,
+    showSavedResults: showSavedResults,
     handleClick: handleClick,
     clear: clearAll,
     setGroundZero: setGroundZero,
