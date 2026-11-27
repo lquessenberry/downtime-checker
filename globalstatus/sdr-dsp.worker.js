@@ -1,4 +1,4 @@
-/* Global Status · SDR DSP worker (Phase 1, receive only)
+/* Global Status · SDR DSP worker (receive only; Phase 2 decoders live in sdr-dsp2.js)
  *
  * Original clean-room code for Global Status App. Written from public protocol
  * descriptions (Mode-S / 1090ES, ITU-R M.1371 AIS, AX.25 + APRS 1.0.1, POCSAG
@@ -33,13 +33,28 @@ const H = { samples: 0, transfers: 0, dropped: 0, rmsAcc: 0, rmsN: 0, iqRMS: 0, 
 // ------------------------------------------------------------------ bands
 // Which decoders run is decided only by where the radio is tuned (one radio, one band).
 function bandOf(hz) {
-  const m = hz / 1e6;
-  if (Math.abs(m - 1090) < 1.2) return "adsb";
+  const m = hz / 1e6, near = (f, t) => Math.abs(m - f) <= t;
+  if (near(1090, 1.2)) return "adsb";
+  if (near(978, 1.2)) return "uat";
   if (m >= 161.9 && m <= 162.1) return "ais";
-  if (Math.abs(m - 144.39) < 0.02 || Math.abs(m - 144.8) < 0.02) return "aprs";
+  if (near(144.39, 0.02) || near(144.8, 0.02)) return "aprs";
+  if ([1.84, 3.573, 7.074, 10.136, 14.074, 18.1, 21.074, 24.915, 28.074, 50.313, 3.578, 7.078, 14.078, 21.078, 28.078].some((f) => near(f, 0.004))) return "ft8";
   if (m >= 400 && m <= 406.1) return "sonde";
+  if (near(457.9375, 0.006) || near(452.9375, 0.006)) return "train";
+  if ([151.82, 151.88, 151.94, 154.57, 154.6].some((f) => near(f, 0.006))) return "voice";
   if ((m >= 152 && m <= 159) || (m >= 929 && m <= 932) || (m >= 466 && m <= 466.3)) return "pager";
-  if (Math.abs(m - 433.92) < 0.15 || Math.abs(m - 315) < 0.15) return "tpms";
+  if (m >= 129 && m <= 132) return "acars";
+  if (m >= 136.6 && m < 137) return "vdl2";
+  if ((m >= 137 && m <= 138) || (m >= 145.8 && m <= 146) || (m >= 435 && m <= 438)) return "sat";
+  if (near(908.42, 0.05) || near(868.42, 0.05) || near(916, 0.05)) return "zwave";
+  if (near(906.875, 0.3) || near(915, 0.15) || (m >= 868 && m <= 870) || near(910.525, 0.05)) return "mesh";
+  if (m >= 910 && m <= 920) return "meter";
+  if (m >= 2400 && m <= 2483.5) return "ble";
+  if ((m >= 617 && m <= 652) || (m >= 729 && m <= 756) || (m >= 869 && m <= 894) || (m >= 1805 && m <= 1880) || (m >= 1930 && m <= 1995) || (m >= 2110 && m <= 2200)) return "lte";
+  if ((m >= 470 && m <= 608) || (m >= 174 && m <= 216)) return "atsc";
+  if (near(433.92, 0.15) || near(315, 0.15) || near(345, 0.15) || near(319.5, 0.15)) return "tpms";
+  if ((m >= 26.96 && m <= 27.41) || (m >= 462.55 && m <= 462.73) || (m >= 467.55 && m <= 467.73) || (m >= 144 && m <= 148) || (m >= 420 && m <= 450) || (m >= 28 && m <= 29.7) || (m >= 50 && m <= 54)) return "voice";
+  if ((m >= 450 && m <= 470) || (m >= 851 && m <= 869) || (m >= 380 && m <= 400) || (m >= 769 && m <= 775) || (m >= 806 && m <= 824) || (m >= 159 && m <= 174)) return "dispatch";
   if (m >= 87.5 && m <= 108.1) return "fm";
   return "other";
 }
@@ -654,6 +669,8 @@ class Rs41 {
         out.frame = dv.getUint16(0, true);
         out.serial = String.fromCharCode(...f.subarray(p + 4, p + 12)).replace(/[^\x20-\x7e]/g, "").trim();
         out.battery = f[p + 12] / 10;
+        if (self.P2) P2.rs41Block(id, f, p, len, out);
+      } else if (id === 0x7a && self.P2) { P2.rs41Block(id, f, p, len, out);
       } else if (id === 0x7b && len >= 0x15) {
         const x = dv.getInt32(0, true) / 100, y = dv.getInt32(4, true) / 100, z = dv.getInt32(8, true) / 100;
         const vx = dv.getInt16(12, true) / 100, vy = dv.getInt16(14, true) / 100, vz = dv.getInt16(16, true) / 100;
@@ -666,6 +683,7 @@ class Rs41 {
       p += len + 4;
     }
     if (bad) H.crcFail += bad;
+    if (self.P2) P2.rs41Finish(out);
     if (out.serial && Number.isFinite(out.lat)) {
       H.packets.sonde += 1;
       post({ t: "sonde", msg: Object.assign(out, { type: "RS41" }) });
@@ -760,6 +778,8 @@ function buildPipeline() {
   S.band = band;
   P = { band, fs, chans: [], decoders: [] };
   if (band === "adsb") { post({ t: "log", text: "Band ADSB · Mode-S DF17/18 decoder at " + (fs / 1e6).toFixed(1) + " MS/s" }); return; }
+  const raw = self.P2 ? P2.raw(band, fs) : null;
+  if (raw) { P.raw = raw; post({ t: "log", text: "Band " + band.toUpperCase() + " · " + raw.label + " · tuned " + (S.tuned / 1e6).toFixed(4) + " MHz · " + (fs / 1e6).toFixed(3) + " MS/s" }); return; }
   const main = new Channel(fs, S.tuned - S.center);
   P.main = main;
   P.chans.push(main);
@@ -797,9 +817,10 @@ function buildPipeline() {
     sl.useDc = true;
     P.decoders.push(() => { const d = disc.run(main.r2, main.i2, main.n2); for (let i = 0; i < main.n2; i += 1) sl.push(d[i]); });
   } else if (band === "tpms") {
-    const ook = new Ook(main.fs1);
+    const ook = self.P2 ? new P2.sensors.OokMulti(main.fs1) : new Ook(main.fs1);
     P.decoders.push(() => ook.push(main.r1, main.i1, main.n1));
   }
+  if (self.P2) P2.decoders(band, P, main);
   post({ t: "log", text: "Band " + band.toUpperCase() + " · tuned " + (S.tuned / 1e6).toFixed(4) + " MHz · center " + (S.center / 1e6).toFixed(4) + " MHz · " + (fs / 1e6).toFixed(2) + " MS/s" });
 }
 
@@ -869,8 +890,9 @@ function onIQ(buf, fmt) {
   for (let i = 0; i < n2; i += 7) { acc += f[i] * f[i]; cnt += 1; }
   H.rmsAcc += acc; H.rmsN += cnt;
   sinceFft += n;
-  if (sinceFft >= S.rate / 12 && n >= FFT_N) { sinceFft = 0; const db = fft(f, n - FFT_N); post({ t: "fft", db, center: S.center, rate: S.rate, tuned: S.tuned }, [db.buffer]); }
+  if (sinceFft >= S.rate / 12 && n >= FFT_N) { sinceFft = 0; const db = fft(f, n - FFT_N); if (self.P2) P2.onFft(db, P.band); post({ t: "fft", db, center: S.center, rate: S.rate, tuned: S.tuned }, [db.buffer]); }
   if (P.band === "adsb") adsbBlock(f, n);
+  else if (P.raw) { P.raw.run(f, n); post({ t: "level", db: 10 * Math.log10(acc / Math.max(1, cnt) + 1e-12), band: P.band }); }
   else {
     for (const ch of P.chans) ch.process(f, n);
     for (const run of P.decoders) run();
@@ -905,13 +927,14 @@ self.onmessage = (ev) => {
     health();
     return;
   }
-  if (m.t === "decode") { post({ t: "decoded", id: m.id, out: decodeTest(m.frame) }); return; }
+  if (m.t === "decode") { Promise.resolve(decodeTest(m.frame)).then((out) => post({ t: "decoded", id: m.id, out }), (e) => post({ t: "decoded", id: m.id, out: { error: String(e && e.message) } })); return; }
   if (m.t === "sim") { if (m.on) simStart(m); else simStop(); }
 };
 
 // Single known frames (public test vectors) straight into the decoders. QA only.
 function decodeTest(fr) {
   try {
+    if (self.P2) { const r = P2.decodeTest(fr); if (r !== undefined) return r; }
     if (fr.type === "adsb") {
       const hex = String(fr.hex || "").replace(/[^0-9a-f]/gi, "");
       const bytes = new Uint8Array(14);
@@ -972,6 +995,7 @@ function simStart(m) {
       { id: 0x7e4410c5, kpa: 220, temp: 23 },
     ],
   };
+  if (self.P2) P2.simStart(SIM, rx);
   SIM.timer = setInterval(simTick, 60);
   post({ t: "log", text: "Synthetic IQ generator on (test mode)" });
 }
@@ -1029,6 +1053,8 @@ function simBackground(band, re, im, n, fs) {
 }
 function simCarriers(band) {
   const mk = (f, amp, o) => Object.assign({ f, amp, phase: Math.random() * TAU, ph: Math.random() * TAU, tone: 400 + Math.random() * 600, tone2: 1700 + Math.random() * 900 }, o || {});
+  const p2 = self.P2 ? P2.simCarriers(band, mk) : null;
+  if (p2) return p2;
   if (band === "fm") return [mk(99.5e6, 0.22, { wfm: 1 }), mk(100.1e6, 0.32, { wfm: 1, fade: 1 }), mk(100.7e6, 0.16, { wfm: 1 }), mk(99.1e6, 0.1, { wfm: 1, fade: 1 })];
   if (band === "other") return [mk(S.tuned + 25000, 0.06, { nfm: 1, fade: 1 }), mk(S.tuned - 410000, 0.04, { fade: 1 })];
   if (band === "adsb") return [];
@@ -1045,6 +1071,7 @@ function simSchedule(band, dt) {
   const rr = (key, len) => { const v = (SIM.rr[key] || 0) % len; SIM.rr[key] = v + 1; return v; };
   const at = SIM.k + Math.round(S.rate * 0.004);
   const push = (e) => { e.band = band; SIM.em.push(e); };
+  if (self.P2 && P2.simSchedule(band, { at, push, due, rr, dt, SIM })) return;
   if (band === "adsb" && due("adsb", 0.03)) {
     const idx = rr("adsb", SIM.aircraft.length * 4);
     push(ppmEmission(at, encodeModeS(SIM.aircraft[idx >> 2], idx & 3), 0.28 + Math.random() * 0.1));
@@ -1200,7 +1227,7 @@ function encodeRs41(sd) {
   f[0x38] = 0x0f;
   const block = (pos, id, len, fill) => { f[pos] = id; f[pos + 1] = len; fill(new DataView(f.buffer, pos + 2, len)); const c = crc16ccitt(f, pos + 2, len); f[pos + 2 + len] = c & 255; f[pos + 3 + len] = c >> 8; };
   block(0x39, 0x79, 0x28, (dv) => { dv.setUint16(0, sd.frame & 0xffff, true); for (let i = 0; i < 8; i += 1) dv.setUint8(2 + i, sd.serial.charCodeAt(i)); dv.setUint8(10, 28); });
-  block(0x65, 0x7a, 0x2a, () => {});
+  if (self.P2) P2.rs41Sim(sd, f, block); else block(0x65, 0x7a, 0x2a, () => {});
   block(0x93, 0x7c, 0x1e, () => {});
   block(0xb5, 0x7b, 0x1e, (dv) => {
     const [x, y, z] = geoToEcef(sd.lat, sd.lon, sd.alt);
@@ -1245,3 +1272,6 @@ function encodeTpms(tp) {
   for (const b of bits) halves.push(b ? 1 : 0, b ? 0 : 1);
   return halves;
 }
+
+// Phase 2 decoders (LoRa / Meshtastic, UAT, ACARS, FLEX, DFM, BLE, EOT, Z-Wave, LTE, HD, ...). Receive only.
+importScripts("/sdr-dsp2.js?v=20261127sdr3");

@@ -284,7 +284,7 @@
     var sdrRow = sdrPreset ? '<div class="welcome-cats welcome-sdr">' + cat(sdrPreset) + "</div>" : "";
     var gridRow = '<button type="button" class="welcome-row" data-welcome-grid="1">' +
       '<span class="welcome-icon">' + svg(I.web) + "</span>" +
-      '<span class="welcome-text"><strong>GRID TESTER</strong><em>Scan a grid and draw the lines on the globe</em></span>' +
+      '<span class="welcome-text"><strong>GRID TESTER</strong><em>Scan banks, government, military &amp; infrastructure to see which networks are down</em></span>' +
       '<span class="welcome-arrow" aria-hidden="true">→</span></button>';
     var filter = '<div class="welcome-filter"><input type="search" data-welcome-filter placeholder="Search all layers" aria-label="Search all layers" autocomplete="off" spellcheck="false">' +
       '<span data-welcome-filter-n aria-live="polite"></span></div>';
