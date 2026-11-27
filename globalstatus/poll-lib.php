@@ -2749,6 +2749,10 @@ function gsa_ioda_refresh($opts = array())
 
 function gsa_ioda_snapshot()
 {
+    $http = gsa_http_serve_cache(gsa_ioda_cache_file(), 600, 'IODA', 'https://ioda.inetintel.cc.gatech.edu/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = gsa_ioda_cache_read();
     $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
     if ($age > 1200) {
@@ -3163,6 +3167,10 @@ function gsa_ripe_refresh($opts = array())
 
 function gsa_ripe_snapshot()
 {
+    $http = gsa_http_serve_cache(gsa_ripe_cache_file(), 600, 'RIPE Atlas (RIPE NCC)', 'https://atlas.ripe.net/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = gsa_ripe_cache_read();
     $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
     if ($age > 1200) {
@@ -3480,6 +3488,10 @@ function gsa_tfr_refresh($opts = array())
 
 function gsa_tfr_snapshot()
 {
+    $http = gsa_http_serve_cache(gsa_tfr_cache_file(), 600, 'FAA, tfr.faa.gov', 'https://tfr.faa.gov/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = gsa_tfr_cache_read();
     $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
     if ($age > 1200) {
@@ -3865,6 +3877,10 @@ function gsa_fd_refresh($opts = array())
 
 function gsa_fd_snapshot()
 {
+    $http = gsa_http_serve_cache(gsa_fd_cache_file(), 600, 'FAA National Airspace System Status (nasstatus.faa.gov)', 'https://nasstatus.faa.gov/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = gsa_fd_cache_read();
     $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
     if ($age > 600) {
@@ -4287,6 +4303,10 @@ function gsa_aq_refresh($opts = array())
 
 function gsa_aq_snapshot()
 {
+    $http = gsa_http_serve_cache(gsa_aq_cache_file(), 600, 'EPA AirNow & NOAA HMS Smoke', 'https://www.airnow.gov/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = gsa_aq_cache_read();
     $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
     if ($age > 1800) {
