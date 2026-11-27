@@ -685,6 +685,9 @@ async function startGlobe() {
   if (window.GsaSdr) {
     try { window.GsaSdr.init({ viewer: () => state.viewer }); } catch (error) { console.warn("SDR init failed", error); }
   }
+  if (window.GsaCommunity) {
+    try { window.GsaCommunity.init({ viewer: () => state.viewer }); } catch (error) { console.warn("Community Feed init failed", error); }
+  }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   state.mapReady = true;
   viewer.camera.setView({
@@ -2105,7 +2108,7 @@ function syncLayerGroups() {
   for (const group of document.querySelectorAll(".rail .layer-group")) {
     const el = group.querySelector(".layer-group-count");
     if (!el) continue;
-    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"], [data-xl-toggle][aria-pressed="true"], [data-sdr-toggle][aria-pressed="true"]').length;
+    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"], [data-xl-toggle][aria-pressed="true"], [data-sdr-toggle][aria-pressed="true"], [data-cf-toggle][aria-pressed="true"]').length;
     el.textContent = n ? `${n} ON` : "";
   }
 }
@@ -2119,6 +2122,7 @@ function clearLayers() {
   }
   if (window.GsaExtraLayers) window.GsaExtraLayers.clearAll();
   if (window.GsaSdr) window.GsaSdr.clearAll();
+  if (window.GsaCommunity) window.GsaCommunity.clearAll();
 }
 
 const VIEW_US = [-127, 22, -65, 51];
@@ -2295,6 +2299,9 @@ function setLayer(layer, on, options) {
   syncMobilePick(layer);
   kickRender();
   if (window.GsaWelcome && window.GsaWelcome.syncSwitches) window.GsaWelcome.syncSwitches();
+  if (["aircraft", "ships", "mesh", "amfm"].includes(layer) && window.GsaCommunity && window.GsaCommunity.syncRegular) {
+    window.GsaCommunity.syncRegular();
+  }
   if (state.mapReady && fly && state.layers[layer] && !wasOn) flyLayerOverview(layer);
 }
 
@@ -4187,6 +4194,8 @@ async function loadAmfm() {
         lon: Number(place.lon),
         stations: Array.isArray(place.stations) ? place.stations : [],
       }));
+    const hd = await communityHd();
+    if (hd.length) state.live.amfm.points = mergeAmfmCommunity(state.live.amfm.points, hd);
     state.amfmReady = true;
     publishAmfm();
     statusLive();
@@ -4344,27 +4353,38 @@ function closeMapPopups() {
 // LIVE AIR TRAFFIC / GLOBAL MESH NODES by the server and GLOBAL MARITIME TRAFFIC here,
 // only when the regular feed does not already have that aircraft, vessel or node.
 const COMMUNITY_COLOR = "#c084fc";
-const COMMUNITY_KINDS = { adsb: "ADS-B 1090", uat: "UAT 978", ais: "AIS VESSEL", mesh: "MESH NODE" };
+const COMMUNITY_KINDS = { adsb: "ADS-B 1090", uat: "UAT 978", ais: "AIS VESSEL", mesh: "MESH NODE", aprs: "APRS STATION", sonde: "WEATHER BALLOON", acars: "ACARS / VDL2", hd: "HD RADIO TOWER" };
 function communityHtml(item) {
   const age = Number(item.ageSec);
+  const onAir = item.layer === "aircraft" || item.k === "adsb" || item.k === "uat";
+  const onShip = item.layer === "ships" || item.k === "ais";
+  const onMesh = item.layer === "mesh" || item.k === "mesh";
   const facts = [
     aircraftFact("Heard", Number.isFinite(age) ? (age < 60 ? `${Math.round(age)} s ago` : `${Math.round(age / 60)} min ago`) : ""),
     aircraftFact("Signal", COMMUNITY_KINDS[item.k] || ""),
-    aircraftFact("ICAO", item.layer === "aircraft" && item.hex ? String(item.hex).toUpperCase() : ""),
-    aircraftFact("Altitude", item.layer === "aircraft" ? (aircraftOnGround(item) ? "on the ground" : aircraftNumber(item.alt, 0, " ft")) : ""),
-    aircraftFact("Groundspeed", item.layer === "aircraft" ? aircraftNumber(item.gs, 0, " kt") : ""),
-    aircraftFact("Track", item.layer === "aircraft" ? aircraftNumber(item.track, 0, "°") : ""),
-    aircraftFact("MMSI", item.layer === "ships" ? item.mmsi : ""),
-    aircraftFact("Speed", item.layer === "ships" && Number.isFinite(Number(item.sog)) ? `${Number(item.sog).toFixed(1)} kn` : ""),
-    aircraftFact("Ship type", item.layer === "ships" ? shipTypeLabel(item) : ""),
-    aircraftFact("Node", item.layer === "mesh" ? item.id : ""),
-    aircraftFact("Short name", item.layer === "mesh" ? item.short : ""),
-    aircraftFact("Protocol", item.layer === "mesh" ? item.hw : ""),
+    aircraftFact("ICAO", onAir && item.hex ? String(item.hex).toUpperCase() : ""),
+    aircraftFact("Altitude", onAir ? (aircraftOnGround(item) ? "on the ground" : aircraftNumber(item.alt, 0, " ft")) : ""),
+    aircraftFact("Groundspeed", onAir ? aircraftNumber(item.gs, 0, " kt") : ""),
+    aircraftFact("Track", onAir ? aircraftNumber(item.track, 0, "°") : ""),
+    aircraftFact("MMSI", onShip ? (item.mmsi || item.id) : ""),
+    aircraftFact("Speed", onShip && Number.isFinite(Number(item.sog)) ? `${Number(item.sog).toFixed(1)} kn` : ""),
+    aircraftFact("Ship type", onShip ? shipTypeLabel(item) : ""),
+    aircraftFact("Node", onMesh ? item.id : ""),
+    aircraftFact("Short name", onMesh ? item.short : ""),
+    aircraftFact("Protocol", onMesh ? (item.hw || item.proto) : ""),
+    aircraftFact("Call", item.k === "aprs" ? item.id : ""),
+    aircraftFact("Balloon", item.k === "sonde" ? item.id : ""),
+    aircraftFact("Altitude", item.k === "sonde" && Number.isFinite(Number(item.alt)) ? `${Number(item.alt)} ft` : ""),
+    aircraftFact("Flight", item.k === "acars" ? (item.call || item.id) : ""),
+    aircraftFact("Call sign", item.k === "hd" ? item.id : ""),
     aircraftFact("Receivers", Number(item.reports) > 1 ? `${item.reports} contributors` : ""),
   ].join("");
+  const note = item.communityView
+    ? "Shared live by a Global Status visitor's own radio. Not verified."
+    : "Shared live by a Global Status visitor's own radio. Not verified. Shown because the regular feed does not have it right now.";
   return `<b>COMMUNITY SDR</b> ${esc(item.name || "")}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}`
     + `<dl class="nearby-facts">${facts}</dl>`
-    + `<p class="community-note">Shared live by a Global Status visitor's own radio. Not verified. Shown because the regular feed does not have it right now.</p>`;
+    + `<p class="community-note">${note}</p>`;
 }
 
 let communityShipsCache = { at: 0, points: [] };
@@ -4383,6 +4403,94 @@ async function communityShips() {
     communityShipsCache.at = Date.now();
   }
   return communityShipsCache.points;
+}
+
+function communityMeshKeys(id) {
+  const raw = String(id || "").toLowerCase();
+  const keys = new Set([raw]);
+  const m = raw.match(/^!?([0-9a-f]{8})$/);
+  if (m) {
+    keys.add("!" + m[1]);
+    keys.add(m[1]);
+    keys.add(String(parseInt(m[1], 16)));
+  } else if (/^\d+$/.test(raw)) {
+    keys.add("!" + parseInt(raw, 10).toString(16).padStart(8, "0"));
+  }
+  return keys;
+}
+
+function gsLiveIdentityKeys(layer) {
+  const points = (state.live[layer] && state.live[layer].points) || [];
+  const keys = new Set();
+  for (const p of points) {
+    if (layer === "aircraft") {
+      const hex = String(p.hex || p.id || "").toLowerCase();
+      if (hex) keys.add(hex);
+    } else if (layer === "ships") {
+      const mmsi = String(p.mmsi || p.id || "");
+      if (mmsi) keys.add(mmsi);
+    } else if (layer === "mesh") {
+      for (const k of communityMeshKeys(p.id)) keys.add(k);
+    } else if (layer === "amfm") {
+      if (p.id) keys.add(String(p.id).toUpperCase());
+      for (const s of amfmStations(p)) {
+        if (s.call) keys.add(String(s.call).toUpperCase());
+        if (s.name) keys.add(String(s.name).toLowerCase());
+      }
+    }
+  }
+  return keys;
+}
+window.gsLiveIdentityKeys = gsLiveIdentityKeys;
+
+let communityHdCache = { at: 0, points: [] };
+async function communityHd() {
+  if (Date.now() - communityHdCache.at < 20000) return communityHdCache.points;
+  try {
+    const response = await fetch("/api/community/feed?k=hd");
+    const body = await response.json();
+    const points = Array.isArray(body.points) ? body.points : [];
+    communityHdCache = { at: Date.now(), points };
+  } catch (error) {
+    communityHdCache.at = Date.now();
+  }
+  return communityHdCache.points;
+}
+
+function mergeAmfmCommunity(places, contrib) {
+  const have = gsLiveIdentityKeys("amfm");
+  // Seed from the just-loaded regular list (state may not be set yet).
+  for (const place of places || []) {
+    if (place.id) have.add(String(place.id).toUpperCase());
+    for (const s of amfmStations(place)) {
+      if (s.call) have.add(String(s.call).toUpperCase());
+      if (s.name) have.add(String(s.name).toLowerCase());
+    }
+  }
+  const out = (places || []).slice();
+  for (const c of contrib || []) {
+    const call = String(c.id || "").toUpperCase();
+    const name = String(c.name || "").toLowerCase();
+    let dupe = (call && have.has(call)) || (name && have.has(name));
+    if (!dupe && call) {
+      const re = new RegExp("\\b" + call.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
+      for (const place of out) {
+        for (const s of amfmStations(place)) {
+          if (re.test(String(s.name || ""))) dupe = true;
+        }
+      }
+    }
+    if (dupe) continue;
+    if (call) have.add(call);
+    out.push({
+      name: c.name || call || "HD TOWER",
+      lat: c.lat, lon: c.lon,
+      community: true, source: "contributor", k: "hd", id: call,
+      ageSec: c.ageSec, reports: c.reports,
+      stations: [{ name: (call + (c.name ? " " + c.name : "") + " HD").trim(), band: "fm", call }],
+    });
+  }
+  return out;
 }
 
 function showLive(item) {

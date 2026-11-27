@@ -1,0 +1,29 @@
+/* COMMUNITY FEED category (GS-59): sits under SDR & MESH. Dark slate, violet
+   accent already used for contributor pins, no green. Uniform full-width boxes. */
+.welcome-cats.welcome-community { grid-template-columns: 1fr; }
+.welcome-community-cat .welcome-row.is-category .welcome-icon {
+  color: #e2e8f0;
+  border-color: rgba(192, 132, 252, 0.55);
+  background: rgba(192, 132, 252, 0.1);
+}
+.welcome-community-cat .welcome-row.is-category .welcome-text em { color: #cbd5e1; }
+.welcome-drop button[data-welcome-cf] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  justify-self: stretch;
+  min-width: 0;
+}
+.welcome-drop button[data-welcome-cf].on {
+  border-color: #c084fc;
+  background: #1e1630;
+}
+.welcome-drop button[data-welcome-cf].on .switch,
+.rail [data-cf-toggle].on .switch { background: #3b3354; }
+.welcome-drop button[data-welcome-cf].on .switch::after,
+.rail [data-cf-toggle].on .switch::after { left: 16px; background: #e9d5ff; }
+.rail [data-cf-toggle].on { border-color: #c084fc; }
+.gsc-note { color: #cbd5e1; }
+@media (max-width: 800px) {
+  .welcome-drop button[data-welcome-cf] { min-height: 42px; font-size: 12.5px; }
+}

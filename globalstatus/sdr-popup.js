@@ -14,7 +14,7 @@
  */
 (function (root) {
   "use strict";
-  const V = "20261127sdr4";
+  const V = "20261127sdr5";
   const D = () => root.GsaSdrDriver;
   const L = () => root.GsaSdrLayers;
 
@@ -75,7 +75,7 @@
     share: { on: false, armed: false, timer: 0, busy: false, sent: 0, lastAt: 0, lastCount: 0, note: "", wait: 0 },
   };
 
-  const SHARE_OFF_NOTE = "Off. Turn on to share the aircraft, ships, mesh nodes, APRS stations and weather balloons your radio decodes live with everyone on the site. Pagers, tire sensors, Bluetooth, meters, radio GPS units and audio are never shared. Your receiver location is blurred to about 25 km.";
+  const SHARE_OFF_NOTE = "Off. Turn on to share the aircraft, ships, mesh nodes, APRS stations, weather balloons, ACARS positions and HD Radio towers your radio decodes live with everyone on the site (COMMUNITY FEED and the matching regular layers). Pagers, tire sensors, Bluetooth, meters, radio GPS units and audio are never shared. Your receiver location is blurred to about 25 km.";
   const URLISH = /(https?:\/\/|www\.)\S*|tel:\S*|mailto:\S*/gi;
   function plain(v) { return String(v == null ? "" : v).replace(/<[^>]*>/g, " ").replace(URLISH, "").replace(/\s+/g, " ").trim(); }
   function esc(v) { return plain(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -1299,21 +1299,22 @@
   }
   // ------------------------------------------------------------------ COMMUNITY LIVE SDR FEED (opt-in, GS-58)
   // Off on every page load. When on, every 15 s the public geo targets this radio is hearing
-  // live are posted to /api/community/ingest. Everyone sees them on LIVE AIR TRAFFIC, GLOBAL
-  // MARITIME TRAFFIC and GLOBAL MESH NODES when those feeds do not already have the target.
-  // Never shared: pagers, tire sensors, Bluetooth, meters, radio GPS units, alerts, audio, IQ.
+  // live are posted to /api/community/ingest. Everyone sees them on COMMUNITY FEED, and on
+  // LIVE AIR TRAFFIC, GLOBAL MARITIME TRAFFIC, GLOBAL MESH NODES and GLOBAL AM FM TOWERS
+  // when those feeds do not already have the target.
+  // Never shared: pagers, tire sensors, Bluetooth, meters, radio GPS units, alerts, audio, IQ, ACARS text.
   const SHARE_EVERY = 15000;
   const SHARE_RX_GRID = 0.25; // receiver blurred to a ~25 km grid before it leaves the browser
   const SHARE_NEAR_RX_KM = 2; // ground targets this close to the receiver (your own node or station) stay private
-  const SHARE_KINDS = ["adsb", "uat", "ais", "mesh", "aprs", "sonde"];
+  const SHARE_KINDS = ["adsb", "uat", "ais", "mesh", "aprs", "sonde", "acars", "hd"];
   function shareNote() {
     const sh = st.share;
-    if (sh.armed) return "Tap CONFIRM to share the aircraft, ships, mesh nodes, APRS stations and weather balloons your radio decodes with everyone on Global Status. Nothing else is sent.";
+    if (sh.armed) return "Tap CONFIRM to share the aircraft, ships, mesh nodes, APRS stations, weather balloons, ACARS positions and HD Radio towers your radio decodes with everyone on Global Status. Nothing else is sent.";
     if (!sh.on) return SHARE_OFF_NOTE;
     if (sh.note) return sh.note;
     if (!st.dev) return "Sharing is on. Connect a radio; nothing is sent until it decodes something.";
     if (st.dev.sim && !/^(localhost|127\.0\.0\.1)$/.test(root.location.hostname)) return "Sharing is on, but a simulated radio is never shared.";
-    if (!sh.lastAt) return "Sharing is on. Waiting for live aircraft, ships, mesh nodes, APRS or balloons.";
+    if (!sh.lastAt) return "Sharing is on. Waiting for live aircraft, ships, mesh nodes, APRS, balloons, ACARS or HD Radio.";
     const secs = Math.max(0, Math.round((Date.now() - sh.lastAt) / 1000));
     return `SHARING · ${sh.lastCount} target${sh.lastCount === 1 ? "" : "s"} sent ${secs} s ago · ${sh.sent} total. Shown to everyone for 2-5 min, labeled COMMUNITY SDR.`;
   }
@@ -1330,12 +1331,15 @@
         if (k === "uat" && t.uatKind !== "aircraft") continue;
         if (k === "aprs" && t.icon === "ft8") continue; // grid squares, not positions
         if (k === "ais" && (t.cls === "AtoN" || t.cls === "Base station")) continue;
+        if (k === "acars" && t.acarsKind && t.acarsKind !== "aircraft") continue;
         const it = { k, lat: +t.lat.toFixed(5), lon: +t.lon.toFixed(5) };
         if (air) Object.assign(it, { id: t.icao, call: t.callsign || "", alt: t.alt, gs: t.speed, track: t.heading, vrate: t.vrate });
         else if (k === "ais") Object.assign(it, { id: String(t.mmsi), name: t.shipName || "", sog: t.sog, cog: t.cog, type: t.shiptype });
         else if (k === "mesh") Object.assign(it, { id: t.nodeId, name: t.longName || "", short: t.shortName || "", proto: t.proto || "" });
         else if (k === "aprs") Object.assign(it, { id: t.call, sym: t.symbol || "" });
         else if (k === "sonde") Object.assign(it, { id: t.serial, alt: t.alt, type: t.type || "" });
+        else if (k === "acars") Object.assign(it, { id: t.icao || t.flight || t.reg || String(t.id || "").replace(/^ac-/, ""), call: t.flight || t.reg || "", alt: t.alt, proto: t.proto || "" });
+        else if (k === "hd") Object.assign(it, { id: t.call, name: t.stationName || "", freq: t.freq });
         for (const key of Object.keys(it)) if (it[key] == null || (typeof it[key] === "number" && !Number.isFinite(it[key]))) delete it[key];
         out.push(it);
         if (out.length >= 240) return out;
