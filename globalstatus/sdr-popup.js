@@ -14,7 +14,7 @@
  */
 (function (root) {
   "use strict";
-  const V = "20261127sdr2";
+  const V = "20261127cf1";
   const D = () => root.GsaSdrDriver;
   const L = () => root.GsaSdrLayers;
 
@@ -72,8 +72,10 @@
     wb: null, wbOpen: false, tab: "tuner", rx: null, awaitingPin: false, message: "", msgKind: "", biasArmed: false,
     portapackSerial: false, step: 12500, fftRow: null, wfFloor: -95, stats: { workers: 0, usbCalls: 0, audioCtx: 0 },
     lastCardId: "", support: null, sim: false, queue: Promise.resolve(),
+    share: { on: false, armed: false, timer: 0, busy: false, sent: 0, lastAt: 0, lastCount: 0, note: "", wait: 0 },
   };
 
+  const SHARE_OFF_NOTE = "Off. Turn on to share the aircraft, ships, mesh nodes, APRS stations and weather balloons your radio decodes live with everyone on the site. Pagers, tire sensors, Bluetooth, meters, radio GPS units and audio are never shared. Your receiver location is blurred to about 25 km.";
   const URLISH = /(https?:\/\/|www\.)\S*|tel:\S*|mailto:\S*/gi;
   function plain(v) { return String(v == null ? "" : v).replace(/<[^>]*>/g, " ").replace(URLISH, "").replace(/\s+/g, " ").trim(); }
   function esc(v) { return plain(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -123,7 +125,9 @@
       `<button type="button" class="gsr-btn gsr-primary" data-sdr-act="connect">CONNECT SDR</button>` +
       `<button type="button" class="gsr-btn" data-sdr-act="bias" aria-pressed="false">BIAS-T OFF</button>` +
       `<button type="button" class="gsr-btn gsr-wide" data-sdr-act="workbench">OPEN SDR WORKBENCH</button>` +
+      `<button type="button" class="gsr-btn gsr-wide gsr-share" data-sdr-act="share" aria-pressed="false">SHARE LIVE FEED: OFF</button>` +
       `</div>` +
+      `<p class="gsr-bar-note gsr-share-note" data-sdr-sharenote>${esc(SHARE_OFF_NOTE)}</p>` +
       `<p class="gsr-bar-warn" data-sdr-biasnote>Bias-T stays off. It sends DC power up the antenna cable (3.3 V HackRF / 4.5 V RTL-SDR Blog); only use it with a powered LNA or active antenna.</p>` +
       `<p class="gsr-bar-msg" data-sdr-msg hidden></p>` +
       `</div>`;
@@ -194,6 +198,13 @@
       ? `Bias-T will send ${volts} DC up the antenna cable. Only use it with a powered LNA or active antenna. Tap CONFIRM BIAS-T to turn it on.`
       : st.dev && st.dev.biasT ? `Bias-T is ON (${volts} on the antenna port). Tap again to turn it off.`
         : "Bias-T stays off. It sends DC power up the antenna cable (3.3 V HackRF / 4.5 V RTL-SDR Blog); only use it with a powered LNA or active antenna.");
+    for (const b of document.querySelectorAll('[data-sdr-act="share"]')) {
+      b.setAttribute("aria-pressed", st.share.on ? "true" : "false");
+      b.textContent = st.share.on ? "SHARE LIVE FEED: ON" : st.share.armed ? "CONFIRM SHARE LIVE FEED" : "SHARE LIVE FEED: OFF";
+      b.classList.toggle("is-on", st.share.on);
+      b.classList.toggle("gsr-warn", st.share.armed);
+    }
+    setText("[data-sdr-sharenote]", shareNote());
     for (const n of document.querySelectorAll("[data-sdr-msg]")) { n.hidden = !st.message; n.textContent = st.message; n.classList.toggle("is-error", st.msgKind === "error"); }
     for (const l of LAYERS) {
       const on = st.layers[l.key];
@@ -1286,6 +1297,84 @@
     catch (e) { setMessage(D().friendlyError(e, st.dev.kind), "error"); }
     render();
   }
+  // ------------------------------------------------------------------ COMMUNITY LIVE SDR FEED (opt-in, GS-58)
+  // Off on every page load. When on, every 15 s the public geo targets this radio is hearing
+  // live are posted to /api/community/ingest. Everyone sees them on LIVE AIR TRAFFIC, GLOBAL
+  // MARITIME TRAFFIC and GLOBAL MESH NODES when those feeds do not already have the target.
+  // Never shared: pagers, tire sensors, Bluetooth, meters, radio GPS units, alerts, audio, IQ.
+  const SHARE_EVERY = 15000;
+  const SHARE_RX_GRID = 0.25; // receiver blurred to a ~25 km grid before it leaves the browser
+  const SHARE_NEAR_RX_KM = 2; // ground targets this close to the receiver (your own node or station) stay private
+  const SHARE_KINDS = ["adsb", "uat", "ais", "mesh", "aprs", "sonde"];
+  function shareNote() {
+    const sh = st.share;
+    if (sh.armed) return "Tap CONFIRM to share the aircraft, ships, mesh nodes, APRS stations and weather balloons your radio decodes with everyone on Global Status. Nothing else is sent.";
+    if (!sh.on) return SHARE_OFF_NOTE;
+    if (sh.note) return sh.note;
+    if (!st.dev) return "Sharing is on. Connect a radio; nothing is sent until it decodes something.";
+    if (st.dev.sim && !/^(localhost|127\.0\.0\.1)$/.test(root.location.hostname)) return "Sharing is on, but a simulated radio is never shared.";
+    if (!sh.lastAt) return "Sharing is on. Waiting for live aircraft, ships, mesh nodes, APRS or balloons.";
+    const secs = Math.max(0, Math.round((Date.now() - sh.lastAt) / 1000));
+    return `SHARING · ${sh.lastCount} target${sh.lastCount === 1 ? "" : "s"} sent ${secs} s ago · ${sh.sent} total. Shown to everyone for 2-5 min, labeled COMMUNITY SDR.`;
+  }
+  function shareItems() {
+    const rx = receiver();
+    const now = Date.now();
+    const out = [];
+    for (const k of SHARE_KINDS) {
+      if (!isLive(k)) continue;
+      for (const t of visibleTargets(k)) {
+        if (now - t.seen > 60000 || !Number.isFinite(t.lat) || !Number.isFinite(t.lon)) continue;
+        const air = k === "adsb" || k === "uat";
+        if (!air && rx && L().distanceKm(rx, t) < SHARE_NEAR_RX_KM) continue;
+        if (k === "uat" && t.uatKind !== "aircraft") continue;
+        if (k === "aprs" && t.icon === "ft8") continue; // grid squares, not positions
+        if (k === "ais" && (t.cls === "AtoN" || t.cls === "Base station")) continue;
+        const it = { k, lat: +t.lat.toFixed(5), lon: +t.lon.toFixed(5) };
+        if (air) Object.assign(it, { id: t.icao, call: t.callsign || "", alt: t.alt, gs: t.speed, track: t.heading, vrate: t.vrate });
+        else if (k === "ais") Object.assign(it, { id: String(t.mmsi), name: t.shipName || "", sog: t.sog, cog: t.cog, type: t.shiptype });
+        else if (k === "mesh") Object.assign(it, { id: t.nodeId, name: t.longName || "", short: t.shortName || "", proto: t.proto || "" });
+        else if (k === "aprs") Object.assign(it, { id: t.call, sym: t.symbol || "" });
+        else if (k === "sonde") Object.assign(it, { id: t.serial, alt: t.alt, type: t.type || "" });
+        for (const key of Object.keys(it)) if (it[key] == null || (typeof it[key] === "number" && !Number.isFinite(it[key]))) delete it[key];
+        out.push(it);
+        if (out.length >= 240) return out;
+      }
+    }
+    return out;
+  }
+  async function shareTick() {
+    const sh = st.share;
+    if (!sh.on || sh.busy || !st.dev || Date.now() < sh.wait) return;
+    if (st.dev.sim && !/^(localhost|127\.0\.0\.1)$/.test(root.location.hostname)) { render(); return; }
+    const items = shareItems();
+    if (!items.length) { render(); return; }
+    const rx = receiver();
+    const body = { v: 1, items };
+    if (rx) body.rx = { lat: Math.round(rx.lat / SHARE_RX_GRID) * SHARE_RX_GRID, lon: Math.round(rx.lon / SHARE_RX_GRID) * SHARE_RX_GRID };
+    sh.busy = true;
+    try {
+      const res = await fetch("/api/community/ingest", { method: "POST", headers: { "Content-Type": "application/json", "X-GSA-Community": "1" }, body: JSON.stringify(body), credentials: "omit" });
+      const out = await res.json().catch(() => ({}));
+      if (res.ok) { sh.note = ""; sh.lastAt = Date.now(); sh.lastCount = out.accepted || 0; sh.sent += out.accepted || 0; }
+      else if (res.status === 429) { sh.wait = Date.now() + (out.retrySec || 30) * 1000; sh.note = "Sharing paused for a moment (rate limit). It resumes on its own."; }
+      else sh.note = "The site did not accept this batch. Sharing keeps trying.";
+    } catch (e) { sh.note = "Can't reach Global Status right now. Sharing keeps trying."; }
+    sh.busy = false;
+    render();
+  }
+  function shareClick() {
+    const sh = st.share;
+    if (sh.on) { sh.on = false; sh.note = ""; clearInterval(sh.timer); sh.timer = 0; addLog("Stopped sharing the live feed"); render(); return; }
+    if (!sh.armed) { sh.armed = true; render(); clearTimeout(sh.armTimer); sh.armTimer = setTimeout(() => { sh.armed = false; render(); }, 10000); return; }
+    sh.armed = false; sh.on = true; sh.note = "";
+    addLog("Sharing the live feed with Global Status (public geo targets only)");
+    clearInterval(sh.timer);
+    sh.timer = setInterval(shareTick, SHARE_EVERY);
+    setTimeout(shareTick, 1500);
+    render();
+  }
+
   function onDocClick(e) {
     const t = e.target;
     if (!t || !t.closest) return;
@@ -1296,6 +1385,7 @@
       const a = act.dataset.sdrAct;
       if (a === "connect") connectClick();
       else if (a === "bias") biasClick();
+      else if (a === "share") shareClick();
       else if (a === "workbench") { if (st.wbOpen) closeWorkbench(); else openWorkbench(); }
       return;
     }
@@ -1340,6 +1430,8 @@
       popup: (k, id) => { const t = st.targets[k] && st.targets[k].get(id); return t ? popupHtml(t) : ""; },
       screenOf: (k, id) => (L() ? L().screenOf(k, id) : null),
       frame: (points, o) => L() && L().frame(points, o),
+      share: () => ({ on: st.share.on, sent: st.share.sent, lastCount: st.share.lastCount, note: shareNote(), items: shareItems() }),
+      shareNow: () => shareTick(),
     };
     root.__gsSdrInjectTestFrame = (frame) => {
       ensureWorker();
