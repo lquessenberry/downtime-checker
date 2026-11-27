@@ -24,7 +24,7 @@ defined('GSA_CF_NEAR_RX_KM') || define('GSA_CF_NEAR_RX_KM', 2.0);   // drop non-
 function gsa_cf_kinds()
 {
     // kind => ttl seconds
-    return array('adsb' => 120, 'uat' => 120, 'ais' => 300, 'mesh' => 300, 'aprs' => 300, 'sonde' => 180);
+    return array('adsb' => 120, 'uat' => 120, 'ais' => 300, 'mesh' => 300, 'aprs' => 300, 'sonde' => 180, 'acars' => 300, 'hd' => 1800);
 }
 
 function gsa_cf_file($name)
@@ -127,10 +127,33 @@ function gsa_cf_clean($it, $rx)
         $out['id'] = $serial;
         $out['alt'] = gsa_cf_num($it['alt'] ?? null, -500, 45000, 0);
         $out['type'] = gsa_cf_str($it['type'] ?? '', 8);
+    } elseif ($k === 'acars') {
+        // Positions only. Message text is never stored.
+        $hex = strtolower(gsa_cf_str($it['id'] ?? '', 6));
+        $id = strtoupper(gsa_cf_str($it['id'] ?? '', 12));
+        if (preg_match('/^[0-9a-f]{6}$/', $hex)) {
+            $out['id'] = $hex;
+        } elseif (preg_match('/^[A-Z0-9-]{3,12}$/', $id)) {
+            $out['id'] = $id;
+        } else {
+            return null;
+        }
+        $out['call'] = strtoupper(preg_replace('/[^A-Za-z0-9-]/', '', gsa_cf_str($it['call'] ?? '', 8)));
+        $out['alt'] = gsa_cf_num($it['alt'] ?? null, -1500, 70000, 0);
+        $out['proto'] = gsa_cf_str($it['proto'] ?? '', 8);
+    } elseif ($k === 'hd') {
+        $call = strtoupper(gsa_cf_str($it['id'] ?? '', 8));
+        if (!preg_match('/^[A-Z0-9]{3,8}$/', $call)) {
+            return null;
+        }
+        $out['id'] = $call;
+        $out['name'] = gsa_cf_str($it['name'] ?? '', 40);
+        $out['freq'] = gsa_cf_num($it['freq'] ?? null, 76e6, 108e6, 0);
     }
     // Privacy: anything sitting at the contributor's own receiver (their mesh
-    // node, home APRS station) is dropped. Aircraft are always far away.
-    if ($rx && $k !== 'adsb' && $k !== 'uat' && gsa_cf_km($rx[0], $rx[1], $lat, $lon) < GSA_CF_NEAR_RX_KM) {
+    // node, home APRS station, nearby tower) is dropped. Aircraft and ACARS
+    // positions in the air are kept.
+    if ($rx && $k !== 'adsb' && $k !== 'uat' && $k !== 'acars' && gsa_cf_km($rx[0], $rx[1], $lat, $lon) < GSA_CF_NEAR_RX_KM) {
         return null;
     }
     return array_filter($out, function ($v) {

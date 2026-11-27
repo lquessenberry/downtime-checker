@@ -48,6 +48,7 @@
     factory: '<path d="M3.5 20.5V11l5 3v-3l5 3v-3l5 3V4.5h2v16z" stroke-linejoin="round"/><path d="M7 17.5h2M11.5 17.5h2" stroke-linecap="round"/>',
     wave: '<circle cx="12" cy="12" r="8.5"/><path d="M4 13.2c1.6-1.4 3.2-1.4 4.8 0s3.2 1.4 4.8 0 3.2-1.4 4.8 0M5.2 16.6c1.4-1.1 2.8-1.1 4.2 0s2.8 1.1 4.2 0 2.8-1.1 4.2 0" stroke-linecap="round"/>',
     capitol: '<path d="M12 3v2.2M8 10.2a4 4 0 0 1 8 0z" stroke-linejoin="round"/><path d="M5 10.2h14M6.5 10.2v7.6M10 10.2v7.6M14 10.2v7.6M17.5 10.2v7.6M4 20.5h16M4.8 17.8h14.4" stroke-linecap="round"/>',
+    feed: '<circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M7.4 7.4a6.6 6.6 0 0 0 0 9.2M16.6 7.4a6.6 6.6 0 0 1 0 9.2" stroke-linecap="round"/><path d="M4.6 4.6a10.6 10.6 0 0 0 0 14.8M19.4 4.6a10.6 10.6 0 0 1 0 14.8" stroke-linecap="round"/>',
     radio: '<rect x="3" y="10" width="13" height="8" rx="1.6"/><path d="M16 12.2h3.6v3.6H16M19.6 13.3h1.4M19.6 14.7h1.4" stroke-linejoin="round"/><path d="M6.5 10V3.2" stroke-linecap="round"/><path d="M4 5.4a3.6 3.6 0 0 1 5 0M2.6 3.6a5.6 5.6 0 0 1 7.8 0" stroke-linecap="round"/><circle cx="6.5" cy="14" r="1.3"/><path d="M10 14h3.5" stroke-linecap="round"/>',
     web: '<circle cx="12" cy="6.4" r="3.5"/><path d="M12 3.1v6.6M9.1 5.1h5.8M9.4 7.7h5.2M12 9.9v2M4.2 11.9h15.6M4.2 11.9v1.8M12 11.9v1.8M19.8 11.9v1.8M2.2 18.5h4.6M9.7 18.5h4.6M17.2 18.5h4.6"/><rect x="2.2" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="9.7" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="17.2" y="14.3" width="4.6" height="3.4" rx="0.7"/>',
   };
@@ -66,6 +67,7 @@
     },
     // SDR (sdr-popup.js): your own USB radio, listed directly under NUKE SIMULATOR.
     { id: "sdr", group: "group-sdr", sdr: true, title: "SDR & MESH", sub: "Plug in your SDR or mesh radio to see live signals on the map", icon: I.radio },
+    { id: "community", group: "group-community", community: true, title: "COMMUNITY FEED", sub: "Live aircraft, ships, mesh and radio pins shared from users' devices", icon: I.feed },
     { id: "transportation", group: "group-transportation", title: "TRANSPORTATION", sub: "Live aircraft, ships, airports, FAA TFRs and flight delays", view: VIEW_US, icon: I.plane },
     { id: "space", group: "group-space", title: "SPACE", sub: "ISS, satellites, aurora and the day / night line", view: VIEW_WORLD, icon: I.space },
     { id: "weather", group: "group-weather", title: "WEATHER", sub: "Global radar, US weather alerts and hurricanes", view: [-168, 5, -48, 74], icon: I.cloud },
@@ -223,7 +225,7 @@
       var catName = strong ? strong.textContent.toLowerCase() : "";
       var drop = cats[i].querySelector(".welcome-drop");
       var hits = 0;
-      var layers = cats[i].querySelectorAll("[data-welcome-layer], [data-welcome-xl], [data-welcome-sdr]");
+      var layers = cats[i].querySelectorAll("[data-welcome-layer], [data-welcome-xl], [data-welcome-sdr], [data-welcome-cf]");
       for (j = 0; j < layers.length; j += 1) {
         var sub = layers[j].closest(".welcome-xsub");
         var hay = (layers[j].textContent + " " + catName + " " + (sub ? sub.getAttribute("data-welcome-sub") : "") + " " + (layers[j].getAttribute("title") || "")).toLowerCase();
@@ -272,23 +274,26 @@
       }).join("");
       items += xlChoices(p);
       if (p.sdr) items += root.GsaSdr && root.GsaSdr.pickerHtml ? root.GsaSdr.pickerHtml() : "";
-      return '<div class="welcome-cat' + (p.sdr ? " welcome-sdr-cat" : "") + '">' +
+      if (p.community) items += root.GsaCommunity && root.GsaCommunity.pickerHtml ? root.GsaCommunity.pickerHtml() : "";
+      return '<div class="welcome-cat' + (p.sdr ? " welcome-sdr-cat" : "") + (p.community ? " welcome-community-cat" : "") + '">' +
         '<button type="button" class="welcome-row is-category" data-welcome-toggle="' + p.id + '" aria-expanded="false">' +
         '<span class="welcome-icon">' + svg(p.icon) + "</span>" +
         '<span class="welcome-text"><strong>' + p.title.replace(/&/g, "&amp;") + "</strong><em>" + p.sub + "</em></span>" +
         '<span class="welcome-arrow" aria-hidden="true">▾</span></button>' +
         '<div class="welcome-drop" hidden>' + items + "</div></div>";
     };
-    var cats = PRESETS.filter(function (p) { return p.group && !p.sdr; });
+    var cats = PRESETS.filter(function (p) { return p.group && !p.sdr && !p.community; });
     var sdrPreset = PRESETS.filter(function (p) { return p.sdr; })[0];
     var sdrRow = sdrPreset ? '<div class="welcome-cats welcome-sdr">' + cat(sdrPreset) + "</div>" : "";
+    var communityPreset = PRESETS.filter(function (p) { return p.community; })[0];
+    var communityRow = communityPreset ? '<div class="welcome-cats welcome-sdr welcome-community">' + cat(communityPreset) + "</div>" : "";
     var gridRow = '<button type="button" class="welcome-row" data-welcome-grid="1">' +
       '<span class="welcome-icon">' + svg(I.web) + "</span>" +
       '<span class="welcome-text"><strong>GRID TESTER</strong><em>Scan banks, government, military &amp; infrastructure to see which networks are down</em></span>' +
       '<span class="welcome-arrow" aria-hidden="true">→</span></button>';
     var filter = '<div class="welcome-filter"><input type="search" data-welcome-filter placeholder="Search all layers" aria-label="Search all layers" autocomplete="off" spellcheck="false">' +
       '<span data-welcome-filter-n aria-live="polite"></span></div>';
-    list.innerHTML = row(PRESETS[0], 0) + sdrRow + gridRow + filter +
+    list.innerHTML = row(PRESETS[0], 0) + sdrRow + communityRow + gridRow + filter +
       '<p class="welcome-section">ALL CATEGORIES</p><div class="welcome-cats">' +
       cats.map(cat).join("") + "</div>" +
       row(PRESETS[PRESETS.length - 1], 1);
@@ -297,7 +302,7 @@
       // under the same finger, so rows ignore clicks for a moment after opening.
       if (root.performance.now() - openedAt < 450) return;
       // The SDR category's own controls are handled by sdr-popup.js.
-      if (event.target.closest("[data-sdr-ui], [data-welcome-sdr]")) { stopSpin(); return; }
+      if (event.target.closest("[data-sdr-ui], [data-welcome-sdr], [data-cf-ui], [data-welcome-cf]")) { stopSpin(); return; }
       var gridBtn = event.target.closest("[data-welcome-grid]");
       if (gridBtn) {
         if (typeof hooks.openGridTester === "function") hooks.openGridTester();
@@ -436,6 +441,7 @@
       xl[x].setAttribute("aria-pressed", xon ? "true" : "false");
     }
     if (root.GsaSdr && root.GsaSdr.render) root.GsaSdr.render();
+    if (root.GsaCommunity && root.GsaCommunity.render) root.GsaCommunity.render();
     var rows = box.querySelectorAll(".welcome-row[data-welcome-preset]");
     for (var r = 0; r < rows.length; r += 1) {
       if (!rows[r].querySelector(".switch")) continue;
