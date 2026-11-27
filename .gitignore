@@ -46,3 +46,6 @@ data/designations/geo/*.geojson
 
 # Raw downloads for scripts/build_infra_layers.py
 .infra-raw/
+
+# Local QA screenshots (verify_all_layers / Playwright). Never committed.
+screenshots/

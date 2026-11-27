@@ -618,6 +618,10 @@ async function startGlobe() {
       statusLive: () => statusLive(),
     });
   }
+  // EXTRA LAYERS (extra-layers.js): ClimateViewer-equivalent packs, NASA GIBS, live feeds.
+  if (window.GsaExtraLayers) {
+    window.GsaExtraLayers.init({ viewer: () => state.viewer });
+  }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   state.mapReady = true;
   viewer.camera.setView({
@@ -668,6 +672,13 @@ async function startGlobe() {
       if (viewer.selectedEntity) viewer.selectedEntity = undefined;
       closeMapPopups();
       showLive(paranormalHit);
+      return;
+    }
+    const extraHit = window.GsaExtraLayers && window.GsaExtraLayers.pick(click.position);
+    if (extraHit) {
+      if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+      closeMapPopups();
+      showLive(extraHit);
       return;
     }
     if (pickedMapPin(click.position)) return;
@@ -1719,6 +1730,7 @@ function resetMap() {
   // It is not a map layer, and RESET should not fall back to a default city.
   if (state.viewer) state.viewer.selectedEntity = undefined;
   for (const key of Object.keys(state.layers)) setLayer(key, false);
+  if (window.GsaExtraLayers) window.GsaExtraLayers.clearAll();
   closeAircraft();
   closeConflict();
   hideOutageCard();
@@ -1803,7 +1815,7 @@ function syncLayerGroups() {
   for (const group of document.querySelectorAll(".rail .layer-group")) {
     const el = group.querySelector(".layer-group-count");
     if (!el) continue;
-    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"]').length;
+    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"], [data-xl-toggle][aria-pressed="true"]').length;
     el.textContent = n ? `${n} ON` : "";
   }
 }
@@ -1815,6 +1827,7 @@ function clearLayers() {
   for (const key of Object.keys(state.layers)) {
     if (state.layers[key]) setLayer(key, false);
   }
+  if (window.GsaExtraLayers) window.GsaExtraLayers.clearAll();
 }
 
 const VIEW_US = [-127, 22, -65, 51];
@@ -4066,6 +4079,9 @@ function liveHtml(item, opts = {}) {
   }
   else if (item.power && window.GsaPowerLines) {
     extra = window.GsaPowerLines.popupHtml(item, opts);
+  }
+  else if (item.xl && window.GsaExtraLayers) {
+    extra = window.GsaExtraLayers.popupHtml(item, opts);
   }
   else if (item.paranormal && window.GsaParanormal) {
     extra = window.GsaParanormal.popupHtml(item, opts);
