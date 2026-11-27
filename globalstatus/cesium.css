@@ -86,7 +86,7 @@ body {
 .panel-backdrop[hidden] { display: none; }
 .view-settings {
   position: absolute;
-  right: 12px;
+  right: 108px;
   bottom: 68px;
   z-index: 3;
   width: min(240px, calc(100% - 24px));
@@ -110,7 +110,7 @@ body {
   display: grid;
   place-items: center;
   position: absolute;
-  right: 12px;
+  right: 108px;
   bottom: 16px;
   z-index: 4;
   width: 40px;
@@ -126,7 +126,7 @@ body {
 .view-reopen svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .view-reopen.is-on { border-color: #9fd4e2; }
 .view-reopen[hidden] { display: none; }
-/* Rotate Earth toggle: sits just left of the VIEW globe button, same dark slate style. */
+/* Rotate Earth toggle: sits between the VIEW globe button and the far-right Zoom button, same dark slate style. */
 .earth-spin {
   display: grid;
   place-items: center;
@@ -150,12 +150,12 @@ body {
 .earth-spin:focus-visible { outline: 2px solid #9fd4e2; outline-offset: 2px; }
 .earth-spin[aria-pressed="true"] { color: #9fd4e2; border-color: #9fd4e2; background: rgba(22, 48, 68, 0.92); box-shadow: 0 0 0 1px rgba(159, 212, 226, 0.35); }
 .earth-spin[hidden] { display: none; }
-/* Zoom in/out toggle: sits just left of the Rotate Earth button, same dark slate style. */
+/* Zoom controls toggle: sits in the far bottom-right corner so its slider stays tucked off the map, same dark slate style. */
 .earth-zoom {
   display: grid;
   place-items: center;
   position: absolute;
-  right: 108px;
+  right: 12px;
   bottom: 16px;
   z-index: 4;
   width: 40px;
@@ -176,7 +176,7 @@ body {
 .earth-zoom[hidden] { display: none; }
 .zoom-slider {
   position: absolute;
-  right: 96px;
+  right: 12px;
   bottom: 64px;
   z-index: 5;
   width: 64px;
@@ -1322,14 +1322,14 @@ button:hover { border-color: #9fd4e2; }
   #sdr-listen { z-index: 40; }
   .sdr-bar { flex-wrap: wrap; }
   #btn-reset { display: none; }
-  .view-settings { right: 8px; bottom: calc(60px + env(safe-area-inset-bottom)); }
+  .view-settings { right: 100px; bottom: calc(60px + env(safe-area-inset-bottom)); }
   .view-settings.is-closed { display: none; }
   #close-view { display: block; min-height: 44px; padding: 4px 10px; font-size: 16px; }
   .view-reopen {
     display: grid;
     place-items: center;
     position: absolute;
-    right: 8px;
+    right: 100px;
     bottom: calc(8px + env(safe-area-inset-bottom));
     z-index: 4;
     width: 40px;
@@ -1346,9 +1346,9 @@ button:hover { border-color: #9fd4e2; }
   .view-reopen.is-on { border-color: #9fd4e2; }
   .view-reopen[hidden] { display: none; }
   .earth-spin { right: 54px; bottom: calc(8px + env(safe-area-inset-bottom)); height: 44px; min-height: 44px; }
-  .earth-zoom { right: 100px; bottom: calc(8px + env(safe-area-inset-bottom)); height: 44px; min-height: 44px; }
+  .earth-zoom { right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); height: 44px; min-height: 44px; }
   .zoom-slider {
-    right: 88px;
+    right: 8px;
     bottom: calc(60px + env(safe-area-inset-bottom));
     width: 64px;
     padding: 4px 4px 6px;
