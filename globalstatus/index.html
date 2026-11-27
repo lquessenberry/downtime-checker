@@ -38,6 +38,7 @@
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
   <link rel="stylesheet" href="/cesium.css?v=20261127f" />
   <link rel="stylesheet" href="/extra-layers.css?v=20261127e" />
+  <link rel="stylesheet" href="/sdr-popup.css?v=20261127sdr1" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -146,6 +147,10 @@
       <details class="layer-group" id="group-simulators" data-layer-group="simulators">
         <summary class="layer-group-head"><span>SIMULATORS &amp; GAMES</span><em class="layer-group-count"></em></summary>
         <button type="button" class="layer" data-layer-toggle="effects" aria-pressed="false"><span class="layer-name"><svg class="nuke-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M 5.01 10.74 L 4.75 10.63 L 4.51 10.51 L 4.29 10.37 L 4.11 10.21 L 3.97 10.03 L 3.86 9.74 L 3.88 9.43 L 3.95 9.21 L 4.07 9.00 L 4.23 8.80 L 4.42 8.60 L 4.56 8.42 L 4.57 8.14 L 4.59 7.87 L 4.62 7.60 L 4.67 7.33 L 4.73 7.06 L 4.80 6.79 L 4.88 6.53 L 4.98 6.27 L 4.89 5.94 L 4.80 5.69 L 4.74 5.44 L 4.73 5.09 L 4.82 4.78 L 4.94 4.61 L 5.11 4.47 L 5.32 4.36 L 5.56 4.28 L 5.82 4.23 L 6.11 4.20 L 6.34 4.15 L 6.55 3.94 L 6.76 3.75 L 6.98 3.56 L 7.21 3.38 L 7.45 3.21 L 7.69 3.04 L 7.95 2.89 L 8.21 2.74 L 8.33 2.55 L 8.42 2.28 L 8.53 2.04 L 8.67 1.82 L 8.83 1.64 L 9.02 1.51 L 9.23 1.42 L 9.57 1.39 L 9.81 1.44 L 10.06 1.53 L 10.31 1.66 L 10.56 1.81 L 10.78 1.91 L 11.08 1.87 L 11.39 1.84 L 11.69 1.82 L 12.00 1.82 L 12.31 1.82 L 12.61 1.84 L 12.92 1.87 L 13.22 1.91 L 13.44 1.81 L 13.69 1.66 L 13.94 1.53 L 14.19 1.44 L 14.43 1.39 L 14.77 1.42 L 14.98 1.51 L 15.17 1.64 L 15.33 1.82 L 15.47 2.04 L 15.58 2.28 L 15.67 2.55 L 15.79 2.74 L 16.05 2.89 L 16.31 3.04 L 16.55 3.21 L 16.79 3.38 L 17.02 3.56 L 17.24 3.75 L 17.45 3.94 L 17.66 4.15 L 17.89 4.20 L 18.18 4.23 L 18.44 4.28 L 18.68 4.36 L 18.89 4.47 L 19.06 4.61 L 19.18 4.78 L 19.27 5.09 L 19.26 5.44 L 19.20 5.69 L 19.11 5.94 L 19.00 6.18 L 19.09 6.44 L 19.17 6.71 L 19.25 6.97 L 19.31 7.24 L 19.36 7.51 L 19.40 7.78 L 19.43 8.05 L 19.44 8.33 L 19.58 8.60 L 19.77 8.80 L 19.93 9.00 L 20.05 9.21 L 20.12 9.43 L 20.14 9.74 L 20.03 10.03 L 19.89 10.21 L 19.71 10.37 L 19.49 10.51 L 19.25 10.63 L 18.99 10.74 L 18.70 10.67 L 18.41 10.59 L 18.12 10.52 L 17.83 10.45 L 17.54 10.37 L 17.24 10.30 L 16.95 10.24 L 16.66 10.17 L 16.37 10.11 L 16.08 10.05 L 15.79 9.99 L 15.50 9.93 L 15.20 9.88 L 14.91 9.83 L 14.62 9.79 L 14.33 9.75 L 14.04 9.72 L 13.75 9.69 L 13.46 9.66 L 13.17 9.64 L 12.87 9.62 L 12.58 9.61 L 12.29 9.60 L 12.00 9.60 L 11.71 9.60 L 11.42 9.61 L 11.13 9.62 L 10.83 9.64 L 10.54 9.66 L 10.25 9.69 L 9.96 9.72 L 9.67 9.75 L 9.38 9.79 L 9.09 9.83 L 8.80 9.88 L 8.50 9.93 L 8.21 9.99 L 7.92 10.05 L 7.63 10.11 L 7.34 10.17 L 7.05 10.24 L 6.76 10.30 L 6.46 10.37 L 6.17 10.45 L 5.88 10.52 L 5.59 10.59 L 5.30 10.67 Z"/><path d="M11.08 9.75 V16.57"/><path d="M12.92 9.75 V16.57"/><path d="M 8.53 17.40 L 8.77 17.18 L 9.00 16.98 L 9.23 16.82 L 9.46 16.71 L 9.92 16.71 L 10.15 16.82 L 10.38 16.98 L 10.61 17.18 L 10.84 17.40 L 11.31 17.40 L 11.77 17.40 L 12.23 17.40 L 12.69 17.40 L 13.16 17.40 L 13.39 17.18 L 13.62 16.98 L 13.85 16.82 L 14.08 16.71 L 14.54 16.71 L 14.77 16.82 L 15.00 16.98 L 15.23 17.18 L 15.47 17.40"/><path d="M 4.46 19.90 L 4.67 19.64 L 4.89 19.41 L 5.10 19.23 L 5.32 19.11 L 5.75 19.11 L 5.97 19.23 L 6.18 19.41 L 6.40 19.64 L 6.61 19.90 L 7.04 19.90 L 7.47 19.90 L 7.91 19.90 L 8.34 19.90 L 8.77 19.90 L 8.98 19.64 L 9.20 19.41 L 9.41 19.23 L 9.63 19.11 L 10.06 19.11 L 10.28 19.23 L 10.49 19.41 L 10.71 19.64 L 10.92 19.90 L 11.35 19.90 L 11.78 19.90 L 12.22 19.90 L 12.65 19.90 L 13.08 19.90 L 13.29 19.64 L 13.51 19.41 L 13.72 19.23 L 13.94 19.11 L 14.37 19.11 L 14.59 19.23 L 14.80 19.41 L 15.02 19.64 L 15.23 19.90 L 15.66 19.90 L 16.09 19.90 L 16.53 19.90 L 16.96 19.90 L 17.39 19.90 L 17.60 19.64 L 17.82 19.41 L 18.03 19.23 L 18.25 19.11 L 18.68 19.11 L 18.90 19.23 L 19.11 19.41 L 19.33 19.64 L 19.54 19.90"/></svg> NUKE SIMULATOR</span><span class="layer-meta"><em data-count="effects">—</em><span class="switch" aria-hidden="true"></span></span></button>
+      </details>
+      <!-- SDR: your own USB radio (sdr-popup.js fills this). Directly under SIMULATORS (Nuke Simulator). -->
+      <details class="layer-group" id="group-sdr" data-layer-group="sdr">
+        <summary class="layer-group-head"><span>SDR</span><em class="layer-group-count"></em></summary>
       </details>
       <details class="layer-group" id="group-transportation" data-layer-group="transportation">
         <summary class="layer-group-head"><span>TRANSPORTATION</span><em class="layer-group-count"></em></summary>
@@ -649,12 +654,15 @@
   <script src="/paranormal.js?v=20261126t"></script>
   <script src="/geocoder.js?v=20261127a"></script>
   <script src="/nearby.js?v=20261126l"></script>
-  <script src="/welcome.js?v=20261126t"></script>
+  <script src="/welcome.js?v=20261127sdr1"></script>
   <script src="/extra-layers-registry.js?v=20261127a"></script>
   <script src="/extra-layers.js?v=20261127a"></script>
   <script src="/custom-packs-loader.js?v=20261127a"></script>
   <script src="/satellite-imagery-loader.js?v=20261127a"></script>
   <script src="/live-feeds-loader.js?v=20261127a"></script>
-  <script src="/cesium.js?v=20261127d"></script>
+  <script src="/sdr-driver.js?v=20261127sdr1"></script>
+  <script src="/sdr-layers.js?v=20261127sdr1"></script>
+  <script src="/sdr-popup.js?v=20261127sdr1"></script>
+  <script src="/cesium.js?v=20261127sdr1"></script>
 </body>
 </html>
