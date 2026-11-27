@@ -943,6 +943,32 @@ function stopEarthSpin() {
   paintEarthSpin();
 }
 
+// Safety net: if any camera update (a wheel zoom right after the spin, for example) ever
+// leaves the camera at NaN, Cesium stops rendering for good. Put the camera back on the
+// last good pose before the frame draws, so the globe keeps working.
+function guardCameraFinite(viewer) {
+  const finite = (v) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+  const good = { p: new Cesium.Cartesian3(), d: new Cesium.Cartesian3(), u: new Cesium.Cartesian3(), ok: false };
+  viewer.scene.preRender.addEventListener(() => {
+    const c = viewer.camera;
+    if (finite(c.positionWC) && finite(c.directionWC) && finite(c.upWC)) {
+      Cesium.Cartesian3.clone(c.positionWC, good.p);
+      Cesium.Cartesian3.clone(c.directionWC, good.d);
+      Cesium.Cartesian3.clone(c.upWC, good.u);
+      good.ok = true;
+      return;
+    }
+    if (!good.ok) return;
+    stopEarthSpin();
+    c.cancelFlight();
+    c.setView({
+      destination: Cesium.Cartesian3.clone(good.p),
+      orientation: { direction: Cesium.Cartesian3.clone(good.d), up: Cesium.Cartesian3.clone(good.u) },
+      endTransform: Cesium.Matrix4.IDENTITY,
+    });
+  });
+}
+
 function initEarthSpin(viewer) {
   earthSpin.viewer = viewer;
   const btn = document.getElementById("earth-spin");
@@ -963,6 +989,7 @@ function initEarthSpin(viewer) {
     stopEarthSpin();
     return flyTo(options);
   };
+  guardCameraFinite(viewer);
   window.GsaEarthSpin = { start: startEarthSpin, stop: stopEarthSpin, isOn: () => earthSpin.on };
 }
 
