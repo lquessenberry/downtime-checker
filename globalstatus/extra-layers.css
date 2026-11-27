@@ -91,9 +91,30 @@
 .welcome-xsub[open] > summary::before { content: "▾"; color: #9fd4e2; }
 .welcome-xsub > summary > span { flex: 1; min-width: 0; }
 .welcome-xsub > summary > em { font-style: normal; color: var(--dim); font-size: 10.5px; }
-.welcome-xsub[open] { display: grid; gap: 4px; padding-bottom: 6px; }
-.welcome-xsub[open] > .welcome-xl, .welcome-xsub[open] > .gsx-note { margin-left: 8px; margin-right: 8px; width: auto; }
+.welcome-xsub { min-width: 0; }
+.welcome-xsub[open] { display: grid; gap: 4px; padding-bottom: 6px; justify-items: stretch; }
+/* Buttons are shrink-to-fit when width is auto, so short labels (e.g. Global
+   Ship Graveyards) were narrower than their neighbors. Fill the row, minus
+   the 8px indent on each side. */
+.welcome-drop .welcome-xsub[open] > button.welcome-xl,
+.welcome-drop .welcome-xsub[open] > .gsx-note {
+  margin-left: 8px;
+  margin-right: 8px;
+  width: calc(100% - 16px);
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
+  justify-self: stretch;
+}
+.welcome-drop button[data-welcome-layer],
+.welcome-drop button[data-welcome-xl],
+.welcome-drop button.welcome-xl {
+  max-width: 100%;
+  box-sizing: border-box;
+  justify-self: stretch;
+  min-width: 0;
+}
 .welcome-drop button.welcome-xl { font-size: 11.5px; }
+.welcome-drop button .welcome-layer-name { overflow-wrap: anywhere; line-height: 1.3; }
 .welcome-xl-count { font-style: normal; color: var(--dim); font-size: 10.5px; white-space: nowrap; }
 .welcome-drop button.welcome-xl.on { border-color: #9fd4e2; background: #163044; }
 .welcome-drop button.welcome-xl.on .switch { background: #3a4a5c; }
