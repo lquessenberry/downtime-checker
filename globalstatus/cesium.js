@@ -636,6 +636,7 @@ async function startGlobe() {
       syncLayers: syncLayersButton,
     });
   }
+  initEarthSpin(viewer);
   dismissBootSplash();
   // Do not pin a hardcoded city. Place the blue hub only after a fresh lookup.
   if (window.GsaSearch && window.GsaSearch.locateStartup) {
@@ -881,6 +882,88 @@ function bindEffectsHud() {
       statusLive,
     });
   }
+}
+
+// ROTATE EARTH button: a slow continuous spin the visitor turns on and off.
+// Any touch, click, drag or wheel on the globe, any camera flight, or the welcome
+// picker stops it. Reduced motion is respected by default, but a press of this
+// button is an explicit request, so it still spins (at the same gentle pace).
+const earthSpin = { on: false, frame: 0, last: 0, viewer: null };
+
+function earthSpinRate(camera) {
+  // Degrees per second: one turn a minute from far out, slower as the camera nears the ground.
+  const h = camera.positionCartographic ? camera.positionCartographic.height : 2e7;
+  return Math.max(0.05, Math.min(6, (6 * h) / 6.0e6));
+}
+
+function earthSpinStep(now) {
+  if (!earthSpin.on) return;
+  const v = earthSpin.viewer;
+  const b = document.body.classList;
+  if (!v || b.contains("welcome-open") || b.contains("welcome-intro") || b.contains("welcome-spin")) {
+    stopEarthSpin();
+    return;
+  }
+  if (earthSpin.last) {
+    const dt = Math.min(0.1, (now - earthSpin.last) / 1000);
+    const cam = v.camera;
+    if (!Cesium.Matrix4.equals(cam.transform, Cesium.Matrix4.IDENTITY)) cam.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    cam.rotate(Cesium.Cartesian3.UNIT_Z, Cesium.Math.toRadians(earthSpinRate(cam) * dt));
+    if (v.scene.requestRender) v.scene.requestRender();
+  }
+  earthSpin.last = now;
+  earthSpin.frame = requestAnimationFrame(earthSpinStep);
+}
+
+function paintEarthSpin() {
+  const btn = document.getElementById("earth-spin");
+  if (!btn) return;
+  btn.setAttribute("aria-pressed", earthSpin.on ? "true" : "false");
+  btn.setAttribute("aria-label", earthSpin.on ? "Stop rotating Earth" : "Rotate Earth");
+  btn.title = earthSpin.on ? "Stop rotating Earth" : "Rotate Earth";
+}
+
+function startEarthSpin() {
+  const v = earthSpin.viewer;
+  if (!v || earthSpin.on) return;
+  if (window.GsaWelcome && window.GsaWelcome.stopSpin) window.GsaWelcome.stopSpin();
+  v.camera.cancelFlight();
+  earthSpin.on = true;
+  earthSpin.last = 0;
+  earthSpin.frame = requestAnimationFrame(earthSpinStep);
+  paintEarthSpin();
+}
+
+function stopEarthSpin() {
+  if (earthSpin.frame) cancelAnimationFrame(earthSpin.frame);
+  earthSpin.frame = 0;
+  earthSpin.last = 0;
+  if (!earthSpin.on) return;
+  earthSpin.on = false;
+  paintEarthSpin();
+}
+
+function initEarthSpin(viewer) {
+  earthSpin.viewer = viewer;
+  const btn = document.getElementById("earth-spin");
+  if (btn) btn.addEventListener("click", () => (earthSpin.on ? stopEarthSpin() : startEarthSpin()));
+  const canvas = viewer.scene && viewer.scene.canvas;
+  if (canvas) {
+    ["pointerdown", "mousedown", "touchstart", "wheel"].forEach((type) => {
+      canvas.addEventListener(type, stopEarthSpin, { capture: true, passive: true });
+    });
+  }
+  window.addEventListener("keydown", (event) => {
+    if (/^Arrow|^[+\-=wasdqe]$/i.test(event.key) && event.target === document.body) stopEarthSpin();
+  });
+  // Every flight (presets, search, pins, welcome) goes through camera.flyTo; stop the spin first.
+  const cam = viewer.camera;
+  const flyTo = cam.flyTo.bind(cam);
+  cam.flyTo = (options) => {
+    stopEarthSpin();
+    return flyTo(options);
+  };
+  window.GsaEarthSpin = { start: startEarthSpin, stop: stopEarthSpin, isOn: () => earthSpin.on };
 }
 
 function hookUi() {
@@ -1574,6 +1657,7 @@ function setCount(key, value) {
 }
 
 function resetMap() {
+  stopEarthSpin();
   // Local view only. The scheduled server pass is never stopped from a page.
   stopReplay();
   state.scanCheckedAt = 0;

@@ -126,6 +126,33 @@ body {
 .view-reopen svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .view-reopen.is-on { border-color: #9fd4e2; }
 .view-reopen[hidden] { display: none; }
+/* Rotate Earth toggle: sits just left of the VIEW globe button, same dark slate style. */
+.earth-spin {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  right: 60px;
+  bottom: 16px;
+  z-index: 4;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  color: var(--text);
+  background: rgba(8, 14, 20, 0.78);
+  border: 1px solid rgba(120, 190, 210, 0.4);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.earth-spin svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.earth-spin:hover { border-color: #9fd4e2; }
+.earth-spin:focus-visible { outline: 2px solid #9fd4e2; outline-offset: 2px; }
+.earth-spin[aria-pressed="true"] { color: #9fd4e2; border-color: #9fd4e2; background: rgba(22, 48, 68, 0.92); box-shadow: 0 0 0 1px rgba(159, 212, 226, 0.35); }
+.earth-spin[hidden] { display: none; }
+html.welcome-pending .earth-spin,
+body.welcome-open .earth-spin,
+body.welcome-intro .earth-spin { display: none; }
 html.welcome-pending .view-settings,
 html.welcome-pending .view-reopen,
 body.welcome-open .view-settings,
@@ -1072,7 +1099,13 @@ button:hover { border-color: #9fd4e2; }
   .stage:has(#outage-card:not([hidden])) .view-reopen,
   .stage:has(#hunger-card:not([hidden])) .view-reopen,
   .stage:has(#conflict-card:not([hidden])) .view-reopen,
-  .stage:has(#aircraft-card:not([hidden])) .view-reopen { display: none; }
+  .stage:has(#aircraft-card:not([hidden])) .view-reopen,
+
+  .stage:has(#selected:not([hidden])) .earth-spin,
+  .stage:has(#outage-card:not([hidden])) .earth-spin,
+  .stage:has(#hunger-card:not([hidden])) .earth-spin,
+  .stage:has(#conflict-card:not([hidden])) .earth-spin,
+  .stage:has(#aircraft-card:not([hidden])) .earth-spin { display: none; }
   #outage-close, #hunger-close, #selected-close, #effects-hud-close, .pin-card-close {
     width: 44px;
     height: 44px;
@@ -1163,6 +1196,7 @@ button:hover { border-color: #9fd4e2; }
   .view-reopen svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .view-reopen.is-on { border-color: #9fd4e2; }
   .view-reopen[hidden] { display: none; }
+  .earth-spin { right: 54px; bottom: calc(8px + env(safe-area-inset-bottom)); height: 44px; min-height: 44px; }
   .grid-results-open {
     display: block;
     position: absolute;
