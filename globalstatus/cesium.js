@@ -681,6 +681,10 @@ async function startGlobe() {
   if (window.GsaExtraLayers) {
     window.GsaExtraLayers.init({ viewer: () => state.viewer });
   }
+  // SDR (sdr-popup.js): your own USB radio. Nothing touches USB until Connect SDR.
+  if (window.GsaSdr) {
+    try { window.GsaSdr.init({ viewer: () => state.viewer }); } catch (error) { console.warn("SDR init failed", error); }
+  }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   state.mapReady = true;
   viewer.camera.setView({
@@ -712,6 +716,13 @@ async function startGlobe() {
   // Cesium then inserts a temporary imagery entity; that is not a layer pin either.
   const popupClicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   popupClicks.setInputAction((click) => {
+    const sdrHit = window.GsaSdr && window.GsaSdr.pick(click.position);
+    if (sdrHit) {
+      if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+      closeMapPopups();
+      showLive(sdrHit);
+      return;
+    }
     const infraHit = window.GsaInfra && window.GsaInfra.pick(click.position);
     if (infraHit) {
       if (viewer.selectedEntity) viewer.selectedEntity = undefined;
@@ -2009,6 +2020,7 @@ function resetMap() {
   if (state.viewer) state.viewer.selectedEntity = undefined;
   for (const key of Object.keys(state.layers)) setLayer(key, false);
   if (window.GsaExtraLayers) window.GsaExtraLayers.clearAll();
+  if (window.GsaSdr) window.GsaSdr.clearAll();
   closeAircraft();
   closeConflict();
   hideOutageCard();
@@ -2093,7 +2105,7 @@ function syncLayerGroups() {
   for (const group of document.querySelectorAll(".rail .layer-group")) {
     const el = group.querySelector(".layer-group-count");
     if (!el) continue;
-    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"], [data-xl-toggle][aria-pressed="true"]').length;
+    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"], [data-xl-toggle][aria-pressed="true"], [data-sdr-toggle][aria-pressed="true"]').length;
     el.textContent = n ? `${n} ON` : "";
   }
 }
@@ -2106,6 +2118,7 @@ function clearLayers() {
     if (state.layers[key]) setLayer(key, false);
   }
   if (window.GsaExtraLayers) window.GsaExtraLayers.clearAll();
+  if (window.GsaSdr) window.GsaSdr.clearAll();
 }
 
 const VIEW_US = [-127, 22, -65, 51];
@@ -4381,6 +4394,9 @@ function liveHtml(item, opts = {}) {
   }
   else if (item.xl && window.GsaExtraLayers) {
     extra = window.GsaExtraLayers.popupHtml(item, opts);
+  }
+  else if (item.sdr && window.GsaSdr) {
+    extra = window.GsaSdr.popupHtml(item, opts);
   }
   else if (item.paranormal && window.GsaParanormal) {
     extra = window.GsaParanormal.popupHtml(item, opts);

@@ -195,7 +195,7 @@
 		header @vendor Cache-Control "public, max-age=31536000, immutable"
 		@assets path /icons/* /images/* /sounds/* /geo/* /infra/* /layers-data/* /favicon.* /apple-touch-icon.png /icon-*.png /start-satellite.mp4
 		header @assets Cache-Control "public, max-age=86400"
-		@shell path / /index.html /cesium.js /cesium.css /extra-layers.css /blast.js /quakes.js /sats.js /spaceweather.js /effects-radius.js /infra.js /firearms.js /ccw.js /militias.js /internet.js /tfr.js /delays.js /airquality.js /powerlines.js /paranormal.js /geocoder.js /nearby.js /welcome.js /extra-layers-registry.js /extra-layers.js /custom-packs-loader.js /satellite-imagery-loader.js /live-feeds-loader.js /sw.js /manifest.webmanifest
+		@shell path / /index.html /cesium.js /cesium.css /extra-layers.css /blast.js /quakes.js /sats.js /spaceweather.js /effects-radius.js /infra.js /firearms.js /ccw.js /militias.js /internet.js /tfr.js /delays.js /airquality.js /powerlines.js /paranormal.js /geocoder.js /nearby.js /welcome.js /extra-layers-registry.js /extra-layers.js /custom-packs-loader.js /satellite-imagery-loader.js /live-feeds-loader.js /sdr-driver.js /sdr-dsp.worker.js /sdr-layers.js /sdr-popup.js /sdr-popup.css /sw.js /manifest.webmanifest
 		header @shell Cache-Control "no-cache"
 		file_server {
 			precompressed zstd br gzip
