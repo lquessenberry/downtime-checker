@@ -1,4 +1,4 @@
-/* Global Status · SDR map layers (Phase 1)
+/* Global Status · SDR map layers (Phase 1 + Phase 2)
  *
  * Draws what the user's own radio decodes on the Cesium globe:
  *   adsb   LOCAL ADS-B AIRCRAFT      aircraft icons rotated to heading + short track trail
@@ -6,6 +6,8 @@
  *   aprs   LOCAL APRS STATIONS       station diamonds + callsign
  *   sonde  LOCAL WEATHER BALLOONS    balloon + flight path + predicted burst and landing
  *   range  RECEIVER RANGE            slate-cyan rings around the receiver + live-signal ring
+ *   mesh, uat, acars, dispatch, meter, hd, sat, lte (Phase 2): node / aircraft / ground station /
+ *   radio / meter / tower / satellite / alert-area pins, trails and WEA alert polygons.
  * Primitives only (no Entities), so the shared #selected card is opened by cesium.js through
  * GsaSdr.pick(). Original code for Global Status App.
  */
@@ -18,6 +20,14 @@
     aprs: { label: "LOCAL APRS STATIONS", color: "#fbbf24" },
     sonde: { label: "LOCAL WEATHER BALLOONS", color: "#f0abfc" },
     range: { label: "RECEIVER RANGE / LIVE SIGNAL", color: "#38bdf8" },
+    mesh: { label: "LOCAL MESH NODES", color: "#c4b5fd" },
+    uat: { label: "LOCAL UAT AIRCRAFT", color: "#7dd3fc" },
+    acars: { label: "LOCAL ACARS / VDL2", color: "#fda4af" },
+    dispatch: { label: "LOCAL RADIO GPS UNITS", color: "#fb923c" },
+    meter: { label: "LOCAL UTILITY METERS", color: "#fcd34d" },
+    hd: { label: "LOCAL HD RADIO TOWERS", color: "#f9a8d4" },
+    sat: { label: "AMATEUR SATELLITES (DOPPLER)", color: "#93c5fd" },
+    lte: { label: "LTE ALERT AREAS", color: "#f87171" },
   };
   const OUT = "#0b1117";
   const svg = (body) => "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">' + body + "</svg>");
@@ -29,6 +39,18 @@
     sonde: svg('<circle cx="16" cy="11" r="8" fill="#f0abfc" stroke="' + OUT + '" stroke-width="1.5"/><path d="M16 19v6" stroke="#f0abfc" stroke-width="1.6"/><rect x="13" y="25" width="6" height="4.5" rx="1" fill="#f0abfc" stroke="' + OUT + '" stroke-width="1.2"/>'),
     landing: svg('<circle cx="16" cy="16" r="10.5" fill="rgba(11,17,23,0.6)" stroke="#f0abfc" stroke-width="2"/><path d="M11 11l10 10M21 11 11 21" stroke="#f0abfc" stroke-width="2.4" stroke-linecap="round"/>'),
     burst: svg('<circle cx="16" cy="16" r="5" fill="none" stroke="#f0abfc" stroke-width="2"/><path d="M16 4v5M16 23v5M4 16h5M23 16h5M7.5 7.5l3.5 3.5M21 21l3.5 3.5M24.5 7.5 21 11M11 21l-3.5 3.5" stroke="#f0abfc" stroke-width="1.8" stroke-linecap="round"/>'),
+    mesh: svg('<path d="M16 3.5 26.8 9.75v12.5L16 28.5 5.2 22.25V9.75z" fill="#c4b5fd" stroke="' + OUT + '" stroke-width="1.5" stroke-linejoin="round"/><circle cx="16" cy="17" r="3.2" fill="' + OUT + '"/><path d="M10.5 13q5.5-4 11 0" fill="none" stroke="' + OUT + '" stroke-width="1.4" stroke-linecap="round"/>'),
+    uat: svg('<path d="M16 3 17.6 12.3 27.5 17.4v2.1L17.6 16.7l-.4 7.6 3.3 2.7v1.7L16 27.6l-4.5 1.1v-1.7l3.3-2.7-.4-7.6L4.5 19.5v-2.1l9.9-5.1z" fill="#7dd3fc" stroke="' + OUT + '" stroke-width="1.4" stroke-linejoin="round"/>'),
+    tower: svg('<path d="M16 9 22 28h-3l-3-10-3 10h-3z" fill="#7dd3fc" stroke="' + OUT + '" stroke-width="1.3" stroke-linejoin="round"/><path d="M10 9.5q6-5 12 0M7 6q9-7.5 18 0" fill="none" stroke="#7dd3fc" stroke-width="1.8" stroke-linecap="round"/>'),
+    metar: svg('<rect x="5" y="5" width="22" height="22" rx="5" fill="#0b1117" stroke="#7dd3fc" stroke-width="2"/><path d="M10 20q0-4 4-4 1-4 5-3 4 .5 4 4.5 2.5.5 2.5 2.5H10z" fill="#e2e8f0"/>'),
+    acars: svg('<path d="M16 3 17.6 12.3 27.5 17.4v2.1L17.6 16.7l-.4 7.6 3.3 2.7v1.7L16 27.6l-4.5 1.1v-1.7l3.3-2.7-.4-7.6L4.5 19.5v-2.1l9.9-5.1z" fill="#fda4af" stroke="' + OUT + '" stroke-width="1.4" stroke-linejoin="round"/>'),
+    gs: svg('<rect x="7" y="16" width="18" height="11" rx="2" fill="#fda4af" stroke="' + OUT + '" stroke-width="1.4"/><path d="M16 16V8M11 7q5-4 10 0" fill="none" stroke="#fda4af" stroke-width="2" stroke-linecap="round"/>'),
+    dispatch: svg('<rect x="10" y="9" width="12" height="19" rx="2.5" fill="#fb923c" stroke="' + OUT + '" stroke-width="1.5"/><path d="M19 9V3.5" stroke="#fb923c" stroke-width="2.2" stroke-linecap="round"/><rect x="12.5" y="12" width="7" height="5" rx="1" fill="' + OUT + '"/>'),
+    meter: svg('<circle cx="16" cy="16" r="11" fill="#fcd34d" stroke="' + OUT + '" stroke-width="1.5"/><path d="M16 16 21.5 10.5" stroke="' + OUT + '" stroke-width="2" stroke-linecap="round"/><path d="M9 20h14" stroke="' + OUT + '" stroke-width="1.4"/>'),
+    hd: svg('<path d="M16 10 21.5 28h-2.8L16 19l-2.7 9h-2.8z" fill="#f9a8d4" stroke="' + OUT + '" stroke-width="1.3" stroke-linejoin="round"/><path d="M10.5 10.5q5.5-5 11 0M7.5 7.5q8.5-8 17 0" fill="none" stroke="#f9a8d4" stroke-width="1.8" stroke-linecap="round"/>'),
+    sat: svg('<rect x="12.5" y="12.5" width="7" height="7" rx="1.2" fill="#e2e8f0" stroke="' + OUT + '" stroke-width="1.3" transform="rotate(45 16 16)"/><path d="M4 9.5 9.5 4l5 5-5.5 5.5zM28 22.5 22.5 28l-5-5 5.5-5.5z" fill="#93c5fd" stroke="' + OUT + '" stroke-width="1.2"/>'),
+    lte: svg('<path d="M16 4 28 26H4z" fill="#f87171" stroke="' + OUT + '" stroke-width="1.5" stroke-linejoin="round"/><path d="M16 11v8" stroke="' + OUT + '" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="22.5" r="1.5" fill="' + OUT + '"/>'),
+    ft8: svg('<rect x="6" y="6" width="20" height="20" rx="3" fill="#fde68a" stroke="' + OUT + '" stroke-width="1.5"/><path d="M10 16h3l2-5 2 10 2-5h3" fill="none" stroke="' + OUT + '" stroke-width="1.6" stroke-linejoin="round"/>'),
     rx: svg('<circle cx="16" cy="16" r="6" fill="#38bdf8" stroke="' + OUT + '" stroke-width="1.6"/><circle cx="16" cy="16" r="11.5" fill="none" stroke="#38bdf8" stroke-width="1.4" stroke-dasharray="3 3"/>'),
   };
 
@@ -99,7 +121,7 @@
     }
     if (item.path && item.path.length > 1) {
       const positions = item.path.map(([lo, la]) => pos(lo, la, 0));
-      if (!rec.path) rec.path = s.lines.add({ positions, width: 2.5, material: Cs.Material.fromType("Color", { color: color("#f0abfc", 0.8) }) });
+      if (!rec.path) rec.path = s.lines.add({ positions, width: 2.5, material: Cs.Material.fromType("Color", { color: color(kind === "sat" ? "#93c5fd" : "#f0abfc", kind === "sat" ? 0.55 : 0.8) }) });
       else rec.path.positions = positions;
     }
     const pred = [item.lon, item.lat];
@@ -111,6 +133,11 @@
       const mat = Cs.Material.fromType("PolylineDash", { color: color("#f0abfc", 0.75), dashLength: 14 });
       if (!rec.pred) rec.pred = s.lines.add({ positions, width: 2, material: mat });
       else rec.pred.positions = positions;
+    }
+    if (item.poly && item.poly.length > 2) { // WEA / ETWS alert area outline
+      const positions = item.poly.map(([la, lo]) => pos(lo, la, 0));
+      if (!rec.poly) rec.poly = s.lines.add({ positions, width: 3, loop: true, material: Cs.Material.fromType("Color", { color: color(KINDS[kind].color, 0.9) }) });
+      else rec.poly.positions = positions;
     }
     marker(s, rec, "burstBb", item.burst, ICONS.burst, item, 22);
     marker(s, rec, "landBb", item.landing, ICONS.landing, item, 26);
@@ -135,7 +162,7 @@
     if (!rec) return;
     for (const k of ["bb", "burstBb", "landBb"]) if (rec[k]) s.bb.remove(rec[k]);
     for (const k of ["label", "landLabel"]) if (rec[k]) s.labels.remove(rec[k]);
-    for (const k of ["trail", "path", "pred"]) if (rec[k]) s.lines.remove(rec[k]);
+    for (const k of ["trail", "path", "pred", "poly"]) if (rec[k]) s.lines.remove(rec[k]);
     s.items.delete(id);
     request();
   }
