@@ -36,7 +36,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261126y" />
+  <link rel="stylesheet" href="/cesium.css?v=20261127d" />
   <link rel="stylesheet" href="/extra-layers.css?v=20261127a" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
@@ -519,6 +519,15 @@
     </div>
     <button type="button" id="open-view" class="view-reopen" aria-pressed="false" aria-label="View"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="3.4" ry="8"/><path d="M4.2 12h15.6M5.6 8.4h12.8M5.6 15.6h12.8"/></svg></button>
     <button type="button" id="earth-spin" class="earth-spin" aria-pressed="false" aria-label="Rotate Earth" title="Rotate Earth"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="11.5" r="7.2"/><ellipse cx="12" cy="11.5" rx="3.3" ry="7.2"/><path d="M5.6 8.3c1.9.8 4.1 1.2 6.4 1.2s4.5-.4 6.4-1.2"/><path d="M3.2 13.8c2.2 2 5.4 3 8.8 3 3.2 0 6.1-.9 8.2-2.6"/><path d="M17.2 13.4l3.3.5-.6 3.2"/></svg></button>
+    <button type="button" id="earth-zoom" class="earth-zoom" aria-expanded="false" aria-controls="zoom-slider" aria-label="Zoom controls" title="Zoom controls"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.25"/><path d="M15.2 15.2L20.3 20.3"/></svg></button>
+    <div class="zoom-slider" id="zoom-slider" hidden>
+      <button type="button" id="zoom-slider-close" aria-label="Close zoom slider" title="Close zoom slider">×</button>
+      <button type="button" id="zoom-slider-in" class="zoom-end" aria-label="Zoom all the way in" title="Zoom all the way in"><span>IN</span><span aria-hidden="true">+</span></button>
+      <div class="zoom-slider-track">
+        <input type="range" id="zoom-slider-range" min="0" max="100" step="0.1" value="0" aria-orientation="vertical" aria-label="Zoom level" />
+      </div>
+      <button type="button" id="zoom-slider-out" class="zoom-end" aria-label="Zoom all the way out" title="Zoom all the way out"><span>OUT</span><span aria-hidden="true">−</span></button>
+    </div>
     <button type="button" id="open-grid-results" class="grid-results-open" hidden>VIEW GRID RESULTS</button>
   </main>
 
@@ -646,6 +655,6 @@
   <script src="/custom-packs-loader.js?v=20261127a"></script>
   <script src="/satellite-imagery-loader.js?v=20261127a"></script>
   <script src="/live-feeds-loader.js?v=20261127a"></script>
-  <script src="/cesium.js?v=20261126z"></script>
+  <script src="/cesium.js?v=20261127d"></script>
 </body>
 </html>

@@ -641,6 +641,7 @@ async function startGlobe() {
     });
   }
   initEarthSpin(viewer);
+  initEarthZoom(viewer);
   dismissBootSplash();
   // Do not pin a hardcoded city. Place the blue hub only after a fresh lookup.
   if (window.GsaSearch && window.GsaSearch.locateStartup) {
@@ -1002,6 +1003,220 @@ function initEarthSpin(viewer) {
   };
   guardCameraFinite(viewer);
   window.GsaEarthSpin = { start: startEarthSpin, stop: stopEarthSpin, isOn: () => earthSpin.on };
+}
+
+// ZOOM slider: the bottom-right magnifying-glass button only opens or closes
+// a compact logarithmic zoom slider. IN / OUT on the bar fly the camera.
+const ZOOM_IN_HEIGHT = 1800;
+const ZOOM_OUT_FALLBACK = 18000000;
+const ZOOM_FLY_SECONDS = 1.4;
+const earthZoom = { viewer: null, dragging: false, overviewHeight: ZOOM_OUT_FALLBACK };
+
+function zoomOverviewHeight(viewer) {
+  // Always pull back at least 18,000 km so "all the way out" is a full globe on
+  // both desktop and mobile. The default VIEW_WORLD rectangle sits much closer
+  // on a tall phone and would only frame a region, not the whole Earth.
+  let computed = 0;
+  if (viewer && window.Cesium) {
+    try {
+      const world = (typeof VIEW_WORLD !== "undefined") ? VIEW_WORLD : [-168, -48, 150, 72];
+      const rect = Cesium.Rectangle.fromDegrees(world[0], world[1], world[2], world[3]);
+      const pos = viewer.camera.getRectangleCameraCoordinates(rect);
+      if (pos) {
+        const carto = Cesium.Cartographic.fromCartesian(pos);
+        if (carto && Number.isFinite(carto.height) && carto.height > 1e6) computed = carto.height;
+      }
+    } catch (error) {
+      /* fall through to the 18,000 km default */
+    }
+  }
+  const height = Math.max(computed, ZOOM_OUT_FALLBACK);
+  earthZoom.overviewHeight = height;
+  return height;
+}
+
+function zoomCameraHeight(viewer) {
+  const pos = viewer && viewer.camera && viewer.camera.positionCartographic;
+  const height = pos && pos.height;
+  return Number.isFinite(height) ? height : zoomOverviewHeight(viewer);
+}
+
+function zoomGroundTarget(viewer) {
+  const camera = viewer.camera;
+  const canvas = viewer.scene.canvas;
+  const center = new Cesium.Cartesian2(canvas.clientWidth * 0.5, canvas.clientHeight * 0.5);
+  let cartesian = camera.pickEllipsoid(center, viewer.scene.globe.ellipsoid);
+  if (!cartesian && camera.getPickRay) {
+    const ray = camera.getPickRay(center);
+    if (ray && viewer.scene.globe && viewer.scene.globe.pick) {
+      cartesian = viewer.scene.globe.pick(ray, viewer.scene);
+    }
+  }
+  if (cartesian) {
+    const carto = Cesium.Cartographic.fromCartesian(cartesian);
+    if (carto && Number.isFinite(carto.latitude) && Number.isFinite(carto.longitude)) return carto;
+  }
+  const pos = camera.positionCartographic;
+  if (pos && Number.isFinite(pos.latitude) && Number.isFinite(pos.longitude)) return pos;
+  return null;
+}
+
+function zoomDestination(viewer, height) {
+  const target = zoomGroundTarget(viewer);
+  if (!target) return null;
+  const ceiling = Math.max(zoomOverviewHeight(viewer), ZOOM_OUT_FALLBACK);
+  const h = Math.max(ZOOM_IN_HEIGHT, Math.min(Number(height), ceiling));
+  if (!Number.isFinite(h)) return null;
+  return Cesium.Cartesian3.fromRadians(target.longitude, target.latitude, h);
+}
+
+function zoomFlyDuration() {
+  try {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return 0.2;
+  } catch (error) {
+    /* use the standard duration */
+  }
+  return ZOOM_FLY_SECONDS;
+}
+
+function zoomFlyTo(viewer, height) {
+  const dest = zoomDestination(viewer, height);
+  if (!dest) return;
+  viewer.camera.flyTo({
+    destination: dest,
+    orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+    duration: zoomFlyDuration(),
+    complete: () => { paintEarthZoom(); syncZoomSlider(); },
+    cancel: () => { paintEarthZoom(); syncZoomSlider(); },
+  });
+}
+
+function zoomSetHeight(viewer, height) {
+  const dest = zoomDestination(viewer, height);
+  if (!dest) return;
+  viewer.camera.cancelFlight();
+  stopEarthSpin();
+  viewer.camera.setView({
+    destination: dest,
+    orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+    endTransform: Cesium.Matrix4.IDENTITY,
+  });
+  const pos = viewer.camera.position;
+  if (!(pos && Number.isFinite(pos.x) && Number.isFinite(pos.y) && Number.isFinite(pos.z))) return;
+  if (viewer.scene.requestRender) viewer.scene.requestRender();
+}
+
+function heightToSlider(height, viewer) {
+  const hMax = zoomOverviewHeight(viewer);
+  const hMin = ZOOM_IN_HEIGHT;
+  const h = Math.min(hMax, Math.max(hMin, height));
+  const t = (Math.log(h) - Math.log(hMax)) / (Math.log(hMin) - Math.log(hMax));
+  if (!Number.isFinite(t)) return 0;
+  return Math.max(0, Math.min(100, t * 100));
+}
+
+function sliderToHeight(value, viewer) {
+  const hMax = zoomOverviewHeight(viewer);
+  const hMin = ZOOM_IN_HEIGHT;
+  const t = Math.max(0, Math.min(100, Number(value))) / 100;
+  const height = Math.exp(Math.log(hMax) + t * (Math.log(hMin) - Math.log(hMax)));
+  return Number.isFinite(height) ? height : hMax;
+}
+
+function paintEarthZoom() {
+  const btn = document.getElementById("earth-zoom");
+  if (!btn) return;
+  const panel = document.getElementById("zoom-slider");
+  const open = Boolean(panel && !panel.hidden);
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  btn.setAttribute("aria-label", "Zoom controls");
+  btn.title = "Zoom controls";
+}
+
+function syncZoomSlider() {
+  if (earthZoom.dragging) return;
+  const range = document.getElementById("zoom-slider-range");
+  const v = earthZoom.viewer;
+  if (!range || !v) return;
+  const val = heightToSlider(zoomCameraHeight(v), v);
+  if (Math.abs(Number(range.value) - val) > 0.15) range.value = String(val);
+}
+
+function openZoomSlider() {
+  const panel = document.getElementById("zoom-slider");
+  if (!panel) return;
+  panel.hidden = false;
+  paintEarthZoom();
+  syncZoomSlider();
+}
+
+function closeZoomSlider() {
+  const panel = document.getElementById("zoom-slider");
+  if (!panel || panel.hidden) return;
+  panel.hidden = true;
+  earthZoom.dragging = false;
+  paintEarthZoom();
+}
+
+function toggleZoomSlider() {
+  const panel = document.getElementById("zoom-slider");
+  if (!panel || panel.hidden) openZoomSlider();
+  else closeZoomSlider();
+}
+
+function initEarthZoom(viewer) {
+  earthZoom.viewer = viewer;
+  zoomOverviewHeight(viewer);
+  const btn = document.getElementById("earth-zoom");
+  if (btn) btn.addEventListener("click", toggleZoomSlider);
+  const close = document.getElementById("zoom-slider-close");
+  if (close) close.addEventListener("click", closeZoomSlider);
+  const range = document.getElementById("zoom-slider-range");
+  if (range) {
+    range.addEventListener("pointerdown", () => { earthZoom.dragging = true; });
+    range.addEventListener("input", (event) => {
+      earthZoom.dragging = true;
+      zoomSetHeight(viewer, sliderToHeight(event.target.value, viewer));
+    });
+    const endDrag = () => {
+      earthZoom.dragging = false;
+      paintEarthZoom();
+      syncZoomSlider();
+    };
+    range.addEventListener("pointerup", endDrag);
+    range.addEventListener("pointercancel", endDrag);
+    range.addEventListener("change", endDrag);
+  }
+  const outBtn = document.getElementById("zoom-slider-out");
+  const inBtn = document.getElementById("zoom-slider-in");
+  if (outBtn) outBtn.addEventListener("click", () => zoomFlyTo(viewer, zoomOverviewHeight(viewer)));
+  if (inBtn) inBtn.addEventListener("click", () => zoomFlyTo(viewer, ZOOM_IN_HEIGHT));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeZoomSlider();
+  });
+  viewer.camera.changed.addEventListener(() => {
+    paintEarthZoom();
+    syncZoomSlider();
+  });
+  viewer.camera.moveEnd.addEventListener(() => {
+    if (!earthZoom.dragging) {
+      paintEarthZoom();
+      syncZoomSlider();
+    }
+  });
+  paintEarthZoom();
+  syncZoomSlider();
+  window.GsaEarthZoom = {
+    isOpen: () => {
+      const panel = document.getElementById("zoom-slider");
+      return Boolean(panel && !panel.hidden);
+    },
+    close: closeZoomSlider,
+    open: openZoomSlider,
+    height: () => zoomCameraHeight(earthZoom.viewer),
+    overviewHeight: () => zoomOverviewHeight(earthZoom.viewer),
+    inHeight: ZOOM_IN_HEIGHT,
+  };
 }
 
 function hookUi() {
