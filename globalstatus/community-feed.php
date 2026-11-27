@@ -17,6 +17,7 @@ defined('GSA_CF_MAX_STORE') || define('GSA_CF_MAX_STORE', 4000);    // targets k
 defined('GSA_CF_MAX_PER_IP') || define('GSA_CF_MAX_PER_IP', 600);   // live targets per contributor
 defined('GSA_CF_MIN_GAP') || define('GSA_CF_MIN_GAP', 8);           // seconds between posts per contributor
 defined('GSA_CF_PER_HOUR') || define('GSA_CF_PER_HOUR', 400);       // posts per contributor per hour
+defined('GSA_CF_SITE_PER_MIN') || define('GSA_CF_SITE_PER_MIN', 240);  // posts per minute site-wide (backstop)
 defined('GSA_CF_RX_GRID') || define('GSA_CF_RX_GRID', 0.25);        // receiver blur, degrees (~25 km)
 defined('GSA_CF_NEAR_RX_KM') || define('GSA_CF_NEAR_RX_KM', 2.0);   // drop non-aircraft this close to the receiver
 
@@ -145,9 +146,30 @@ function gsa_cf_client_key()
         $salt = bin2hex(random_bytes(24));
         @file_put_contents($saltFile, $salt, LOCK_EX);
     }
-    // Shared hosting: REMOTE_ADDR is the visitor. Raw IPs are never stored.
+    // Raw IPs are never stored. A forwarded address is only trusted when the
+    // direct peer is a private or reserved (local proxy) address. Contributors
+    // are bucketed by network (IPv4 /24, IPv6 /48) so a rotating address pool
+    // cannot dodge the per-contributor limits.
     $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
-    return substr(hash('sha256', $salt . '|' . $ip), 0, 16);
+    $public = function ($a) {
+        return filter_var($a, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
+    };
+    if (!$public($ip) && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        foreach (array_reverse(explode(',', (string) $_SERVER['HTTP_X_FORWARDED_FOR'])) as $hop) {
+            $hop = trim($hop);
+            if ($public($hop)) {
+                $ip = $hop;
+                break;
+            }
+        }
+    }
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $net = implode('.', array_slice(explode('.', $ip), 0, 3));
+    } else {
+        $bin = @inet_pton($ip);
+        $net = $bin === false ? $ip : bin2hex(substr($bin, 0, 6));
+    }
+    return substr(hash('sha256', $salt . '|' . $net), 0, 16);
 }
 
 // Locked read-modify-write of the store. $fn gets (&$store, $now).
@@ -237,6 +259,14 @@ function gsa_cf_ingest()
     $ck = gsa_cf_client_key();
     $kinds = gsa_cf_kinds();
     $res = gsa_cf_with_store(function (&$store, $now) use ($clean, $ck, $kinds, $rx) {
+        $minute = intdiv($now, 60);
+        $site = $store['site'] ?? array('m' => 0, 'n' => 0);
+        if ((int) ($site['m'] ?? 0) !== $minute) {
+            $site = array('m' => $minute, 'n' => 0);
+        }
+        if ((int) $site['n'] >= GSA_CF_SITE_PER_MIN) {
+            return array(429, array('error' => 'Feed busy', 'retrySec' => 60 - ($now % 60)));
+        }
         $r = $store['rate'][$ck] ?? array('hour' => $now, 'n' => 0, 'last' => 0);
         if ($now - (int) $r['last'] < GSA_CF_MIN_GAP) {
             return array(429, array('error' => 'Slow down', 'retrySec' => GSA_CF_MIN_GAP - ($now - (int) $r['last'])));
@@ -244,6 +274,8 @@ function gsa_cf_ingest()
         if ((int) $r['n'] >= GSA_CF_PER_HOUR) {
             return array(429, array('error' => 'Hourly limit reached', 'retrySec' => max(60, (int) $r['hour'] + 3600 - $now)));
         }
+        $site['n'] = (int) $site['n'] + 1;
+        $store['site'] = $site;
         $r['n'] = (int) $r['n'] + 1;
         $r['last'] = $now;
         $store['rate'][$ck] = $r;
