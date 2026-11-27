@@ -192,7 +192,13 @@
       await this.repeater(true);
       let id = null;
       for (const addr of [0x34, 0x74]) { this.tunerAddr = addr; try { const r = await this.r82Read(1); if (r[0] === 0x69) { id = addr; break; } } catch (e) { /* not at this address */ } }
-      if (id == null) { await this.repeater(false); throw new Error("This RTL-SDR uses an older tuner (E4000/FC0012/FC0013) that Phase 1 does not support yet."); }
+      if (id == null) {
+        const older = await this.probeOlderTuner();
+        await this.repeater(false);
+        this.tuner = older || "unknown tuner";
+        // Detected and reported by name; these zero-IF tuners are not tuned yet (no verified clean-room PLL code).
+        throw new Error(older ? "RTL2832U with " + older + " tuner found. Older tuners are detected but not tuned yet; use an R820T/R820T2/R828D stick (RTL-SDR Blog V3/V4)." : "RTL2832U found, but its tuner did not answer. Unplug it, plug it back in and try again.");
+      }
       this.tuner = id === 0x74 ? "R828D" : "R820T/R820T2";
       await this.r82Init();
       await this.repeater(false);
@@ -202,6 +208,16 @@
       await this.demodWrite(1, 0x15, 0x01, 1); // spectrum inversion for the R82xx IF
       await this.setBiasT(false); // always off on connect
       return this;
+    }
+    // Identify pre-R820T tuners by their I2C address and chip-ID register (read only; nothing is written to them).
+    async probeOlderTuner() {
+      const probes = [[0xc8, 0x02, { 0x40: "Elonics E4000" }], [0xc6, 0x00, { 0xa1: "Fitipower FC0012", 0xa3: "Fitipower FC0013" }], [0xac, 0x01, { 0x56: "FCI FC2580" }]];
+      for (const [addr, reg, ids] of probes) {
+        this.tunerAddr = addr;
+        try { await this.i2cWrite([reg]); const r = await this.i2cRead(1); if (r.length && ids[r[0]]) return ids[r[0]]; } catch (e) { /* not at this address */ }
+      }
+      this.tunerAddr = 0x34;
+      return null;
     }
     async initBaseband() {
       await this.writeReg(BLK.USB, REG.USB_SYSCTL, 0x09, 1);

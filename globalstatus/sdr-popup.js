@@ -1,8 +1,10 @@
-/* Global Status · SDR category + SDR Workbench (Phase 1, receive only)
+/* Global Status · SDR category + SDR Workbench (Phase 1 + Phase 2, receive only)
  *
  * - SDR category in the LAYERS picker (welcome.js) and the sidebar (#group-sdr): a device
- *   connection bar, five uniform full-width map layer switches and a compare note.
- * - SDR Workbench popup: Tuner & Waterfall, Pagers, Devices, Capture, Log.
+ *   connection bar, thirteen uniform full-width map layer switches and a compare note.
+ * - SDR Workbench popup: Tuner & Waterfall, Spectrum / Looking Glass, Pagers, Devices, Bluetooth,
+ *   Voice & Ham, Trains / Cell / TV, Capture, Log.
+ * - There is no transmit code anywhere in the SDR category.
  * - One radio hears one band at a time: switching a map layer on tunes the radio to it; the
  *   other band layers keep their pins and show PAUSED until the radio is tuned back.
  * Nothing runs until the user clicks Connect SDR: no USB calls, no Web Worker, no AudioContext,
@@ -12,18 +14,27 @@
  */
 (function (root) {
   "use strict";
-  const V = "20261127sdr1";
+  const V = "20261127sdr2";
   const D = () => root.GsaSdrDriver;
   const L = () => root.GsaSdrLayers;
 
   const LAYERS = [
     { key: "adsb", name: "LOCAL ADS-B AIRCRAFT", tune: 1090e6, mode: "AM", ttl: 120e3, sw: "#38bdf8", desc: "1090 MHz Mode-S / ADS-B from aircraft your antenna hears" },
     { key: "ais", name: "LOCAL AIS VESSELS", tune: 162.0e6, mode: "NFM", ttl: 30 * 60e3, sw: "#a5b4fc", desc: "Marine AIS on 161.975 and 162.025 MHz" },
-    { key: "aprs", name: "LOCAL APRS STATIONS", tune: 144.39e6, mode: "NFM", ttl: 60 * 60e3, sw: "#fbbf24", desc: "2 m APRS packet positions (144.390 MHz; 144.800 MHz in Europe)" },
-    { key: "sonde", name: "LOCAL WEATHER BALLOONS", tune: 403.0e6, mode: "NFM", ttl: 30 * 60e3, sw: "#f0abfc", desc: "Radiosondes (RS41) on 400-406 MHz with predicted landing" },
+    { key: "aprs", name: "LOCAL APRS STATIONS", tune: 144.39e6, mode: "NFM", ttl: 60 * 60e3, sw: "#fbbf24", bands: ["aprs", "ft8"], desc: "2 m APRS packet positions (144.390 MHz; 144.800 MHz in Europe) plus FT8 / JS8 grid spots when tuned to an FT8 or JS8 frequency" },
+    { key: "sonde", name: "LOCAL WEATHER BALLOONS", tune: 403.0e6, mode: "NFM", ttl: 30 * 60e3, sw: "#f0abfc", desc: "Radiosondes (RS41 and DFM) on 400-406 MHz with temperature, humidity and predicted landing" },
+    { key: "mesh", name: "LOCAL MESH NODES", tune: 906.875e6, mode: "NFM", ttl: 2 * 3600e3, sw: "#c4b5fd", desc: "Meshtastic, MeshCore and LoRa nodes your antenna hears (906.875 / 915 / 868 MHz presets)" },
+    { key: "uat", name: "LOCAL UAT AIRCRAFT", tune: 978e6, mode: "AM", ttl: 120e3, sw: "#7dd3fc", desc: "978 MHz UAT aircraft plus FIS-B ground towers and airport weather" },
+    { key: "acars", name: "LOCAL ACARS / VDL2", tune: 131.55e6, mode: "AM", ttl: 30 * 60e3, sw: "#fda4af", bands: ["acars", "vdl2"], desc: "Aircraft ACARS (131.550 MHz) and VDL2 (136.975 MHz): positions, ground stations and messages" },
+    { key: "dispatch", name: "LOCAL RADIO GPS UNITS", tune: 460.0e6, mode: "NFM", ttl: 30 * 60e3, sw: "#fb923c", desc: "GPS reports from P25, DMR, NXDN and TETRA radios (location data only)" },
+    { key: "meter", name: "LOCAL UTILITY METERS", tune: 912.6e6, mode: "AM", ttl: 60 * 60e3, sw: "#fcd34d", desc: "ERT smart meters (910-920 MHz); meters do not send their location, so pins are placed approximately near your receiver" },
+    { key: "hd", name: "LOCAL HD RADIO TOWERS", tune: 100.1e6, mode: "WFM", ttl: 6 * 3600e3, sw: "#f9a8d4", bands: ["fm"], desc: "FM stations carrying HD Radio digital sidebands, with tower location when the station sends it" },
+    { key: "sat", name: "AMATEUR SATELLITES (DOPPLER)", tune: 0, ttl: 10 * 60e3, sw: "#93c5fd", desc: "Amateur radio satellites overhead with Doppler-corrected downlink frequencies (works without a radio)" },
+    { key: "lte", name: "LTE ALERT AREAS", tune: 751e6, mode: "NFM", ttl: 3 * 3600e3, sw: "#f87171", desc: "Wireless Emergency Alert and ETWS areas plus LTE cells your antenna hears" },
     { key: "range", name: "RECEIVER RANGE / LIVE SIGNAL", tune: 0, sw: "#7dd3fc", desc: "Range rings around your receiver and the farthest signal decoded" },
   ];
   const BYKEY = Object.fromEntries(LAYERS.map((l) => [l.key, l]));
+  const MAPKEYS = LAYERS.filter((l) => l.key !== "range").map((l) => l.key);
   const PRESETS = [
     { id: "fm", label: "FM", hz: 100.1e6, mode: "WFM" },
     { id: "air", label: "Airband", hz: 121.5e6, mode: "AM" },
@@ -34,6 +45,16 @@
     { id: "ism", label: "433 ISM", hz: 433.92e6, mode: "AM" },
     { id: "pager", label: "Pagers 929", hz: 929.6125e6, mode: "NFM" },
     { id: "adsb", label: "1090 ADS-B", hz: 1090e6, mode: "AM" },
+    { id: "mesh", label: "Mesh 906.875", hz: 906.875e6, mode: "NFM" },
+    { id: "uat", label: "UAT 978", hz: 978e6, mode: "AM" },
+    { id: "acars", label: "ACARS 131.55", hz: 131.55e6, mode: "AM" },
+    { id: "dispatch", label: "Dispatch", hz: 460.0e6, mode: "NFM" },
+    { id: "sats", label: "Satellites", hz: 145.8e6, mode: "NFM" },
+    { id: "cb", label: "CB 27.185", hz: 27.185e6, mode: "AM" },
+    { id: "gmrs", label: "GMRS/FRS", hz: 462.5625e6, mode: "NFM" },
+    { id: "murs", label: "MURS", hz: 151.82e6, mode: "NFM" },
+    { id: "atsc", label: "ATSC TV", hz: 470.309441e6, mode: "NFM" },
+    { id: "ble", label: "BLE 2402", hz: 2402e6, mode: "NFM" },
   ];
   const MODES = ["WFM", "NFM", "AM", "USB", "LSB"];
   const SHIPTYPES = [[20, 29, "Wing in ground"], [30, 30, "Fishing"], [31, 32, "Towing"], [33, 33, "Dredging"], [34, 34, "Diving"], [35, 35, "Military"], [36, 36, "Sailing"], [37, 37, "Pleasure craft"], [40, 49, "High speed craft"], [50, 50, "Pilot"], [51, 51, "Search and rescue"], [52, 52, "Tug"], [53, 53, "Port tender"], [55, 55, "Law enforcement"], [58, 58, "Medical"], [60, 69, "Passenger"], [70, 79, "Cargo"], [80, 89, "Tanker"], [90, 99, "Other"]];
@@ -43,8 +64,10 @@
   const st = {
     dev: null, connecting: false, worker: null, audio: null, audioNext: 0,
     tuned: 100.1e6, tunerHz: 100.1e6, center: 0, rate: 0, mode: "WFM", gain: 62, squelch: -60, muted: true, scan: false,
-    layers: { adsb: false, ais: false, aprs: false, sonde: false, range: false }, order: [],
-    targets: { adsb: new Map(), ais: new Map(), aprs: new Map(), sonde: new Map() },
+    layers: Object.fromEntries(LAYERS.map((l) => [l.key, false])), order: [],
+    targets: Object.fromEntries(MAPKEYS.map((k) => [k, new Map()])),
+    ble: [], trains: [], cells: [], alerts: [], acarsMsgs: [], bursts: [], act: [], actFloor: -100, atsc: {}, hdSide: null,
+    sweep: null, zspan: [], satTrack: null, satInfo: null, airports: null, airportsLoading: false,
     pagers: [], devices: [], log: [], health: null, cap: { on: false, bytes: 0, secs: 0 }, level: -120,
     wb: null, wbOpen: false, tab: "tuner", rx: null, awaitingPin: false, message: "", msgKind: "", biasArmed: false,
     portapackSerial: false, step: 12500, fftRow: null, wfFloor: -95, stats: { workers: 0, usbCalls: 0, audioCtx: 0 },
@@ -55,17 +78,33 @@
   function plain(v) { return String(v == null ? "" : v).replace(/<[^>]*>/g, " ").replace(URLISH, "").replace(/\s+/g, " ").trim(); }
   function esc(v) { return plain(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
   const mhz = (hz) => (hz / 1e6).toFixed(hz >= 1e9 ? 3 : 4);
-  function bandOf(hz) {
-    const m = hz / 1e6;
-    if (Math.abs(m - 1090) < 1.2) return "adsb";
+  function bandOf(hz) { // keep in step with sdr-dsp.worker.js
+    const m = hz / 1e6, near = (f, t) => Math.abs(m - f) <= t;
+    if (near(1090, 1.2)) return "adsb";
+    if (near(978, 1.2)) return "uat";
     if (m >= 161.9 && m <= 162.1) return "ais";
-    if (Math.abs(m - 144.39) < 0.02 || Math.abs(m - 144.8) < 0.02) return "aprs";
+    if (near(144.39, 0.02) || near(144.8, 0.02)) return "aprs";
+    if ([1.84, 3.573, 7.074, 10.136, 14.074, 18.1, 21.074, 24.915, 28.074, 50.313, 3.578, 7.078, 14.078, 21.078, 28.078].some((f) => near(f, 0.004))) return "ft8";
     if (m >= 400 && m <= 406.1) return "sonde";
+    if (near(457.9375, 0.006) || near(452.9375, 0.006)) return "train";
+    if ([151.82, 151.88, 151.94, 154.57, 154.6].some((f) => near(f, 0.006))) return "voice";
     if ((m >= 152 && m <= 159) || (m >= 929 && m <= 932) || (m >= 466 && m <= 466.3)) return "pager";
-    if (Math.abs(m - 433.92) < 0.15 || Math.abs(m - 315) < 0.15) return "tpms";
+    if (m >= 129 && m <= 132) return "acars";
+    if (m >= 136.6 && m < 137) return "vdl2";
+    if ((m >= 137 && m <= 138) || (m >= 145.8 && m <= 146) || (m >= 435 && m <= 438)) return "sat";
+    if (near(908.42, 0.05) || near(868.42, 0.05) || near(916, 0.05)) return "zwave";
+    if (near(906.875, 0.3) || near(915, 0.15) || (m >= 868 && m <= 870) || near(910.525, 0.05)) return "mesh";
+    if (m >= 910 && m <= 920) return "meter";
+    if (m >= 2400 && m <= 2483.5) return "ble";
+    if ((m >= 617 && m <= 652) || (m >= 729 && m <= 756) || (m >= 869 && m <= 894) || (m >= 1805 && m <= 1880) || (m >= 1930 && m <= 1995) || (m >= 2110 && m <= 2200)) return "lte";
+    if ((m >= 470 && m <= 608) || (m >= 174 && m <= 216)) return "atsc";
+    if (near(433.92, 0.15) || near(315, 0.15) || near(345, 0.15) || near(319.5, 0.15)) return "tpms";
+    if ((m >= 26.96 && m <= 27.41) || (m >= 462.55 && m <= 462.73) || (m >= 467.55 && m <= 467.73) || (m >= 144 && m <= 148) || (m >= 420 && m <= 450) || (m >= 28 && m <= 29.7) || (m >= 50 && m <= 54)) return "voice";
+    if ((m >= 450 && m <= 470) || (m >= 851 && m <= 869) || (m >= 380 && m <= 400) || (m >= 769 && m <= 775) || (m >= 806 && m <= 824) || (m >= 159 && m <= 174)) return "dispatch";
     if (m >= 87.5 && m <= 108.1) return "fm";
     return "other";
   }
+  const isHackrf = () => Boolean(st.dev) && (st.dev.kind === "hackrf" || (st.dev.sim && st.dev.version !== "R828D"));
   const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   function addLog(text) { st.log.unshift({ t: nowTime(), text: plain(text) }); if (st.log.length > 200) st.log.length = 200; if (st.wbOpen && st.tab === "log") renderLog(); }
   function support() { return st.support || (st.support = D() ? D().support() : { ok: false, reason: "SDR driver missing." }); }
@@ -112,14 +151,18 @@
 
   // ------------------------------------------------------------------ render
   function setText(sel, text) { for (const n of document.querySelectorAll(sel)) if (n.textContent !== text) n.textContent = text; }
+  // One radio, one band: a layer is live when the radio is tuned to one of its bands.
   function isLive(key) {
     const l = BYKEY[key];
+    if (!l) return false;
+    if (key === "sat") return Boolean(st.layers.sat);
     if (!st.dev || !l.tune) return false;
-    return bandOf(st.tuned) === bandOf(l.tune);
+    return (l.bands || [bandOf(l.tune)]).includes(bandOf(st.tuned));
   }
   function countText(key) {
     if (!st.layers[key]) return "—";
     if (key === "range") return receiver() ? "ON" : "TAP MAP";
+    if (key === "sat") return st.satInfo ? String(visibleTargets("sat").filter((t) => t.visible).length || visibleTargets("sat").length) : "LOADING";
     if (!st.dev) return "NO RADIO";
     if (!isLive(key)) return "PAUSED";
     return String(visibleTargets(key).length);
@@ -260,11 +303,15 @@
 
   async function tune(hz, opts) {
     opts = opts || {};
+    if (!opts.keepTrack) st.satTrack = null;
+    if (st.sweep && st.sweep.on && !opts.fromSweep) st.sweep.on = false;
     const dev = st.dev;
     const band = bandOf(hz);
     if (dev) hz = Math.max(dev.minHz, Math.min(dev.maxHz, hz));
-    const rate = band === "adsb" ? 2.0e6 : 2.4e6;
-    const center = band === "adsb" ? hz : hz - 300e3;
+    if (band === "ble" && dev && !isHackrf()) { addLog("Bluetooth LE needs a HackRF (2.4 GHz); this radio stops at " + mhz(dev.maxHz) + " MHz."); setMessage("Requires HackRF (2.4 GHz) for Bluetooth LE."); renderWorkbench(); return; }
+    const rtl = Boolean(dev) && !isHackrf();
+    const plan = { adsb: [2.0e6, 0], uat: [2083334, 0], mesh: [2.0e6, 300e3], ble: [4.0e6, 1e6], lte: [rtl ? 1.92e6 : 3.84e6, 0] }[band] || [2.4e6, 300e3];
+    const rate = plan[0], center = hz - plan[1];
     if (opts.mode) st.mode = opts.mode;
     const prevBand = bandOf(st.tuned);
     st.tuned = hz;
@@ -301,11 +348,12 @@
       return;
     }
     L().show(key, on);
+    if (key === "sat") { if (on) startSats(); else stopSats(); hideCardFor(key); render(); return; }
     if (on) { redraw(key); if (st.dev) tune(l.tune, { mode: l.mode, fromLayer: true }); }
     else {
       L().clear(key); st.targets[key].clear();
       const next = focusLayer();
-      if (st.dev && bandOf(st.tuned) === bandOf(l.tune)) tune(next ? next.tune : st.tunerHz, { mode: next ? next.mode : undefined, fromLayer: Boolean(next) });
+      if (st.dev && (l.bands || [bandOf(l.tune)]).includes(bandOf(st.tuned))) tune(next ? next.tune : st.tunerHz, { mode: next ? next.mode : undefined, fromLayer: Boolean(next) });
     }
     hideCardFor(key);
     drawRange();
@@ -350,7 +398,7 @@
     if (!st.layers.range) { L().setRange(null); return; }
     const rx = receiver();
     let far = 0;
-    if (rx) for (const k of ["adsb", "ais", "aprs", "sonde"]) for (const t of visibleTargets(k)) { if (!isLive(k)) continue; const d = L().distanceKm(rx, t); if (d < 600) far = Math.max(far, d); }
+    if (rx) for (const k of MAPKEYS) for (const t of visibleTargets(k)) { if (k === "sat" || k === "meter" || t.fixed) continue; if (!isLive(k)) continue; const d = L().distanceKm(rx, t); if (d < 600) far = Math.max(far, d); }
     st.liveKm = far;
     L().setRange(rx, far);
   }
@@ -358,8 +406,8 @@
   // ------------------------------------------------------------------ worker messages
   function onWorker(m) {
     switch (m.t) {
-      case "fft": st.fftRow = m.db; drawSpectrum(m); break;
-      case "level": st.level = m.db; break;
+      case "fft": st.fftRow = m.db; drawSpectrum(m); onSweepFft(m); break;
+      case "level": st.level = m.db; pushZspan(m.db); break;
       case "audio": playAudio(m); break;
       case "adsb": onAdsb(m.msg); break;
       case "ais": onAis(m.msg); break;
@@ -367,6 +415,21 @@
       case "sonde": onSonde(m.msg); break;
       case "pager": onPager(m.msg); break;
       case "device": onDevice(m.msg); break;
+      case "mesh": onMesh(m.msg); break;
+      case "uat": onUat(m.msg); break;
+      case "fisb": onFisb(m.msg); break;
+      case "acars": onAcars(m.msg); break;
+      case "dispatch": onDispatch(m.msg); break;
+      case "meter": onMeter(m.msg); break;
+      case "hd": onHd(m.msg); break;
+      case "hdside": onHdSide(m.msg); break;
+      case "lte": onLte(m.msg); break;
+      case "ft8": onFt8(m.msg); break;
+      case "ble": onBle(m.msg); break;
+      case "eot": onEot(m.msg); break;
+      case "burst": st.bursts.unshift({ t: nowTime(), at: Date.now(), runs: m.runs || [], label: plain(m.label), rssi: m.rssi, freq: st.tuned }); if (st.bursts.length > 30) st.bursts.length = 30; if (st.wbOpen && st.tab === "spectrum") renderSpectrumTab(); break;
+      case "act": st.act = m.list || []; st.actFloor = m.floor; if (st.wbOpen && st.tab === "spectrum") renderSpectrumTab(); break;
+      case "atsc": if (m.msg && m.msg.on) { st.atsc[m.msg.channel || mhz(m.msg.freq)] = Object.assign({ t: nowTime(), at: Date.now() }, m.msg); if (st.wbOpen && st.tab === "trains") renderTrains(); } break;
       case "health": st.health = m.h; if (st.wbOpen && st.tab === "log") renderLog(); break;
       case "cap": st.cap = { on: m.on, bytes: m.bytes, secs: m.secs }; if (st.wbOpen && st.tab === "capture") renderCapture(); break;
       case "capdata": saveCapture(m); break;
@@ -380,7 +443,7 @@
     if (!map) return [];
     const ttl = BYKEY[key].ttl, now = Date.now();
     const out = [];
-    for (const t of map.values()) if (now - t.seen <= ttl && Number.isFinite(t.lat)) out.push(t);
+    for (const t of map.values()) if (now - t.seen <= (t.ttl || ttl) && Number.isFinite(t.lat)) out.push(t);
     return out;
   }
   let drawQueued = false;
@@ -402,7 +465,7 @@
     if (!L() || !st.layers[key]) return;
     const now = Date.now(), ttl = BYKEY[key].ttl;
     for (const [id, t] of st.targets[key]) {
-      if (now - t.seen > ttl) { st.targets[key].delete(id); L().removeItem(key, id); continue; }
+      if (now - t.seen > (t.ttl || ttl)) { st.targets[key].delete(id); L().removeItem(key, id); continue; }
       if (Number.isFinite(t.lat)) L().upsert(key, t);
     }
   }
@@ -476,7 +539,7 @@
   function onSonde(m) {
     if (!m || !m.serial || !accepts("sonde")) return;
     const t = touch("sonde", m.serial, { serial: m.serial, path: [] });
-    for (const k of ["alt", "vE", "vN", "vU", "sats", "battery", "frame", "type"]) if (m[k] != null) t[k] = m[k];
+    for (const k of ["alt", "vE", "vN", "vU", "sats", "battery", "frame", "type", "tempC", "rh", "ptu"]) if (m[k] != null) t[k] = m[k];
     if (Number.isFinite(m.lat)) {
       t.lat = m.lat; t.lon = m.lon;
       const last = t.path[t.path.length - 1];
@@ -499,10 +562,178 @@
   function onDevice(m) {
     let d = st.devices.find((x) => x.kind === m.kind && x.id === m.id);
     if (!d) { d = { kind: m.kind, id: m.id, first: nowTime(), count: 0 }; st.devices.unshift(d); if (st.devices.length > 200) st.devices.pop(); }
-    Object.assign(d, { kpa: m.kpa, tempC: m.tempC, rssi: m.rssi, last: nowTime(), at: Date.now(), freq: st.tuned });
+    Object.assign(d, { kpa: m.kpa, tempC: m.tempC, humidity: m.humidity, fmt: m.fmt, detail: m.detail, rssi: m.rssi, last: nowTime(), at: Date.now(), freq: st.tuned });
     d.count += 1;
     if (st.wbOpen && st.tab === "devices") renderDevices();
     badge("devices", st.devices.length);
+  }
+  // ---- Phase 2 handlers
+  function onMesh(m) {
+    if (!m || !m.id || !accepts("mesh")) return;
+    const t = touch("mesh", m.id, { nodeId: m.id });
+    for (const k of ["proto", "longName", "shortName", "hw", "portName", "snr", "rssi", "hops", "sf", "bw", "preset", "encrypted", "nodeType", "channel", "cfoHz", "alt"]) if (m[k] != null && m[k] !== "") t[k] = m[k];
+    if (m.to) t.to = m.to;
+    if (Number.isFinite(m.lat) && (m.lat || m.lon)) { t.lat = m.lat; t.lon = m.lon; pushTrack(t, 40); }
+    t.icon = "mesh";
+    t.name = t.longName || t.shortName || m.id;
+    t.label = t.shortName || t.longName || m.id;
+    scheduleDraw("mesh");
+  }
+  function onUat(m) {
+    if (!m || !m.icao || !accepts("uat")) return;
+    const t = touch("uat", "ac-" + m.icao, { icao: m.icao });
+    for (const k of ["callsign", "alt", "altType", "speed", "heading", "vrate", "addrType", "ground", "nic", "emitter"]) if (m[k] != null && m[k] !== "") t[k] = m[k];
+    if (Number.isFinite(m.lat)) { t.lat = m.lat; t.lon = m.lon; pushTrack(t); }
+    t.icon = "uat"; t.uatKind = "aircraft";
+    t.name = t.callsign || m.icao; t.label = t.callsign || m.icao;
+    scheduleDraw("uat");
+  }
+  function onFisb(m) {
+    if (!m || !m.ground || !accepts("uat")) return;
+    const g = m.ground;
+    const t = touch("uat", "gs-" + g.lat.toFixed(3) + "," + g.lon.toFixed(3), { uatKind: "tower", fixed: true, ttl: 30 * 60e3 });
+    Object.assign(t, { lat: g.lat, lon: g.lon, slot: g.slot, site: g.site, icon: "tower", name: "FIS-B ground station", label: "FIS-B" });
+    t.products = (t.products || 0) + m.texts.length;
+    for (const x of m.texts) metarPin(x);
+    scheduleDraw("uat");
+  }
+  function loadAirports() {
+    if (st.airports || st.airportsLoading) return;
+    st.airportsLoading = true;
+    fetch("/geo/us-airports.json").then((r) => (r.ok ? r.json() : null)).then((j) => { st.airports = (j && j.airports) || {}; st.airportsLoading = false; for (const x of st.pendingWx || []) metarPin(x); st.pendingWx = []; }).catch(() => { st.airportsLoading = false; });
+  }
+  function metarPin(x) {
+    const mm = /^(?:METAR|SPECI|TAF)?\s*(K?[A-Z0-9]{3,4})\s/.exec(x.text);
+    if (!mm) return;
+    if (!st.airports) { (st.pendingWx = st.pendingWx || []).push(x); if (st.pendingWx.length > 40) st.pendingWx.shift(); loadAirports(); return; }
+    const icao = mm[1], faa = icao.length === 4 && icao[0] === "K" ? icao.slice(1) : icao, a = st.airports[faa] || st.airports[icao];
+    if (!a) return;
+    const t = touch("uat", "wx-" + icao, { uatKind: "metar", fixed: true, ttl: 90 * 60e3 });
+    Object.assign(t, { lat: a[3], lon: a[4], icao, airport: a[0], city: a[1] + (a[2] ? ", " + a[2] : ""), metar: plain(x.text), wxTime: x.time, icon: "metar", name: icao + " weather", label: icao });
+    scheduleDraw("uat");
+  }
+  function onAcars(m) {
+    if (!m) return;
+    if (m.text || m.label) { st.acarsMsgs.unshift({ t: nowTime(), proto: m.proto, freq: m.freq || st.tuned, flight: plain(m.flight || m.reg || m.src || ""), label: plain(m.label || ""), text: plain(m.text || "") }); if (st.acarsMsgs.length > 150) st.acarsMsgs.length = 150; }
+    if (!accepts("acars")) return;
+    if (m.gsLat != null) {
+      const t = touch("acars", "gs-" + m.src, { fixed: true, ttl: 2 * 3600e3 });
+      Object.assign(t, { lat: m.gsLat, lon: m.gsLon, gsName: m.gsName, addr: m.src, icon: "gs", acarsKind: "ground", name: (m.gsName || "VDL2") + " ground station", label: m.gsName || m.src, proto: "VDL2", freq: m.freq });
+      scheduleDraw("acars");
+      return;
+    }
+    const id = m.flight || m.reg || m.src;
+    if (!id) return;
+    const t = touch("acars", "ac-" + id, { acarsKind: "aircraft" });
+    for (const k of ["flight", "reg", "label", "proto", "freq", "alt", "msn"]) if (m[k] != null && m[k] !== "") t[k] = m[k];
+    t.msgs = [{ t: nowTime(), label: plain(m.label), text: plain(m.text) }].concat(t.msgs || []).slice(0, 5);
+    if (Number.isFinite(m.lat)) { t.lat = m.lat; t.lon = m.lon; pushTrack(t, 30); }
+    t.icon = "acars"; t.name = t.flight || t.reg || id; t.label = t.flight || t.reg || id;
+    scheduleDraw("acars");
+  }
+  function onDispatch(m) {
+    if (!m || !accepts("dispatch")) return;
+    const id = m.proto + "-" + (m.radioId || "?");
+    const t = touch("dispatch", id, { proto: m.proto, radioId: m.radioId });
+    for (const k of ["talkgroup", "speed", "heading", "radius", "freq"]) if (m[k] != null) t[k] = m[k];
+    if (Number.isFinite(m.lat)) { t.lat = m.lat; t.lon = m.lon; pushTrack(t, 30); }
+    t.icon = "dispatch"; t.name = m.proto + " radio " + (m.radioId || ""); t.label = m.proto + " " + (m.radioId || "");
+    scheduleDraw("dispatch");
+  }
+  // Meters never send a position: spread them on a small deterministic ring near the receiver.
+  function onMeter(m) {
+    if (!m || !m.id) return;
+    onDevice({ kind: "Meter", id: m.id, fmt: m.proto, detail: m.kind + " · reading " + m.consumption + (m.tamper ? " · tamper flag" : ""), rssi: m.rssi });
+    if (!accepts("meter")) return;
+    const t = touch("meter", m.id, { meterId: m.id, fixed: true });
+    Object.assign(t, { proto: m.proto, ert: m.ert, meterKind: m.kind, consumption: m.consumption, tamper: m.tamper, rssi: m.rssi });
+    const rx = receiver();
+    if (rx && !Number.isFinite(t.lat)) { let h = 0; for (const c of String(m.id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; const p = L().destination(rx, 0.3 + (h % 2200) / 1000, h % 360); t.lat = p.lat; t.lon = p.lon; }
+    t.icon = "meter"; t.name = m.kind + " meter " + m.id; t.label = m.kind + " " + String(m.id).slice(-4);
+    scheduleDraw("meter");
+  }
+  function onHd(m) {
+    if (!m || !m.call || !accepts("hd")) return;
+    const t = touch("hd", m.call, { fixed: true });
+    Object.assign(t, { call: m.call, stationName: m.name, freq: m.freq, programs: m.programs, icon: "hd", name: m.call + " · " + m.name, label: m.call + " HD" });
+    if (Number.isFinite(m.lat)) { t.lat = m.lat; t.lon = m.lon; }
+    if (st.hdSide && Math.abs(st.hdSide.freq - m.freq) < 50e3) t.sidebands = st.hdSide;
+    scheduleDraw("hd");
+  }
+  function onHdSide(m) {
+    if (!m) return;
+    st.hdSide = Object.assign({ at: Date.now() }, m);
+    for (const t of st.targets.hd.values()) if (Math.abs(t.freq - m.freq) < 50e3) t.sidebands = st.hdSide;
+  }
+  function onLte(m) {
+    if (!m) return;
+    if (m.kind === "cell") {
+      let c = st.cells.find((x) => Math.abs(x.freq - m.freq) < 1e5 && x.nid2 === m.nid2);
+      if (!c) { c = { freq: m.freq, nid2: m.nid2, first: nowTime(), count: 0 }; st.cells.unshift(c); if (st.cells.length > 40) st.cells.pop(); }
+      Object.assign(c, { score: m.score, last: nowTime(), at: Date.now() }); c.count += 1;
+      if (st.wbOpen && st.tab === "trains") renderTrains();
+      return;
+    }
+    const key = m.msgId + "-" + m.serial;
+    if (!st.alerts.find((a) => a.key === key)) { st.alerts.unshift({ key, t: nowTime(), category: plain(m.category), text: plain(m.text), freq: m.freq }); if (st.alerts.length > 40) st.alerts.pop(); }
+    if (st.wbOpen && st.tab === "trains") renderTrains();
+    if (!accepts("lte") || !m.poly || m.poly.length < 3) return;
+    const t = touch("lte", key, { fixed: true });
+    const lat = m.poly.reduce((a, p) => a + p[0], 0) / m.poly.length, lon = m.poly.reduce((a, p) => a + p[1], 0) / m.poly.length;
+    Object.assign(t, { lat, lon, poly: m.poly, category: m.category, text: m.text, msgId: m.msgId, serial: m.serial, freq: m.freq, icon: "lte", name: m.category, label: (m.category || "Alert").split(" (")[0].toUpperCase() });
+    scheduleDraw("lte");
+  }
+  function onFt8(m) {
+    if (!m || !m.call || !Number.isFinite(m.lat) || !accepts("aprs")) return;
+    const t = touch("aprs", "ft8-" + m.call, { call: m.call, ttl: 30 * 60e3 });
+    Object.assign(t, { lat: m.lat, lon: m.lon, grid: m.grid, mode: m.mode, snr: m.snr, ftText: plain(m.text), freq: m.freq, icon: "ft8", name: m.call + " (" + m.mode + ")", label: m.call });
+    scheduleDraw("aprs");
+  }
+  function onBle(m) {
+    if (!m || !m.addr) return;
+    let d = st.ble.find((x) => x.addr === m.addr);
+    if (!d) { d = { addr: m.addr, first: nowTime(), count: 0 }; st.ble.unshift(d); if (st.ble.length > 200) st.ble.pop(); }
+    Object.assign(d, { name: plain(m.name || d.name || ""), company: plain(m.company || d.company || ""), tag: plain(m.tag || d.tag || ""), pdu: m.pdu, rssi: m.rssi, txPower: m.txPower, chan: m.chan, last: nowTime(), at: Date.now() });
+    d.count += 1;
+    if (st.wbOpen && st.tab === "ble") renderBle();
+    badge("ble", st.ble.length);
+  }
+  function onEot(m) {
+    if (!m) return;
+    let d = st.trains.find((x) => x.unit === m.unit && x.kind === m.kind);
+    if (!d) { d = { unit: m.unit, kind: m.kind, first: nowTime(), count: 0 }; st.trains.unshift(d); if (st.trains.length > 100) st.trains.pop(); }
+    Object.assign(d, { psi: m.psi, charge: m.charge, battery: m.battery, motion: m.motion, markerLight: m.markerLight, valve: m.valve, last: nowTime(), at: Date.now(), freq: st.tuned });
+    d.count += 1;
+    if (st.wbOpen && st.tab === "trains") renderTrains();
+    badge("trains", st.trains.length + st.alerts.length);
+  }
+  // ---- satellites (lazy: the script and orbit data load only when the layer is switched on)
+  let satsScript = null;
+  function startSats() {
+    const go = () => root.GsaSdrSats.start(receiver, onSats, (e) => { addLog("Satellites: " + (e && e.message)); st.satInfo = { error: true }; render(); });
+    if (root.GsaSdrSats) { go(); return; }
+    if (satsScript) return;
+    satsScript = document.createElement("script");
+    satsScript.src = "/sdr-sats.js?v=" + V; satsScript.async = true;
+    satsScript.onload = () => { if (st.layers.sat) go(); };
+    satsScript.onerror = () => { satsScript = null; addLog("Satellites: could not load sdr-sats.js"); };
+    document.head.appendChild(satsScript);
+  }
+  function stopSats() { if (root.GsaSdrSats) root.GsaSdrSats.stop(); st.satTrack = null; if (L()) L().clear("sat"); st.targets.sat.clear(); st.satInfo = null; }
+  function onSats(list) {
+    if (!st.layers.sat) return;
+    st.satInfo = root.GsaSdrSats.info();
+    const rx = receiver();
+    for (const r of list) {
+      if (!Number.isFinite(r.lat)) continue;
+      const t = st.targets.sat.get(r.id) || { id: r.id, first: Date.now(), packets: 0 };
+      Object.assign(t, { seen: Date.now(), lat: r.lat, lon: r.lon, altKm: r.altKm, norad: r.norad, satName: r.name, epoch: r.epoch, downlink: r.downlink, service: r.service, az: r.az, el: r.el, rangeKm: r.rangeKm, rangeRate: r.rangeRate, doppler: r.doppler, visible: rx ? r.visible : false, track: r.track, icon: "sat", name: r.name, label: r.name.replace(/\s*\(.*?\)\s*/g, " ").trim().slice(0, 18) });
+      st.targets.sat.set(r.id, t);
+      L().upsert("sat", t);
+    }
+    if (st.satTrack && st.dev) { const s2 = list.find((x) => x.id === st.satTrack); if (s2 && s2.downlink && Number.isFinite(s2.doppler)) { const f = Math.round(s2.downlink * 1e6 + s2.doppler); if (Math.abs(f - st.tuned) > 150) tune(f, { quiet: true, keepTrack: true }); } }
+    if (st.wbOpen && st.tab === "voice") renderVoice();
+    render(); refreshCard();
   }
   function badge(tab, n) { for (const b of document.querySelectorAll(`[data-gsr-badge="${tab}"]`)) b.textContent = n ? String(n) : ""; }
 
@@ -520,7 +751,19 @@
     if (kind === "adsb") return src + rows([["ICAO", t.icao], ["Callsign", t.callsign], ["Altitude", Number.isFinite(t.alt) ? Math.round(t.alt).toLocaleString() + " ft" : ""], ["Ground speed", Number.isFinite(t.speed) ? Math.round(t.speed) + " kt" : ""], ["Heading", Number.isFinite(t.heading) ? Math.round(t.heading) + "°" : ""], ["Vertical rate", Number.isFinite(t.vrate) ? t.vrate + " ft/min" : ""], ["Position", t.cpr ? "CPR " + t.cpr : ""], ["Signal", Number.isFinite(t.rssi) ? t.rssi + " dBFS" : ""], ["Range", rangeText(t)], ["Messages", t.packets], ["Last heard", ago(t.seen)]]);
     if (kind === "ais") return src + rows([["MMSI", t.mmsi], ["Name", t.shipName], ["Call sign", t.callsign], ["Class", t.cls], ["Ship type", t.shiptype != null ? shipType(t.shiptype) : ""], ["Speed", Number.isFinite(t.sog) ? t.sog.toFixed(1) + " kn" : ""], ["Course", Number.isFinite(t.cog) ? Math.round(t.cog) + "°" : ""], ["Heading", Number.isFinite(t.heading) ? t.heading + "°" : ""], ["Destination", t.dest], ["Channel", t.channel ? "AIS " + t.channel : ""], ["Range", rangeText(t)], ["Messages", t.packets], ["Last heard", ago(t.seen)]]);
     if (kind === "aprs") return src + rows([["Call sign", t.call], ["Station", APRS_SYMBOLS[t.symbol] || (t.symbol ? "Symbol " + t.symbol : "")], ["Comment", t.comment || t.status], ["Format", t.format], ["Speed", Number.isFinite(t.speedKn) ? t.speedKn + " kn" : ""], ["Path", t.digis], ["Range", rangeText(t)], ["Packets", t.packets], ["Last heard", ago(t.seen)]]);
-    if (kind === "sonde") return src + rows([["Serial", t.serial], ["Type", t.type || "RS41"], ["Altitude", Number.isFinite(t.alt) ? Math.round(t.alt).toLocaleString() + " m" : ""], ["Climb", Number.isFinite(t.vU) ? t.vU.toFixed(1) + " m/s" : ""], ["Wind", Number.isFinite(t.vE) ? Math.hypot(t.vE, t.vN).toFixed(1) + " m/s" : ""], ["Satellites", t.sats], ["Frame", t.frame], ["Predicted burst", t.burst ? t.burst.lat.toFixed(3) + ", " + t.burst.lon.toFixed(3) : ""], ["Predicted landing", t.landing ? t.landing.lat.toFixed(3) + ", " + t.landing.lon.toFixed(3) + (t.landMin ? " in about " + t.landMin + " min" : "") : ""], ["Range", rangeText(t)], ["Last heard", ago(t.seen)]]) + `<p class="gsr-src">Landing is a simple estimate from the last measured climb rate and wind.</p>`;
+    if (kind === "sonde") return src + rows([["Serial", t.serial], ["Type", t.type || "RS41"], ["Temperature", Number.isFinite(t.tempC) ? t.tempC.toFixed(1) + " °C" : t.ptu === "calibrating" ? "calibrating…" : ""], ["Humidity", Number.isFinite(t.rh) ? t.rh + " %" : ""], ["Altitude", Number.isFinite(t.alt) ? Math.round(t.alt).toLocaleString() + " m" : ""], ["Climb", Number.isFinite(t.vU) ? t.vU.toFixed(1) + " m/s" : ""], ["Wind", Number.isFinite(t.vE) ? Math.hypot(t.vE, t.vN).toFixed(1) + " m/s" : ""], ["Satellites", t.sats], ["Frame", t.frame], ["Predicted burst", t.burst ? t.burst.lat.toFixed(3) + ", " + t.burst.lon.toFixed(3) : ""], ["Predicted landing", t.landing ? t.landing.lat.toFixed(3) + ", " + t.landing.lon.toFixed(3) + (t.landMin ? " in about " + t.landMin + " min" : "") : ""], ["Range", rangeText(t)], ["Last heard", ago(t.seen)]]) + `<p class="gsr-src">Landing is a simple estimate from the last measured climb rate and wind.</p>`;
+    if (kind === "mesh") return src + rows([["Node", t.nodeId], ["Long name", t.longName], ["Short name", t.shortName], ["Protocol", t.proto], ["Packet", t.portName], ["Hardware", t.hw || t.nodeType], ["Hops", t.hops], ["SNR", Number.isFinite(t.snr) ? t.snr + " dB" : ""], ["Signal", Number.isFinite(t.rssi) ? t.rssi + " dBFS" : ""], ["LoRa", t.sf ? "SF" + t.sf + " · " + t.bw / 1e3 + " kHz" + (t.preset ? " · " + t.preset : "") : ""], ["Encrypted", t.encrypted === true ? "yes (private channel)" : t.encrypted === false ? "no (default key)" : ""], ["Altitude", Number.isFinite(t.alt) && t.alt ? t.alt + " m" : ""], ["Range", rangeText(t)], ["Packets", t.packets], ["Last heard", ago(t.seen)]]);
+    if (kind === "uat" && t.uatKind === "tower") return src + rows([["Type", "FIS-B ground station"], ["Position", t.lat.toFixed(3) + ", " + t.lon.toFixed(3)], ["Time slot", t.slot], ["Products heard", t.products], ["Range", rangeText(t)], ["Last heard", ago(t.seen)]]);
+    if (kind === "uat" && t.uatKind === "metar") return src + rows([["Airport", t.icao + " · " + (t.airport || "")], ["City", t.city], ["Report time", t.wxTime], ["Weather (METAR)", t.metar], ["Source", "FIS-B uplink over 978 MHz"], ["Last heard", ago(t.seen)]]);
+    if (kind === "uat") return src + rows([["ICAO", t.icao], ["Callsign", t.callsign], ["Address type", t.addrType], ["Altitude", Number.isFinite(t.alt) ? Math.round(t.alt).toLocaleString() + " ft " + (t.altType || "") : ""], ["Ground speed", Number.isFinite(t.speed) ? t.speed + " kt" : ""], ["Track", Number.isFinite(t.heading) ? t.heading + "°" : ""], ["Vertical rate", Number.isFinite(t.vrate) ? t.vrate + " ft/min" : ""], ["On ground", t.ground ? "yes" : ""], ["Range", rangeText(t)], ["Messages", t.packets], ["Last heard", ago(t.seen)]]);
+    if (kind === "acars" && t.acarsKind === "ground") return src + rows([["Ground station", t.gsName], ["Address", t.addr], ["Link", "VDL Mode 2 · " + (t.freq ? mhz(t.freq) + " MHz" : "")], ["Position", "from its XID broadcast (0.1° precision)"], ["Range", rangeText(t)], ["Last heard", ago(t.seen)]]);
+    if (kind === "acars") return src + rows([["Flight", t.flight], ["Registration", t.reg], ["Link", (t.proto || "ACARS") + (t.freq ? " · " + mhz(t.freq) + " MHz" : "")], ["Altitude", Number.isFinite(t.alt) ? Math.round(t.alt).toLocaleString() + " ft" : ""], ["Range", rangeText(t)], ["Messages", t.packets], ["Last heard", ago(t.seen)]]) + (t.msgs && t.msgs.length ? `<div class="gsr-card-msgs">${t.msgs.map((x) => `<p><time>${esc(x.t)}</time> <b>${esc(x.label)}</b> ${esc(x.text)}</p>`).join("")}</div>` : "");
+    if (kind === "dispatch") return src + rows([["Radio", t.proto + " · ID " + (t.radioId || "?")], ["Talkgroup", t.talkgroup], ["Speed", Number.isFinite(t.speed) ? Math.round(t.speed) + " km/h" : ""], ["Heading", Number.isFinite(t.heading) ? Math.round(t.heading) + "°" : ""], ["Accuracy", t.radius ? "± " + t.radius + " m" : ""], ["Frequency", t.freq ? mhz(t.freq) + " MHz" : ""], ["Range", rangeText(t)], ["Reports", t.packets], ["Last heard", ago(t.seen)]]) + `<p class="gsr-src">Location data only. Voice is encrypted or not decoded.</p>`;
+    if (kind === "meter") return src + rows([["Meter ID", t.meterId], ["Utility", t.meterKind], ["Protocol", t.proto + " · ERT type " + t.ert], ["Reading", t.consumption], ["Tamper flags", t.tamper ? "set" : "clear"], ["Signal", Number.isFinite(t.rssi) ? t.rssi + " dBFS" : ""], ["Packets", t.packets], ["Last heard", ago(t.seen)]]) + `<p class="gsr-src">Meters do not send their location. This pin is placed approximately near your receiver.</p>`;
+    if (kind === "hd") return src + rows([["Station", t.call], ["Name", t.stationName], ["Frequency", t.freq ? mhz(t.freq) + " MHz" : ""], ["Digital programs", t.programs ? "HD1-HD" + t.programs : ""], ["Digital sidebands", t.sidebands ? (t.sidebands.on ? "present (" + t.sidebands.lower + " / " + t.sidebands.upper + " dB over noise)" : "not detected right now") : ""], ["Tower", Number.isFinite(t.lat) ? t.lat.toFixed(4) + ", " + t.lon.toFixed(4) : ""], ["Range", rangeText(t)], ["Last heard", ago(t.seen)]]);
+    if (kind === "sat") return `<span data-sdr-card="${esc(item.id)}" hidden></span><p class="gsr-src">Orbit from ${esc((st.satInfo && st.satInfo.source) || "CelesTrak")} · position by SGP4 in your browser</p>` + rows([["Satellite", t.satName], ["NORAD", t.norad], ["Altitude", Number.isFinite(t.altKm) ? Math.round(t.altKm) + " km" : ""], ["Downlink", t.downlink ? t.downlink.toFixed(3) + " MHz · " + t.service : "not listed"], ["Doppler now", Number.isFinite(t.doppler) ? (t.doppler >= 0 ? "+" : "") + Math.round(t.doppler) + " Hz" : receiver() ? "" : "place a receiver to see Doppler"], ["Tune to", t.downlink && Number.isFinite(t.doppler) ? ((t.downlink * 1e6 + t.doppler) / 1e6).toFixed(4) + " MHz" : ""], ["Elevation", Number.isFinite(t.el) ? t.el.toFixed(1) + "°" + (t.el > 0 ? " (overhead now)" : " (below horizon)") : ""], ["Azimuth", Number.isFinite(t.az) ? Math.round(t.az) + "°" : ""], ["Distance", Number.isFinite(t.rangeKm) ? Math.round(t.rangeKm).toLocaleString() + " km" : ""], ["Elements epoch", t.epoch]]);
+    if (kind === "lte") return src + rows([["Alert", t.category], ["Message", t.text], ["Message ID", t.msgId], ["Serial", t.serial], ["Carrier", t.freq ? mhz(t.freq) + " MHz" : ""], ["Area", t.poly ? t.poly.length + "-point polygon" : ""], ["Last heard", ago(t.seen)]]);
+    if (kind === "aprs" && t.icon === "ft8") return src + rows([["Call sign", t.call], ["Mode", t.mode], ["Grid", t.grid + " (pin is the grid square centre)"], ["Message", t.ftText], ["SNR", Number.isFinite(t.snr) ? t.snr + " dB" : ""], ["Dial", t.freq ? mhz(t.freq) + " MHz" : ""], ["Range", rangeText(t)], ["Last heard", ago(t.seen)]]);
     if (kind === "range") { const rx = receiver(); return rows([["Receiver", rx ? rx.name : "Not placed"], ["Rings", "50, 100 and 200 km"], ["Farthest live signal", st.liveKm ? Math.round(st.liveKm) + " km" : "none yet"]]); }
     return "";
   }
@@ -572,7 +815,7 @@
   }
 
   // ------------------------------------------------------------------ workbench
-  const TABS = [["tuner", "TUNER & WATERFALL"], ["pagers", "PAGERS"], ["devices", "DEVICES"], ["capture", "CAPTURE"], ["log", "LOG"]];
+  const TABS = [["tuner", "TUNER & WATERFALL"], ["spectrum", "SPECTRUM & SEARCH"], ["pagers", "PAGERS"], ["devices", "DEVICES"], ["ble", "BLUETOOTH"], ["voice", "VOICE & HAM"], ["trains", "TRAINS · CELL · TV"], ["capture", "CAPTURE"], ["log", "LOG"]];
   function buildWorkbench() {
     if (st.wb) return st.wb;
     const host = document.querySelector(".stage") || document.body;
@@ -599,8 +842,12 @@
       `<label><span>GAIN <b data-gsr-gv></b></span><input type="range" min="0" max="100" step="1" data-gsr-gain></label></div>` +
       `<div class="gsr-row"><button type="button" class="gsr-btn" data-gsr="mute" aria-pressed="true">AUDIO MUTED</button><button type="button" class="gsr-btn" data-gsr="scan" aria-pressed="false">SCAN</button><span class="gsr-meter"><i data-gsr-meter></i></span><span class="gsr-level" data-gsr-level>—</span></div>` +
       `<p class="gsr-hint" data-gsr-bandhint></p></div>` +
+      `<div class="gsr-pane" data-gsr-pane="spectrum" hidden></div>` +
       `<div class="gsr-pane" data-gsr-pane="pagers" hidden></div>` +
       `<div class="gsr-pane" data-gsr-pane="devices" hidden></div>` +
+      `<div class="gsr-pane" data-gsr-pane="ble" hidden></div>` +
+      `<div class="gsr-pane" data-gsr-pane="voice" hidden></div>` +
+      `<div class="gsr-pane" data-gsr-pane="trains" hidden></div>` +
       `<div class="gsr-pane" data-gsr-pane="capture" hidden></div>` +
       `<div class="gsr-pane" data-gsr-pane="log" hidden></div>` +
       `</div>`;
@@ -633,11 +880,16 @@
     if (!st.wb || !st.wbOpen) return;
     renderWorkbenchHead();
     if (st.tab === "tuner") renderTuner();
+    else if (st.tab === "spectrum") renderSpectrumTab();
     else if (st.tab === "pagers") renderPagers();
     else if (st.tab === "devices") renderDevices();
+    else if (st.tab === "ble") renderBle();
+    else if (st.tab === "voice") renderVoice();
+    else if (st.tab === "trains") renderTrains();
     else if (st.tab === "capture") renderCapture();
     else renderLog();
-    badge("pagers", st.pagers.length); badge("devices", st.devices.length);
+    badge("pagers", st.pagers.length); badge("devices", st.devices.length); badge("ble", st.ble.length); badge("trains", st.trains.length + st.alerts.length);
+    const tb = st.wb.querySelector('[data-gsr-tab="' + st.tab + '"]'); if (tb && tb.scrollIntoView && st.lastTabShown !== st.tab) { st.lastTabShown = st.tab; tb.scrollIntoView({ block: "nearest", inline: "nearest" }); }
   }
   function renderWorkbenchHead() {
     if (!st.wb) return;
@@ -665,7 +917,7 @@
     for (const b of w.querySelectorAll('[data-gsr-pane="tuner"] button, [data-gsr-pane="tuner"] input, [data-gsr-pane="tuner"] select')) b.disabled = !st.dev && !b.matches("[data-gsr-preset], [data-gsr-mode], [data-gsr-freq], [data-gsr-step], [data-gsr=up], [data-gsr=down]");
     w.querySelector("[data-gsr-scopemsg]").hidden = Boolean(st.dev);
     const band = bandOf(st.tuned);
-    const hints = { adsb: "1090 MHz: aircraft appear on LOCAL ADS-B AIRCRAFT. Audio is not useful here.", ais: "Marine AIS: vessels appear on LOCAL AIS VESSELS.", aprs: "2 m APRS: stations appear on LOCAL APRS STATIONS.", sonde: "Radiosondes: balloons appear on LOCAL WEATHER BALLOONS with a predicted landing.", pager: "Pager band: POCSAG messages appear in the Pagers tab.", tpms: "ISM band: tire pressure sensors appear in the Devices tab.", fm: "FM broadcast: use WFM and turn audio on.", other: "Listening only. Pick a mode and turn audio on." };
+    const hints = { adsb: "1090 MHz: aircraft appear on LOCAL ADS-B AIRCRAFT. Audio is not useful here.", ais: "Marine AIS: vessels appear on LOCAL AIS VESSELS.", aprs: "2 m APRS: stations appear on LOCAL APRS STATIONS.", sonde: "Radiosondes: balloons appear on LOCAL WEATHER BALLOONS with a predicted landing.", pager: "Pager band: POCSAG messages appear in the Pagers tab.", tpms: "ISM band: tire pressure sensors appear in the Devices tab.", fm: "FM broadcast: use WFM and turn audio on. HD Radio stations appear on LOCAL HD RADIO TOWERS.", uat: "978 MHz UAT: aircraft, FIS-B ground stations and airport weather appear on LOCAL UAT AIRCRAFT.", mesh: "LoRa ISM: Meshtastic and MeshCore nodes appear on LOCAL MESH NODES; LoRaWAN headers go to Devices.", meter: "900 MHz ISM: ERT utility meters appear on LOCAL UTILITY METERS and in Devices.", acars: "VHF airband ACARS: messages appear in Log, aircraft on LOCAL ACARS / VDL2.", vdl2: "VDL Mode 2: ground stations and aircraft appear on LOCAL ACARS / VDL2.", sat: "Satellite downlinks: use the Voice & Ham tab to follow a pass with Doppler.", ft8: "FT8 / JS8 dial: spots appear in Voice & Ham and on LOCAL APRS STATIONS. Use USB.", train: "Rail telemetry: end- and head-of-train units appear in Trains · Cell · TV.", voice: "Voice channel: pick NFM or AM, set squelch and turn audio on.", zwave: "Z-Wave: home network frames appear in Devices.", ble: "Bluetooth LE advertising: devices appear in the Bluetooth tab (HackRF only).", lte: "LTE downlink: carriers and wireless alerts appear in Trains · Cell · TV.", atsc: "ATSC TV: stations are found by their pilot in Trains · Cell · TV.", dispatch: "Land mobile radio: DMR/P25/NXDN/TETRA location reports appear on LOCAL RADIO GPS UNITS.", other: "Listening only. Pick a mode and turn audio on." };
     w.querySelector("[data-gsr-bandhint]").textContent = hints[band] || hints.other;
     drawScale();
   }
@@ -743,6 +995,14 @@
     if (tab) { showTab(tab.dataset.gsrTab); return; }
     const pre = t.closest("[data-gsr-preset]");
     if (pre) { const p = PRESETS.find((x) => x.id === pre.dataset.gsrPreset); st.scan = false; if (p) tune(p.hz, { mode: p.mode }); return; }
+    const th = t.closest("[data-gsr-tunehz]");
+    if (th) { st.scan = false; tune(Number(th.dataset.gsrTunehz), th.dataset.gsrTmode ? { mode: th.dataset.gsrTmode } : {}); renderWorkbench(); return; }
+    const pr = t.closest("[data-gsr-prowl]");
+    if (pr) { const gi = Number(pr.dataset.gsrProwl); if (st.scan && st.scanGroup === gi) { st.scan = false; } else { st.scanGroup = gi; st.scanList = VOICE[gi][1].map(([, hz, mode]) => ({ hz, mode })); st.scan = true; if (st.squelch <= -100) st.squelch = -55; config(); scanStep(true); } renderVoice(); return; }
+    const sf = t.closest("[data-gsr-sattrack]");
+    if (sf) { const id = sf.dataset.gsrSattrack, s2 = st.targets.sat.get(id); if (st.satTrack === id) st.satTrack = null; else if (s2 && s2.downlink) { tune(Math.round(s2.downlink * 1e6 + (s2.doppler || 0)), { mode: /APRS|packet|FM/i.test(s2.service) ? "NFM" : "USB" }); st.satTrack = id; addLog("Following " + s2.satName + " with Doppler correction"); } renderVoice(); return; }
+    const swp = t.closest("[data-gsr-swpre]");
+    if (swp) { const [a2, b2] = swp.dataset.gsrSwpre.split(",").map(Number); const w = st.wb; w.querySelector("[data-gsr-swlo]").value = a2; w.querySelector("[data-gsr-swhi]").value = b2; startSweep(a2, b2); return; }
     const md = t.closest("[data-gsr-mode]");
     if (md) { st.mode = md.dataset.gsrMode; config(); renderTuner(); renderWorkbenchHead(); return; }
     const act = t.closest("[data-gsr]");
@@ -751,12 +1011,16 @@
     if (a === "close") closeWorkbench();
     else if (a === "up" || a === "down") tune(st.tuned + (a === "up" ? 1 : -1) * st.step);
     else if (a === "mute") setMuted(!st.muted);
-    else if (a === "scan") { st.scan = !st.scan; if (st.scan) scanStep(true); renderTuner(); }
+    else if (a === "scan") { st.scan = !st.scan; st.scanList = null; st.scanGroup = null; if (st.scan) scanStep(true); renderTuner(); }
     else if (a === "cap-start" && st.worker) st.worker.postMessage({ t: "cap", cmd: "start" });
     else if (a === "cap-stop" && st.worker) st.worker.postMessage({ t: "cap", cmd: "stop" });
     else if (a === "cap-save" && st.worker) st.worker.postMessage({ t: "cap", cmd: "save" });
     else if (a === "pagers-clear") { st.pagers = []; renderPagers(); badge("pagers", 0); }
     else if (a === "devices-clear") { st.devices = []; renderDevices(); badge("devices", 0); }
+    else if (a === "ble-clear") { st.ble = []; renderBle(); badge("ble", 0); }
+    else if (a === "sweep") { if (st.sweep && st.sweep.on) stopSweep(); else startSweep(parseFloat(st.wb.querySelector("[data-gsr-swlo]").value), parseFloat(st.wb.querySelector("[data-gsr-swhi]").value)); }
+    else if (a === "sweep-peak") { st.sweep = st.sweep || { on: false, lo: 88e6, hi: 108e6, bins: new Float32Array(512).fill(-120), cur: 0, rows: 0, passes: 0 }; st.sweep.peak = !st.sweep.peak; renderSpectrumTab(); }
+    else if (a === "tv-scan") { if (st.scan && st.scanGroup === "tv") st.scan = false; else { st.scanGroup = "tv"; st.scanList = ATSC_CH.map(([, hz]) => ({ hz, mode: "NFM" })); st.scan = true; scanStep(true); } renderTrains(); }
     else if (a === "tune-pager") tune(929.6125e6, { mode: "NFM" });
     else if (a === "tune-ism") tune(433.92e6, { mode: "AM" });
     else if (a === "tune-315") tune(315e6, { mode: "AM" });
@@ -777,13 +1041,204 @@
   function scanStep(first) {
     clearTimeout(st.scanTimer);
     if (!st.scan || !st.dev) { st.scan = false; renderTuner(); return; }
-    const list = PRESETS.filter((p) => p.id !== "adsb");
+    const list = st.scanList || PRESETS.filter((p) => p.id !== "adsb");
     const open = st.squelch > -100 && st.level > st.squelch;
     if (!first && open) { st.scanTimer = setTimeout(() => scanStep(false), 1500); return; }
     let i = list.findIndex((p) => Math.abs(p.hz - st.tuned) < 1);
     const p = list[(i + 1) % list.length];
-    tune(p.hz, { mode: p.mode, quiet: true });
+    tune(p.hz, { mode: p.mode, quiet: true, keepScan: true });
     st.scanTimer = setTimeout(() => scanStep(false), 2500);
+  }
+  // ---- Phase 2 workbench: spectrum / looking glass / zero-span / bursts / search
+  function onSweepFft(m) {
+    const sw = st.sweep;
+    if (sw && sw.on && st.dev) {
+      if (Math.abs(m.center - sw.cur) > 1) return;
+      sw.rows += 1;
+      if (sw.rows < 2) return; // skip the row that straddles the retune
+      const n = m.db.length, lo = m.center - m.rate / 2, keep = 0.8;
+      for (let i = Math.floor(n * (1 - keep) / 2); i < Math.ceil(n * (1 + keep) / 2); i += 1) {
+        const f = lo + (i / n) * m.rate, b = Math.floor(((f - sw.lo) / (sw.hi - sw.lo)) * sw.bins.length);
+        if (b >= 0 && b < sw.bins.length) sw.bins[b] = Math.max(sw.bins[b] * 0.6 + m.db[i] * 0.4, sw.peak ? sw.bins[b] : -200);
+      }
+      const step = m.rate * keep;
+      let next = sw.cur + step;
+      if (next - step / 2 > sw.hi) { next = sw.lo + step / 2; sw.passes += 1; }
+      sweepTune(next);
+      if (st.wbOpen && st.tab === "spectrum") drawSweep();
+    }
+  }
+  function sweepTune(c) {
+    const sw = st.sweep; sw.cur = Math.round(c); sw.rows = 0;
+    st.center = sw.cur; st.tuned = sw.cur; config();
+    serial(() => st.dev.setFrequency(sw.cur)).catch(() => {});
+  }
+  function startSweep(loMHz, hiMHz) {
+    if (!st.dev) return;
+    const lo = Math.max(st.dev.minHz, loMHz * 1e6), hi = Math.min(st.dev.maxHz, hiMHz * 1e6);
+    if (!(hi > lo)) return;
+    st.scan = false;
+    st.sweep = { on: true, lo, hi, bins: new Float32Array(512).fill(-120), cur: 0, rows: 0, passes: 0, peak: st.sweep ? st.sweep.peak : false };
+    sweepTune(lo + st.rate * 0.4);
+    addLog(`Looking Glass sweep ${mhz(lo)}-${mhz(hi)} MHz`);
+    renderSpectrumTab();
+  }
+  function stopSweep() { if (!st.sweep || !st.sweep.on) return; st.sweep.on = false; tune(st.tunerHz || st.tuned, { quiet: true }); addLog("Sweep stopped"); renderSpectrumTab(); }
+  function drawSweep() {
+    const c = st.wb && st.wb.querySelector("[data-gsr-sweep]"), sw = st.sweep;
+    if (!c || !sw) return;
+    const g = c.getContext("2d"), W = c.width, H = c.height, b = sw.bins;
+    let mn = Infinity, mx = -Infinity; for (const v of b) { if (v > -119) { mn = Math.min(mn, v); mx = Math.max(mx, v); } }
+    if (!Number.isFinite(mn)) { mn = -100; mx = -40; }
+    const span = Math.max(20, mx - mn + 6);
+    g.fillStyle = "#0b1117"; g.fillRect(0, 0, W, H);
+    g.strokeStyle = "rgba(148,163,184,0.16)"; for (let x = 0; x < W; x += W / 10) { g.beginPath(); g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, H); g.stroke(); }
+    g.beginPath();
+    for (let i = 0; i < b.length; i += 1) { const x = (i / (b.length - 1)) * W, y = H - Math.max(0, Math.min(1, (b[i] - mn + 3) / span)) * H; if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+    g.strokeStyle = "#38bdf8"; g.lineWidth = 1.5; g.stroke();
+    if (sw.on) { const x = ((sw.cur - sw.lo) / (sw.hi - sw.lo)) * W; g.strokeStyle = "#fbbf24"; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+    const lab = st.wb.querySelector("[data-gsr-sweepscale]");
+    if (lab) lab.innerHTML = `<span>${mhz(sw.lo)}</span><span>${sw.on ? "sweeping · pass " + (sw.passes + 1) : "stopped"}</span><span>${mhz(sw.hi)}</span>`;
+  }
+  function pushZspan(db) {
+    if (!Number.isFinite(db)) return;
+    st.zspan.push(db); if (st.zspan.length > 400) st.zspan.shift();
+    if (st.wbOpen && st.tab === "spectrum") drawZspan();
+  }
+  function drawZspan() {
+    const c = st.wb && st.wb.querySelector("[data-gsr-zspan]");
+    if (!c) return;
+    const g = c.getContext("2d"), W = c.width, H = c.height, z = st.zspan;
+    g.fillStyle = "#0b1117"; g.fillRect(0, 0, W, H);
+    if (z.length < 2) return;
+    g.beginPath();
+    for (let i = 0; i < z.length; i += 1) { const x = W - (z.length - 1 - i) * (W / 400), y = H - Math.max(0, Math.min(1, (z[i] + 100) / 100)) * H; if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+    g.strokeStyle = "#a5b4fc"; g.lineWidth = 1.5; g.stroke();
+    if (st.squelch > -100) { const y = H - ((st.squelch + 100) / 100) * H; g.setLineDash([4, 4]); g.strokeStyle = "#fbbf24"; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); g.setLineDash([]); }
+  }
+  function burstBits(runs) {
+    const highs = runs.filter((r) => r > 0);
+    if (!highs.length) return "";
+    const unit = Math.max(1, Math.min(...highs.map(Math.abs)));
+    let s = "";
+    for (const r of runs) { const k = Math.min(8, Math.max(1, Math.round(Math.abs(r) / unit))); s += (r > 0 ? "1" : "0").repeat(k); if (s.length > 160) break; }
+    return s.slice(0, 160);
+  }
+  function renderSpectrumTab() {
+    const pane = st.wb && st.wb.querySelector('[data-gsr-pane="spectrum"]');
+    if (!pane || st.tab !== "spectrum") return;
+    const sw = st.sweep, on = Boolean(sw && sw.on), dis = st.dev ? "" : "disabled";
+    if (!pane.querySelector("[data-gsr-sweep]")) {
+      pane.innerHTML =
+        `<h4 class="gsr-h">LOOKING GLASS SWEEP</h4>` +
+        `<div class="gsr-row gsr-wrap"><label class="gsr-mini">FROM <input class="gsr-input gsr-num" data-gsr-swlo value="88" inputmode="decimal" aria-label="Sweep start MHz"></label><label class="gsr-mini">TO <input class="gsr-input gsr-num" data-gsr-swhi value="108" inputmode="decimal" aria-label="Sweep end MHz"></label><span class="gsr-mini">MHz</span>` +
+        `<button type="button" class="gsr-btn" data-gsr="sweep" ${dis}></button><button type="button" class="gsr-btn" data-gsr="sweep-peak" aria-pressed="false">PEAK HOLD</button></div>` +
+        `<div class="gsr-chips">${[["FM", 88, 108], ["Air", 118, 137], ["2 m", 144, 148], ["Marine", 156, 163], ["70 cm", 420, 450], ["UHF TV", 470, 608], ["ISM 900", 902, 928], ["LTE 700", 729, 756]].map(([l, a, b]) => `<button type="button" class="gsr-chip" data-gsr-swpre="${a},${b}" ${dis}>${l}</button>`).join("")}</div>` +
+        `<div class="gsr-scope gsr-scope-sm"><canvas data-gsr-sweep width="1024" height="120" aria-label="Wideband sweep"></canvas><div class="gsr-scale" data-gsr-sweepscale></div></div>` +
+        `<h4 class="gsr-h">ZERO-SPAN (SIGNAL LEVEL OVER TIME)</h4>` +
+        `<div class="gsr-scope gsr-scope-sm"><canvas data-gsr-zspan width="1024" height="80" aria-label="Zero span level"></canvas></div>` +
+        `<h4 class="gsr-h">SEARCH: ACTIVE CHANNELS</h4><div class="gsr-list" data-gsr-act></div>` +
+        `<h4 class="gsr-h">BURSTS TO BITS (OOK / ISM)</h4><div class="gsr-list" data-gsr-bursts></div>` +
+        `<p class="gsr-hint">Sweep steps the radio across the range and stitches the spectrum together (receive only). Search lists the strongest carriers in the current window; tap TUNE to listen.</p>`;
+    }
+    const b = pane.querySelector('[data-gsr="sweep"]');
+    b.textContent = on ? "STOP SWEEP" : "START SWEEP"; b.disabled = !st.dev; b.classList.toggle("gsr-warn", on);
+    pane.querySelector('[data-gsr="sweep-peak"]').setAttribute("aria-pressed", sw && sw.peak ? "true" : "false");
+    for (const c of pane.querySelectorAll("[data-gsr-swpre]")) c.disabled = !st.dev;
+    const act = st.act.slice(0, 16);
+    pane.querySelector("[data-gsr-act]").innerHTML = act.length
+      ? tableHtml(["MHZ", "LEVEL", "SNR", "WIDTH", "BAND", ""], act.map((a) => `<tr><td>${esc(mhz(a.hz))}</td><td>${esc(a.db)} dB</td><td>${esc(a.snr)} dB</td><td>${esc(a.bwHz >= 1e3 ? (a.bwHz / 1e3).toFixed(0) + " kHz" : a.bwHz + " Hz")}</td><td>${esc(bandOf(a.hz).toUpperCase())}</td><td><button type="button" class="gsr-btn gsr-xs" data-gsr-tunehz="${a.hz}">TUNE</button></td></tr>`).join(""))
+      : `<p class="gsr-empty">${st.dev ? "No carriers above the noise floor right now." : "Connect a radio to search for active channels."}</p>`;
+    pane.querySelector("[data-gsr-bursts]").innerHTML = st.bursts.length
+      ? tableHtml(["TIME", "MHZ", "DECODED AS", "PULSES", "BITS (1 = carrier on)"], st.bursts.slice(0, 12).map((x) => `<tr><td>${esc(x.t)}</td><td>${esc(mhz(x.freq))}</td><td>${esc(x.label)}</td><td>${esc(x.runs.length)}</td><td class="gsr-bits">${esc(burstBits(x.runs))}</td></tr>`).join(""))
+      : `<p class="gsr-empty">Tune 315 or 433.92 MHz: every OOK burst is shown here as raw bits.</p>`;
+    if (sw) drawSweep();
+    drawZspan();
+  }
+  function devReading(d) {
+    const out = [];
+    if (Number.isFinite(d.kpa)) out.push(d.kpa.toFixed(1) + " kPa / " + (d.kpa * 0.145038).toFixed(1) + " psi");
+    if (Number.isFinite(d.tempC)) out.push(d.tempC + " °C");
+    if (Number.isFinite(d.humidity)) out.push(d.humidity + " % RH");
+    if (d.detail) out.push(d.detail);
+    return out.join(" · ") || "—";
+  }
+  function renderDevices() {
+    const pane = st.wb && st.wb.querySelector('[data-gsr-pane="devices"]');
+    if (!pane || st.tab !== "devices") return;
+    const body = st.devices.slice(0, 150).map((d) => `<tr><td>${esc(d.kind)}</td><td>${esc(d.id || "—")}</td><td>${esc(d.fmt || "")}</td><td class="gsr-msg">${esc(devReading(d))}</td><td>${esc(Number.isFinite(d.rssi) ? d.rssi + " dB" : "")}</td><td>${esc(d.count)}</td><td>${esc(d.last)}</td></tr>`).join("");
+    pane.innerHTML = `<div class="gsr-row gsr-wrap"><button type="button" class="gsr-btn" data-gsr="tune-ism">TUNE 433.92</button><button type="button" class="gsr-btn" data-gsr="tune-315">TUNE 315</button><button type="button" class="gsr-btn" data-gsr-tunehz="915000000" data-gsr-tmode="NFM">METERS 915</button><button type="button" class="gsr-btn" data-gsr-tunehz="908420000" data-gsr-tmode="NFM">Z-WAVE 908.42</button><button type="button" class="gsr-btn" data-gsr="devices-clear">CLEAR</button></div>` +
+      `<div class="gsr-list">${st.devices.length ? tableHtml(["TYPE", "ID", "FORMAT", "READING", "SIGNAL", "SEEN", "LAST"], body) : `<p class="gsr-empty">${["tpms", "meter", "zwave"].includes(bandOf(st.tuned)) ? "Listening for sensors on " + mhz(st.tuned) + " MHz…" : "Tune 315 MHz (North America) or 433.92 MHz (Europe and Asia) for tire sensors, remotes and weather stations; 915 MHz for utility meters."}</p>`}</div>` +
+      `<p class="gsr-hint">Decodes tire pressure sensors (two common formats, CRC checked), EV1527 key fobs and remotes, WH2-style weather sensors, ERT SCM utility meters, Z-Wave and LoRaWAN headers. Anything else appears as an unknown OOK burst in the Spectrum tab.</p>`;
+  }
+  function renderBle() {
+    const pane = st.wb && st.wb.querySelector('[data-gsr-pane="ble"]');
+    if (!pane || st.tab !== "ble") return;
+    const ok = isHackrf();
+    const banner = !st.dev ? `<p class="gsr-banner">Bluetooth LE advertising runs at 2.4 GHz. Connect a HackRF to scan it.</p>` : ok ? "" : `<p class="gsr-banner gsr-banner-warn"><b>Requires HackRF (2.4 GHz)</b> · ${esc(st.dev.name)} tops out at ${esc(mhz(st.dev.maxHz))} MHz.</p>`;
+    const dis = ok ? "" : "disabled";
+    const body = st.ble.slice(0, 150).map((d) => `<tr><td>${esc(d.addr)}</td><td>${esc(d.name || "—")}</td><td>${esc(d.company || d.tag || "")}</td><td>${esc(d.pdu || "")}</td><td>${esc(Number.isFinite(d.rssi) ? d.rssi + " dB" : "")}</td><td>${esc(d.chan || "")}</td><td>${esc(d.count)}</td><td>${esc(d.last)}</td></tr>`).join("");
+    pane.innerHTML = banner +
+      `<div class="gsr-row gsr-wrap"><button type="button" class="gsr-btn" data-gsr-tunehz="2402000000" ${dis}>CH 37 · 2402</button><button type="button" class="gsr-btn" data-gsr-tunehz="2426000000" ${dis}>CH 38 · 2426</button><button type="button" class="gsr-btn" data-gsr-tunehz="2480000000" ${dis}>CH 39 · 2480</button><button type="button" class="gsr-btn" data-gsr="ble-clear">CLEAR</button></div>` +
+      `<div class="gsr-list">${st.ble.length ? tableHtml(["ADDRESS", "NAME", "MAKER / TYPE", "PDU", "SIGNAL", "CH", "SEEN", "LAST"], body) : `<p class="gsr-empty">${ok && bandOf(st.tuned) === "ble" ? "Listening for advertisements on " + mhz(st.tuned) + " MHz…" : "No Bluetooth advertisements yet."}</p>`}</div>` +
+      `<p class="gsr-hint">Passive only: reads public advertising packets (whitening and CRC-24 checked). Many phones rotate random addresses every few minutes. Nothing is ever transmitted or connected.</p>`;
+  }
+  const VOICE = [
+    ["CB", [["Ch 9 · emergency", 27.065e6, "AM"], ["Ch 19 · highway", 27.185e6, "AM"], ["Ch 1", 26.965e6, "AM"], ["Ch 40", 27.405e6, "AM"]]],
+    ["GMRS / FRS", [["Ch 1", 462.5625e6, "NFM"], ["Ch 3", 462.6125e6, "NFM"], ["Ch 7", 462.7125e6, "NFM"], ["Ch 15", 462.55e6, "NFM"], ["Ch 20 · 462.675", 462.675e6, "NFM"]]],
+    ["MURS", [["151.820", 151.82e6, "NFM"], ["151.880", 151.88e6, "NFM"], ["151.940", 151.94e6, "NFM"], ["154.570", 154.57e6, "NFM"], ["154.600", 154.6e6, "NFM"]]],
+    ["Repeaters", [["2 m 146.940", 146.94e6, "NFM"], ["2 m 147.000", 147.0e6, "NFM"], ["70 cm 442.000", 442.0e6, "NFM"], ["70 cm 444.000", 444.0e6, "NFM"]]],
+    ["Ham calling", [["2 m 146.520", 146.52e6, "NFM"], ["70 cm 446.000", 446.0e6, "NFM"], ["6 m 50.125", 50.125e6, "USB"], ["10 m 28.400", 28.4e6, "USB"], ["20 m 14.230", 14.23e6, "USB"]]],
+    ["FT8 / JS8", [["FT8 14.074", 14.074e6, "USB"], ["FT8 7.074", 7.074e6, "USB"], ["FT8 50.313", 50.313e6, "USB"], ["JS8 14.078", 14.078e6, "USB"], ["JS8 7.078", 7.078e6, "USB"]]],
+  ];
+  function renderVoice() {
+    const pane = st.wb && st.wb.querySelector('[data-gsr-pane="voice"]');
+    if (!pane || st.tab !== "voice") return;
+    const dis = st.dev ? "" : "disabled";
+    const groups = VOICE.map(([g, list], gi) => `<div class="gsr-group"><div class="gsr-group-head"><b>${esc(g)}</b><button type="button" class="gsr-btn gsr-xs" data-gsr-prowl="${gi}" aria-pressed="${st.scan && st.scanGroup === gi ? "true" : "false"}" ${dis}>${st.scan && st.scanGroup === gi ? "STOP" : "PROWL"}</button></div><div class="gsr-chips">${list.map(([l, hz, mode]) => `<button type="button" class="gsr-chip${Math.abs(hz - st.tuned) < 1 ? " on" : ""}" data-gsr-tunehz="${hz}" data-gsr-tmode="${mode}">${esc(l)}</button>`).join("")}</div></div>`).join("");
+    const sats = Array.from(st.targets.sat.values()).sort((a, b) => (b.el || -90) - (a.el || -90)).slice(0, 10);
+    const satHtml = !st.layers.sat ? `<p class="gsr-empty">Turn on AMATEUR SATELLITES (DOPPLER) to list passes and follow Doppler.</p>`
+      : !sats.length ? `<p class="gsr-empty">${st.satInfo && st.satInfo.error ? "Could not load orbit data." : "Loading orbits…"}</p>`
+      : tableHtml(["SATELLITE", "ELEV", "AZ", "DOWNLINK", "DOPPLER", ""], sats.map((s) => `<tr><td>${esc(s.satName)}</td><td>${esc(Number.isFinite(s.el) ? s.el.toFixed(0) + "°" : "—")}</td><td>${esc(Number.isFinite(s.az) ? Math.round(s.az) + "°" : "—")}</td><td>${esc(s.downlink ? s.downlink.toFixed(3) : "—")}</td><td>${esc(Number.isFinite(s.doppler) ? (s.doppler >= 0 ? "+" : "") + Math.round(s.doppler) + " Hz" : "—")}</td><td>${s.downlink ? `<button type="button" class="gsr-btn gsr-xs" data-gsr-sattrack="${esc(s.id)}" aria-pressed="${st.satTrack === s.id ? "true" : "false"}" ${dis}>${st.satTrack === s.id ? "FOLLOWING" : "FOLLOW"}</button>` : ""}</td></tr>`).join(""));
+    const spots = Array.from(st.targets.aprs.values()).filter((t) => t.icon === "ft8").sort((a, b) => b.seen - a.seen).slice(0, 20);
+    pane.innerHTML = `<div class="gsr-groups">${groups}</div>` +
+      `<p class="gsr-hint">PROWL steps through a group and holds on any channel above the squelch (set squelch on the Tuner tab). HF bands need a HackRF or an upconverter.</p>` +
+      `<h4 class="gsr-h">SATELLITE PASSES</h4><div class="gsr-list">${satHtml}</div>` +
+      `<h4 class="gsr-h">FT8 / JS8 SPOTS</h4><div class="gsr-list">${spots.length ? tableHtml(["CALL", "MODE", "GRID", "SNR", "MESSAGE", "LAST"], spots.map((t) => `<tr><td>${esc(t.call)}</td><td>${esc(t.mode)}</td><td>${esc(t.grid)}</td><td>${esc(Number.isFinite(t.snr) ? t.snr : "")}</td><td class="gsr-msg">${esc(t.ftText)}</td><td>${esc(ago(t.seen))}</td></tr>`).join("")) : `<p class="gsr-empty">Tune an FT8 or JS8 dial frequency to collect spots. Spots with a grid square appear on LOCAL APRS STATIONS.</p>`}</div>`;
+  }
+  const ATSC_CH = Array.from({ length: 23 }, (_, i) => [14 + i, 470e6 + i * 6e6 + 309441]);
+  function renderTrains() {
+    const pane = st.wb && st.wb.querySelector('[data-gsr-pane="trains"]');
+    if (!pane || st.tab !== "trains") return;
+    const dis = st.dev ? "" : "disabled";
+    const tr = st.trains.slice(0, 60).map((d) => `<tr><td>${esc(d.unit)}</td><td>${esc(d.kind)}</td><td>${esc(d.psi != null ? d.psi + " psi" : "—")}</td><td>${esc(d.motion != null ? (d.motion ? "moving" : "stopped") : "—")}</td><td>${esc(d.markerLight != null ? (d.markerLight ? "on" : "off") : "—")}</td><td>${esc(d.battery || "—")}</td><td>${esc(d.count)}</td><td>${esc(d.last)}</td></tr>`).join("");
+    const cells = st.cells.slice(0, 20).map((c) => `<tr><td>${esc(mhz(c.freq))}</td><td>${esc(c.nid2)}</td><td>${esc(c.score >= 1 ? "strong" : c.score >= 0.5 ? "good" : "weak")}</td><td>${esc(c.count)}</td><td>${esc(c.last)}</td></tr>`).join("");
+    const alerts = st.alerts.slice(0, 20).map((a) => `<p><time>${esc(a.t)}</time> <b>${esc(a.category)}</b> ${esc(a.text)}</p>`).join("");
+    const tv = Object.values(st.atsc).sort((a, b) => a.channel - b.channel).map((a) => `<tr><td>${esc(a.channel)}</td><td>${esc(mhz(a.freq))}</td><td>${esc(a.pilot)} dB</td><td>${esc(a.plateau)} dB</td><td>${esc(a.t)}</td></tr>`).join("");
+    pane.innerHTML =
+      `<h4 class="gsr-h">TRAINS: END / HEAD OF TRAIN</h4>` +
+      `<div class="gsr-row gsr-wrap"><button type="button" class="gsr-btn" data-gsr-tunehz="457937500" data-gsr-tmode="NFM">EOT 457.9375</button><button type="button" class="gsr-btn" data-gsr-tunehz="452937500" data-gsr-tmode="NFM">HOT 452.9375</button><button type="button" class="gsr-btn" data-gsr-tunehz="220500000" data-gsr-tmode="NFM">PTC 220.5 (activity)</button></div>` +
+      `<div class="gsr-list">${tr ? tableHtml(["UNIT", "TYPE", "BRAKE PIPE", "MOTION", "MARKER", "BATTERY", "SEEN", "LAST"], tr) : `<p class="gsr-empty">Tune 457.9375 MHz near a rail line to hear end-of-train devices.</p>`}</div>` +
+      `<h4 class="gsr-h">CELL: LTE CARRIERS &amp; WIRELESS ALERTS</h4>` +
+      `<div class="gsr-row gsr-wrap"><button type="button" class="gsr-btn" data-gsr-tunehz="751000000" ${dis}>BAND 13 · 751</button><button type="button" class="gsr-btn" data-gsr-tunehz="739000000" ${dis}>BAND 12 · 739</button><button type="button" class="gsr-btn" data-gsr-tunehz="634500000" ${dis}>BAND 71 · 634.5</button><button type="button" class="gsr-btn" data-gsr-tunehz="881500000" ${dis}>BAND 5 · 881.5</button></div>` +
+      `<div class="gsr-list">${cells ? tableHtml(["MHZ", "PSS ID", "MATCH", "SEEN", "LAST"], cells) : `<p class="gsr-empty">No LTE carriers found yet.</p>`}</div>` +
+      `<div class="gsr-log">${alerts || '<p class="gsr-empty">No wireless emergency alerts heard. Alerts with an area appear on LTE ALERT AREAS.</p>'}</div>` +
+      `<h4 class="gsr-h">TV: ATSC CHANNELS</h4>` +
+      `<div class="gsr-row gsr-wrap"><button type="button" class="gsr-btn" data-gsr="tv-scan" aria-pressed="${st.scan && st.scanGroup === "tv" ? "true" : "false"}" ${dis}>${st.scan && st.scanGroup === "tv" ? "STOP TV SCAN" : "SCAN UHF TV 14-36"}</button></div>` +
+      `<div class="gsr-list">${tv ? tableHtml(["CH", "PILOT MHZ", "PILOT", "PLATEAU", "LAST"], tv) : `<p class="gsr-empty">Scan to find ATSC TV stations by their pilot tone.</p>`}</div>` +
+      `<p class="gsr-hint">EOT/HOT is decoded (BCH checked). LTE carriers are found by their primary sync signal, and alerts are read from broadcast frames. TV stations are found by their pilot, not demodulated. Receive only.</p>`;
+  }
+  function renderLog() {
+    const pane = st.wb && st.wb.querySelector('[data-gsr-pane="log"]');
+    if (!pane || st.tab !== "log") return;
+    const h = st.health;
+    const pk = h ? h.packets : {};
+    const names = [["adsb", "ADS-B"], ["uat", "UAT"], ["fisb", "FIS-B"], ["ais", "AIS"], ["aprs", "APRS"], ["sonde", "Sonde"], ["mesh", "Mesh"], ["lorawan", "LoRaWAN"], ["acars", "ACARS"], ["vdl2", "VDL2"], ["dispatch", "Dispatch"], ["meter", "Meter"], ["pager", "Pager"], ["flex", "FLEX"], ["device", "TPMS/OOK"], ["remote", "Remote"], ["weather", "Weather"], ["zwave", "Z-Wave"], ["ble", "BLE"], ["eot", "EOT"], ["lte", "LTE"], ["hd", "HD"], ["ft8", "FT8/JS8"]];
+    const counts = h ? names.filter(([k]) => pk[k]).map(([k, l]) => `${l} ${pk[k]}`).join(" · ") || "none yet" : "—";
+    const facts = [["Radio", st.dev ? st.dev.name + (st.dev.version ? " · " + st.dev.version : "") + (st.dev.tuner ? " · " + st.dev.tuner : "") : "Not connected"], ["Tuned", st.dev ? mhz(st.tuned) + " MHz " + st.mode : "—"], ["Band decoder", h ? String(h.band || "").toUpperCase() : "—"], ["Sample rate", h ? (h.rate / 1e6).toFixed(2) + " MS/s" : "—"], ["IQ level (RMS)", h ? h.iqRMS.toFixed(3) + (h.iqRMS > 0.7 ? " (too strong, lower gain)" : h.iqRMS < 0.02 ? " (weak, raise gain)" : "") : "—"], ["USB transfers", h ? h.transfers : "—"], ["Dropped", h ? h.dropped : "—"], ["Bias-T", st.dev && st.dev.biasT ? "ON (" + st.dev.biasVolts + ")" : "Off"], ["Decoded", counts], ["CRC failures", h ? h.crcFail : "—"]];
+    const acars = st.acarsMsgs.slice(0, 40).map((x) => `<p><time>${esc(x.t)}</time> <b>${esc(x.proto || "ACARS")} ${esc(x.flight)}</b> ${esc(x.label)} ${esc(x.text)}</p>`).join("");
+    pane.innerHTML = rows(facts) + `<h4 class="gsr-h">ACARS / VDL2 MESSAGES</h4><div class="gsr-log">${acars || '<p class="gsr-empty">Tune 131.550 MHz (ACARS) or 136.975 MHz (VDL2).</p>'}</div>` +
+      `<h4 class="gsr-h">EVENTS</h4><div class="gsr-log">${st.log.slice(0, 120).map((l) => `<p><time>${esc(l.t)}</time> ${esc(l.text)}</p>`).join("") || '<p class="gsr-empty">Nothing yet.</p>'}</div>`;
   }
   function tableHtml(head, body) { return `<table class="gsr-table"><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`; }
   function renderPagers(keepFocus) {
@@ -798,14 +1253,6 @@
     pane.innerHTML = `<div class="gsr-row"><input type="search" class="gsr-input" data-gsr-pagerfilter placeholder="Filter capcode or text" value="${esc(st.pagerFilter || "")}" aria-label="Filter pages"><button type="button" class="gsr-btn" data-gsr="tune-pager">TUNE 929.6125</button><button type="button" class="gsr-btn" data-gsr="pagers-clear">CLEAR</button></div>` +
       `<div class="gsr-list" data-gsr-pagerlist>${listHtml}</div>` +
       `<p class="gsr-hint">POCSAG 512 / 1200 / 2400 baud, numeric and text. Pages stay on this device and are never sent anywhere. Laws on reading pager traffic vary by country; in the US, display-pager content is protected by the ECPA.</p>`;
-  }
-  function renderDevices() {
-    const pane = st.wb && st.wb.querySelector('[data-gsr-pane="devices"]');
-    if (!pane || st.tab !== "devices") return;
-    const body = st.devices.slice(0, 150).map((d) => `<tr><td>${esc(d.kind)}</td><td>${esc(d.id)}</td><td>${esc(d.kpa.toFixed(1) + " kPa / " + (d.kpa * 0.145038).toFixed(1) + " psi")}</td><td>${esc(d.tempC + " °C")}</td><td>${esc(d.count)}</td><td>${esc(d.last)}</td></tr>`).join("");
-    pane.innerHTML = `<div class="gsr-row"><button type="button" class="gsr-btn" data-gsr="tune-ism">TUNE 433.92</button><button type="button" class="gsr-btn" data-gsr="tune-315">TUNE 315</button><button type="button" class="gsr-btn" data-gsr="devices-clear">CLEAR</button></div>` +
-      `<div class="gsr-list">${st.devices.length ? tableHtml(["TYPE", "SENSOR", "PRESSURE", "TEMP", "SEEN", "LAST"], body) : `<p class="gsr-empty">${bandOf(st.tuned) === "tpms" ? "Listening for tire pressure sensors on " + mhz(st.tuned) + " MHz…" : "Tune 315 MHz (North America) or 433.92 MHz (Europe and Asia) to hear tire pressure sensors."}</p>`}</div>` +
-      `<p class="gsr-hint">Phase 1 decodes a common Manchester OOK sensor format (CRC-8 checked). More vendor formats are planned.</p>`;
   }
   function renderCapture() {
     const pane = st.wb && st.wb.querySelector('[data-gsr-pane="capture"]');
@@ -829,15 +1276,6 @@
     st.cap = { on: false, bytes: 0, secs: 0 };
     renderCapture();
   }
-  function renderLog() {
-    const pane = st.wb && st.wb.querySelector('[data-gsr-pane="log"]');
-    if (!pane || st.tab !== "log") return;
-    const h = st.health;
-    const pk = h ? h.packets : {};
-    const facts = [["Radio", st.dev ? st.dev.name + (st.dev.version ? " · " + st.dev.version : "") + (st.dev.tuner ? " · " + st.dev.tuner : "") : "Not connected"], ["Tuned", st.dev ? mhz(st.tuned) + " MHz " + st.mode : "—"], ["Band decoder", h ? String(h.band || "").toUpperCase() : "—"], ["Sample rate", h ? (h.rate / 1e6).toFixed(2) + " MS/s" : "—"], ["IQ level (RMS)", h ? h.iqRMS.toFixed(3) + (h.iqRMS > 0.7 ? " (too strong, lower gain)" : h.iqRMS < 0.02 ? " (weak, raise gain)" : "") : "—"], ["USB transfers", h ? h.transfers : "—"], ["Dropped", h ? h.dropped : "—"], ["Bias-T", st.dev && st.dev.biasT ? "ON (" + st.dev.biasVolts + ")" : "Off"], ["Decoded", h ? `ADS-B ${pk.adsb || 0} · AIS ${pk.ais || 0} · APRS ${pk.aprs || 0} · Sonde ${pk.sonde || 0} · Pager ${pk.pager || 0} · TPMS ${pk.device || 0}` : "—"], ["CRC failures", h ? h.crcFail : "—"]];
-    pane.innerHTML = rows(facts) + `<div class="gsr-log">${st.log.slice(0, 120).map((l) => `<p><time>${esc(l.t)}</time> ${esc(l.text)}</p>`).join("") || '<p class="gsr-empty">Nothing yet.</p>'}</div>`;
-  }
-
   // ------------------------------------------------------------------ events + init
   async function biasClick() {
     if (!st.dev) return;
@@ -876,7 +1314,7 @@
     document.addEventListener("click", onDocClick);
     // The welcome picker is built lazily: refresh the SDR rows when its category opens (no USB calls).
     document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest('[data-welcome-toggle="sdr"]')) setTimeout(render, 0); });
-    setInterval(() => { if (!st.dev) return; for (const k of ["adsb", "ais", "aprs", "sonde"]) if (st.layers[k] && st.targets[k].size) scheduleDraw(k); }, 5000);
+    setInterval(() => { if (!st.dev) return; for (const k of MAPKEYS) if (k !== "sat" && st.layers[k] && st.targets[k].size) scheduleDraw(k); }, 5000);
     render();
   }
 
@@ -893,10 +1331,12 @@
       setReceiver: (lat, lon, name) => setReceiver({ lat, lon, name: name || "Receiver pin" }),
       tune: (mhzValue, mode) => tune(Math.round(mhzValue * 1e6), { mode }),
       setLayer, openWorkbench, closeWorkbench, showTab, setMuted,
-      state: () => ({ connected: Boolean(st.dev), name: st.dev ? st.dev.name : "", tuned: st.tuned, center: st.center, rate: st.rate, mode: st.mode, layers: Object.assign({}, st.layers), counts: Object.fromEntries(Object.keys(st.targets).map((k) => [k, st.targets[k].size])), pagers: st.pagers.length, devices: st.devices.length, liveKm: st.liveKm || 0, stats: Object.assign({}, st.stats), health: st.health }),
+      state: () => ({ connected: Boolean(st.dev), name: st.dev ? st.dev.name : "", tuned: st.tuned, center: st.center, rate: st.rate, mode: st.mode, layers: Object.assign({}, st.layers), counts: Object.fromEntries(Object.keys(st.targets).map((k) => [k, st.targets[k].size])), pagers: st.pagers.length, devices: st.devices.length, ble: st.ble.length, trains: st.trains.length, cells: st.cells.length, alerts: st.alerts.length, acars: st.acarsMsgs.length, bursts: st.bursts.length, act: st.act.length, atsc: Object.keys(st.atsc).length, hdSide: st.hdSide, sats: st.targets.sat.size, satSource: st.satInfo && st.satInfo.source, sweep: st.sweep ? { on: st.sweep.on, passes: st.sweep.passes } : null, zspan: st.zspan.length, tab: st.tab, liveKm: st.liveKm || 0, stats: Object.assign({}, st.stats), health: st.health }),
       targets: (k) => Array.from((st.targets[k] || new Map()).values()).map((t) => ({ id: t.id, name: t.name, lat: t.lat, lon: t.lon, alt: t.alt, landing: t.landing || null })),
       pagers: () => st.pagers.map((p) => ({ capcode: p.capcode, text: p.text, baud: p.baud })),
-      devices: () => st.devices.map((d) => ({ id: d.id, kpa: d.kpa, tempC: d.tempC })),
+      devices: () => st.devices.map((d) => ({ kind: d.kind, fmt: d.fmt, id: d.id, kpa: d.kpa, tempC: d.tempC, humidity: d.humidity, detail: d.detail })),
+      lists: () => ({ ble: st.ble.slice(0, 20), trains: st.trains.slice(0, 20), cells: st.cells.slice(0, 20), alerts: st.alerts.slice(0, 20), acars: st.acarsMsgs.slice(0, 20), pagers: st.pagers.slice(0, 20).map((p) => ({ proto: p.proto, capcode: p.capcode, text: p.text })), atsc: Object.values(st.atsc) }),
+      startSweep: (a, b) => startSweep(a, b), stopSweep: () => stopSweep(),
       popup: (k, id) => { const t = st.targets[k] && st.targets[k].get(id); return t ? popupHtml(t) : ""; },
       screenOf: (k, id) => (L() ? L().screenOf(k, id) : null),
       frame: (points, o) => L() && L().frame(points, o),
@@ -904,7 +1344,7 @@
     root.__gsSdrInjectTestFrame = (frame) => {
       ensureWorker();
       const id = ++testId;
-      return new Promise((resolve) => { testWaiters[id] = resolve; st.worker.postMessage({ t: "decode", id, frame }); setTimeout(() => { if (testWaiters[id]) { delete testWaiters[id]; resolve({ error: "timeout" }); } }, 4000); });
+      return new Promise((resolve) => { testWaiters[id] = resolve; st.worker.postMessage({ t: "decode", id, frame }); setTimeout(() => { if (testWaiters[id]) { delete testWaiters[id]; resolve({ error: "timeout" }); } }, frame && frame.type === "selftest" ? 25000 : 6000); });
     };
   }
 
