@@ -43,6 +43,10 @@
     group: '<circle cx="8.5" cy="8.6" r="2.6"/><circle cx="16" cy="9.6" r="2.2"/><path d="M3.5 19c.4-3.2 2.4-5 5-5s4.6 1.8 5 5M13.2 14.6c.8-.5 1.7-.8 2.8-.8 2.2 0 3.9 1.6 4.3 4.6" stroke-linecap="round"/>',
     compass: '<circle cx="12" cy="12" r="9"/><path d="m15.6 8.4-2.2 5-5 2.2 2.2-5z" stroke-linejoin="round"/>',
     spark: '<path d="M12 2.6 14.1 8.8h6.5l-5.3 3.9 2 6.3L12 15.2 6.7 19l2-6.3L3.4 8.8h6.5z" stroke-linejoin="round"/>',
+    column: '<path d="M3.5 8.2 12 3.5l8.5 4.7z" stroke-linejoin="round"/><path d="M5.5 10.5v7M9.8 10.5v7M14.2 10.5v7M18.5 10.5v7M3.5 20.5h17" stroke-linecap="round"/>',
+    factory: '<path d="M3.5 20.5V11l5 3v-3l5 3v-3l5 3V4.5h2v16z" stroke-linejoin="round"/><path d="M7 17.5h2M11.5 17.5h2" stroke-linecap="round"/>',
+    wave: '<circle cx="12" cy="12" r="8.5"/><path d="M4 13.2c1.6-1.4 3.2-1.4 4.8 0s3.2 1.4 4.8 0 3.2-1.4 4.8 0M5.2 16.6c1.4-1.1 2.8-1.1 4.2 0s2.8 1.1 4.2 0 2.8-1.1 4.2 0" stroke-linecap="round"/>',
+    capitol: '<path d="M12 3v2.2M8 10.2a4 4 0 0 1 8 0z" stroke-linejoin="round"/><path d="M5 10.2h14M6.5 10.2v7.6M10 10.2v7.6M14 10.2v7.6M17.5 10.2v7.6M4 20.5h16M4.8 17.8h14.4" stroke-linecap="round"/>',
     web: '<circle cx="12" cy="6.4" r="3.5"/><path d="M12 3.1v6.6M9.1 5.1h5.8M9.4 7.7h5.2M12 9.9v2M4.2 11.9h15.6M4.2 11.9v1.8M12 11.9v1.8M19.8 11.9v1.8M2.2 18.5h4.6M9.7 18.5h4.6M17.2 18.5h4.6"/><rect x="2.2" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="9.7" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="17.2" y="14.3" width="4.6" height="3.4" rx="0.7"/>',
   };
   // group: the sidebar <details> id whose layers the row turns on (read from the page,
@@ -68,6 +72,10 @@
     { id: "conflict", group: "group-conflict-military", title: "CONFLICT & MILITARY", sub: "Global conflict tracker and military bases", view: VIEW_WORLD, icon: I.flag },
     { id: "health", group: "group-health", title: "HEALTH & HUMANITARIAN", sub: "Disease and animal outbreaks, hunger and US air quality", view: VIEW_WORLD, icon: I.health },
     { id: "firearms", group: "group-firearms", title: "FIREARMS", sub: "USA and global gun ownership and carry reciprocity", view: VIEW_US, icon: I.target },
+    { id: "history", group: "group-history-archaeology", title: "HISTORY & ARCHAEOLOGY", sub: "Ancient ruins, shipwrecks, battles, explorers and fossil sites", view: VIEW_WORLD, icon: I.column },
+    { id: "environment", group: "group-environment-energy", title: "ENVIRONMENT & ENERGY", sub: "Pollution, nuclear disasters, fracking, Superfund and geoengineering", view: VIEW_WORLD, icon: I.factory },
+    { id: "earth", group: "group-earth-oceans", title: "EARTH & OCEANS", sub: "Oceans, polar research, climate, biomes and geology", view: VIEW_WORLD, icon: I.wave },
+    { id: "government", group: "group-government-infrastructure", title: "GOVERNMENT & INFRASTRUCTURE", sub: "Borders, government sites, native lands and drone no-fly zones", view: VIEW_US, icon: I.capitol },
     { id: "militias", group: "group-militias", title: "MILITIAS", sub: "National, statewide, local and inactive groups", view: VIEW_US, icon: I.group },
     { id: "paranormal", group: "group-paranormal", title: "PARANORMAL", sub: "UFO reports and Bigfoot sightings", view: VIEW_WORLD, icon: I.spark },
     {
@@ -139,6 +147,102 @@
     return out;
   }
 
+  function escText(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // EXTRA LAYERS (extra-layers.js): the sidebar group's sub-groups, each collapsible,
+  // each layer with its own switch (data-welcome-xl). Read from the page like the rest.
+  function xlChoices(p) {
+    var group = p.group && document.getElementById(p.group);
+    if (!group) return "";
+    var subs = group.querySelectorAll("details.gsx-sub");
+    var html = "";
+    for (var i = 0; i < subs.length; i += 1) {
+      var buttons = subs[i].querySelectorAll("[data-xl-toggle]");
+      var rows = "";
+      for (var j = 0; j < buttons.length; j += 1) {
+        var key = buttons[j].getAttribute("data-xl-toggle");
+        var nameEl = buttons[j].querySelector(".layer-name");
+        var name = nameEl ? nameEl.textContent.replace(/\s+/g, " ").trim() : key;
+        rows += '<button type="button" class="welcome-xl" data-welcome-xl="' + escText(key) + '" aria-pressed="false" title="' + escText(buttons[j].getAttribute("title") || "") + '">' +
+          '<span class="welcome-layer-name">' + escText(name) + '</span><em class="welcome-xl-count" data-xl-count="' + escText(key) + '">—</em>' +
+          '<span class="switch" aria-hidden="true"></span></button>' +
+          '<div class="gsx-note" data-xl-note="' + escText(key) + '" hidden></div>';
+      }
+      html += '<details class="welcome-xsub" data-welcome-sub="' + escText(subs[i].getAttribute("data-xl-sub")) + '">' +
+        '<summary><span>' + escText(subs[i].getAttribute("data-xl-sub")) + '</span><em>' + buttons.length + '</em></summary>' + rows + '</details>';
+    }
+    return html;
+  }
+
+  // One search box for every layer in every category (old and new).
+  var filterSaved = null;
+  function applyFilter(q) {
+    if (!box) return;
+    var words = String(q || "").toLowerCase().split(/\s+/).filter(Boolean);
+    var cats = box.querySelectorAll(".welcome-cat");
+    var out = box.querySelector("[data-welcome-filter-n]");
+    var rest = box.querySelectorAll(".welcome-list > .welcome-row, .welcome-list > .welcome-section");
+    var i, j;
+    if (!words.length) {
+      box.classList.remove("is-filtering");
+      var hidden = box.querySelectorAll(".welcome-hide");
+      for (i = 0; i < hidden.length; i += 1) hidden[i].classList.remove("welcome-hide");
+      if (filterSaved) {
+        for (i = 0; i < filterSaved.length; i += 1) {
+          var rec = filterSaved[i];
+          if (rec.node.tagName === "DETAILS") rec.node.open = rec.open;
+          else { rec.node.hidden = rec.hidden; }
+          if (rec.head) rec.head.setAttribute("aria-expanded", rec.hidden ? "false" : "true");
+        }
+        filterSaved = null;
+      }
+      if (out) out.textContent = "";
+      return;
+    }
+    if (!filterSaved) {
+      filterSaved = [];
+      var drops = box.querySelectorAll(".welcome-drop");
+      for (i = 0; i < drops.length; i += 1) filterSaved.push({ node: drops[i], hidden: drops[i].hidden, head: drops[i].parentNode.querySelector("[data-welcome-toggle]") });
+      var subsAll = box.querySelectorAll(".welcome-xsub");
+      for (i = 0; i < subsAll.length; i += 1) filterSaved.push({ node: subsAll[i], open: subsAll[i].open });
+    }
+    box.classList.add("is-filtering");
+    for (i = 0; i < rest.length; i += 1) rest[i].classList.add("welcome-hide");
+    var total = 0;
+    for (i = 0; i < cats.length; i += 1) {
+      var head = cats[i].querySelector("[data-welcome-toggle]");
+      var strong = head && head.querySelector("strong");
+      var catName = strong ? strong.textContent.toLowerCase() : "";
+      var drop = cats[i].querySelector(".welcome-drop");
+      var hits = 0;
+      var layers = cats[i].querySelectorAll("[data-welcome-layer], [data-welcome-xl]");
+      for (j = 0; j < layers.length; j += 1) {
+        var sub = layers[j].closest(".welcome-xsub");
+        var hay = (layers[j].textContent + " " + catName + " " + (sub ? sub.getAttribute("data-welcome-sub") : "") + " " + (layers[j].getAttribute("title") || "")).toLowerCase();
+        var ok = words.every(function (w) { return hay.indexOf(w) !== -1; });
+        layers[j].classList.toggle("welcome-hide", !ok);
+        if (ok) hits += 1;
+      }
+      var subs = cats[i].querySelectorAll(".welcome-xsub");
+      for (j = 0; j < subs.length; j += 1) {
+        var n = subs[j].querySelectorAll("[data-welcome-xl]:not(.welcome-hide)").length;
+        subs[j].classList.toggle("welcome-hide", n === 0);
+        subs[j].open = n > 0;
+      }
+      cats[i].classList.toggle("welcome-hide", hits === 0);
+      if (drop) drop.hidden = hits === 0;
+      if (head) head.setAttribute("aria-expanded", hits ? "true" : "false");
+      total += hits;
+    }
+    var sec = box.querySelector(".welcome-section");
+    if (sec) sec.classList.remove("welcome-hide");
+    if (out) out.textContent = total ? total + (total === 1 ? " match" : " matches") : "No matches";
+  }
+
   function build() {
     if (box) return box;
     box = document.getElementById("welcome");
@@ -162,6 +266,7 @@
           '<span class="welcome-layer-name">' + item.name.replace(/&/g, "&amp;") + "</span>" +
           '<span class="switch" aria-hidden="true"></span></button>';
       }).join("");
+      items += xlChoices(p);
       return '<div class="welcome-cat">' +
         '<button type="button" class="welcome-row is-category" data-welcome-toggle="' + p.id + '" aria-expanded="false">' +
         '<span class="welcome-icon">' + svg(p.icon) + "</span>" +
@@ -174,7 +279,9 @@
       '<span class="welcome-icon">' + svg(I.web) + "</span>" +
       '<span class="welcome-text"><strong>GRID TESTER</strong><em>Scan a grid and draw the lines on the globe</em></span>' +
       '<span class="welcome-arrow" aria-hidden="true">→</span></button>';
-    list.innerHTML = row(PRESETS[0], 0) + gridRow +
+    var filter = '<div class="welcome-filter"><input type="search" data-welcome-filter placeholder="Search all layers" aria-label="Search all layers" autocomplete="off" spellcheck="false">' +
+      '<span data-welcome-filter-n aria-live="polite"></span></div>';
+    list.innerHTML = row(PRESETS[0], 0) + gridRow + filter +
       '<p class="welcome-section">ALL CATEGORIES</p><div class="welcome-cats">' +
       cats.map(cat).join("") + "</div>" +
       row(PRESETS[PRESETS.length - 1], 1);
@@ -187,6 +294,14 @@
         if (typeof hooks.openGridTester === "function") hooks.openGridTester();
         return;
       }
+      var xlBtn = event.target.closest("[data-welcome-xl]");
+      if (xlBtn) {
+        stopSpin();
+        if (root.GsaExtraLayers) root.GsaExtraLayers.setActive(xlBtn.dataset.welcomeXl, !root.GsaExtraLayers.isOn(xlBtn.dataset.welcomeXl));
+        syncSwitches();
+        return;
+      }
+      if (event.target.closest(".welcome-xsub > summary, .gsx-note, .welcome-filter")) return;
       var layerBtn = event.target.closest("[data-welcome-layer]");
       if (layerBtn) {
         chooseLayer(layerBtn.dataset.welcomePreset, layerBtn.dataset.welcomeLayer);
@@ -200,6 +315,13 @@
       var picked = event.target.closest("[data-welcome-preset]");
       if (picked && !picked.closest(".welcome-drop")) choose(picked.dataset.welcomePreset);
     });
+    var filterInput = list.querySelector("[data-welcome-filter]");
+    if (filterInput) {
+      filterInput.addEventListener("input", function () { applyFilter(filterInput.value); });
+      filterInput.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") { event.stopPropagation(); filterInput.value = ""; applyFilter(""); }
+      });
+    }
     var closers = box.querySelectorAll("[data-welcome-close]");
     for (var c = 0; c < closers.length; c += 1) {
       closers[c].addEventListener("click", function () { close(); });
@@ -297,6 +419,12 @@
       var on = layerOn(layers[i].dataset.welcomeLayer);
       layers[i].classList.toggle("on", on);
       layers[i].setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    var xl = box.querySelectorAll("[data-welcome-xl]");
+    for (var x = 0; x < xl.length; x += 1) {
+      var xon = Boolean(root.GsaExtraLayers && root.GsaExtraLayers.isOn(xl[x].dataset.welcomeXl));
+      xl[x].classList.toggle("on", xon);
+      xl[x].setAttribute("aria-pressed", xon ? "true" : "false");
     }
     var rows = box.querySelectorAll(".welcome-row[data-welcome-preset]");
     for (var r = 0; r < rows.length; r += 1) {
@@ -560,6 +688,7 @@
     },
     stopSpin: stopSpin,
     syncSwitches: syncSwitches,
+    applyFilter: applyFilter,
     releaseCamera: releaseCamera,
     presets: function () { return PRESETS.map(function (p) { return { id: p.id, title: p.title, group: p.group || "", layers: presetLayers(p) }; }); },
     storeKey: STORE_KEY,

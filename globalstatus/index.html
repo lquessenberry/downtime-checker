@@ -37,6 +37,7 @@
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
   <link rel="stylesheet" href="/cesium.css?v=20261126y" />
+  <link rel="stylesheet" href="/extra-layers.css?v=20261127a" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -251,6 +252,18 @@
         <p class="sw-note" data-firearms-note="gunsworld" hidden></p>
         <button type="button" class="layer" data-layer-toggle="ccw" aria-pressed="false"><span class="layer-name"><span class="swatch ccw"></span> USA CONCEALED CARRY RECIPROCITY</span><span class="layer-meta"><em data-count="ccw">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-ccw-note="ccw" hidden></p>
+      </details>
+      <details class="layer-group gsx-new" id="group-history-archaeology" data-layer-group="history-archaeology">
+        <summary class="layer-group-head"><span>HISTORY &amp; ARCHAEOLOGY</span><em class="layer-group-count"></em></summary>
+      </details>
+      <details class="layer-group gsx-new" id="group-environment-energy" data-layer-group="environment-energy">
+        <summary class="layer-group-head"><span>ENVIRONMENT &amp; ENERGY</span><em class="layer-group-count"></em></summary>
+      </details>
+      <details class="layer-group gsx-new" id="group-earth-oceans" data-layer-group="earth-oceans">
+        <summary class="layer-group-head"><span>EARTH &amp; OCEANS</span><em class="layer-group-count"></em></summary>
+      </details>
+      <details class="layer-group gsx-new" id="group-government-infrastructure" data-layer-group="government-infrastructure">
+        <summary class="layer-group-head"><span>GOVERNMENT &amp; INFRASTRUCTURE</span><em class="layer-group-count"></em></summary>
       </details>
       <details class="layer-group" id="group-militias" data-layer-group="militias">
         <summary class="layer-group-head"><span>MILITIAS</span><em class="layer-group-count"></em></summary>
@@ -628,6 +641,11 @@
   <script src="/geocoder.js?v=20261126s"></script>
   <script src="/nearby.js?v=20261126l"></script>
   <script src="/welcome.js?v=20261126t"></script>
+  <script src="/extra-layers-registry.js?v=20261127a"></script>
+  <script src="/extra-layers.js?v=20261127a"></script>
+  <script src="/custom-packs-loader.js?v=20261127a"></script>
+  <script src="/satellite-imagery-loader.js?v=20261127a"></script>
+  <script src="/live-feeds-loader.js?v=20261127a"></script>
   <script src="/cesium.js?v=20261126z"></script>
 </body>
 </html>

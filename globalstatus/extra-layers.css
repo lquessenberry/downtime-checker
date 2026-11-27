@@ -1,0 +1,109 @@
+/* Global Status · EXTRA LAYERS (extra-layers.js and loaders).
+   Dark slate / neutral palette from cesium.css: slate, ice blue and warm accents only.
+
+/* While a search is active, hide what does not match. */
+.gsx-hide { display: none !important; }
+
+/* Collapsible sub-groups inside a category. */
+.gsx-sub { margin: 2px 0 2px 8px; border-left: 1px solid rgba(120, 190, 210, 0.16); }
+.gsx-sub > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  color: #b8cbd2;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+}
+.gsx-sub > summary::-webkit-details-marker { display: none; }
+.gsx-sub > summary::before { content: "▸"; margin-right: 4px; color: #7f97a1; }
+.gsx-sub[open] > summary::before { content: "▾"; }
+.gsx-sub > summary > span { flex: 1; }
+.gsx-sub-count { font-style: normal; color: var(--dim); font-size: 10px; }
+
+/* New layer rows: slate / ice switch instead of the older on-colour. */
+.gsx-layer { padding-left: 14px; }
+.gsx-layer .layer-name { line-height: 1.3; }
+.gsx-swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: 0 0 8px; box-shadow: 0 0 0 1px rgba(11, 18, 24, 0.9); }
+.gsx-swatch.gsx-img { border-radius: 1px; background: linear-gradient(135deg, #6f8fb0 0 50%, #c9d8e2 50%); }
+.layer.gsx-layer.on .switch.gsx-switch { background: #3a4a5c; }
+.layer.gsx-layer.on .switch.gsx-switch::after { left: 16px; background: #cfe3ee; }
+.layer-group.gsx-new > summary em { color: #9fd4e2; }
+
+/* Note under a switched-on layer: description, credit, opacity. Plain text only. */
+.gsx-note { margin: 0 10px 6px 30px; color: var(--dim); font-size: 10px; line-height: 1.4; }
+.gsx-note p { margin: 2px 0; }
+.gsx-note .gsx-credit { color: #93a9b2; font-style: italic; }
+.gsx-note .gsx-err { color: #e0a07a; }
+.gsx-opacity { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.gsx-opacity span { letter-spacing: 0.06em; }
+.gsx-opacity input[type="range"] { flex: 1; accent-color: #9fd4e2; height: 14px; }
+
+/* Card body (shared #selected card: close × and scroll come from cesium.css). */
+#selected .gsx-card-region { color: #b8cbd2; }
+#selected .gsx-card-era { color: #d8b27a; }
+#selected .gsx-card-sum { color: var(--text); display: inline-block; margin-top: 2px; }
+#selected .gsx-card-det { color: #b8cbd2; display: inline-block; margin-top: 2px; }
+#selected .gsx-card-credit { color: var(--dim); font-size: 0.9em; font-style: italic; }
+#selected .gsx-facts dt { color: var(--dim); }
+#selected .gsx-facts dd { margin: 0; color: var(--text); }
+#selected-body { overflow-wrap: anywhere; }
+
+/* LAYERS picker (welcome.js): search box, sub-groups and the new layer switches. */
+.welcome-filter { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.welcome-filter input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: #101820;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+.welcome-filter input::placeholder { color: var(--dim); }
+.welcome-filter input:focus { outline: none; border-color: #9fd4e2; background: #163044; }
+.welcome-filter [data-welcome-filter-n] { color: var(--dim); font-size: 10.5px; letter-spacing: 0.08em; white-space: nowrap; }
+.welcome-hide { display: none !important; }
+.welcome.is-filtering .welcome-cats { grid-template-columns: 1fr; }
+.welcome.is-filtering .gsx-note { display: none; }
+
+.welcome-xsub { border: 1px solid rgba(120, 190, 210, 0.18); border-radius: 4px; background: rgba(16, 24, 32, 0.6); }
+.welcome-xsub > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 10px;
+  color: #b8cbd2;
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+}
+.welcome-xsub > summary::-webkit-details-marker { display: none; }
+.welcome-xsub > summary::before { content: "▸"; color: #7f97a1; }
+.welcome-xsub[open] > summary::before { content: "▾"; color: #9fd4e2; }
+.welcome-xsub > summary > span { flex: 1; min-width: 0; }
+.welcome-xsub > summary > em { font-style: normal; color: var(--dim); font-size: 10.5px; }
+.welcome-xsub[open] { display: grid; gap: 4px; padding-bottom: 6px; }
+.welcome-xsub[open] > .welcome-xl, .welcome-xsub[open] > .gsx-note { margin-left: 8px; margin-right: 8px; width: auto; }
+.welcome-drop button.welcome-xl { font-size: 11.5px; }
+.welcome-xl-count { font-style: normal; color: var(--dim); font-size: 10.5px; white-space: nowrap; }
+.welcome-drop button.welcome-xl.on { border-color: #9fd4e2; background: #163044; }
+.welcome-drop button.welcome-xl.on .switch { background: #3a4a5c; }
+.welcome-drop button.welcome-xl.on .switch::after { left: 16px; background: #cfe3ee; }
+.welcome-xsub .gsx-note { margin-top: 0; margin-bottom: 2px; padding: 0 4px; }
+
+@media (max-width: 800px) {
+  .welcome-filter input { font-size: 16px; }
+  .gsx-sub > summary { min-height: 40px; font-size: 12.5px; }
+  .gsx-layer { min-height: 40px; }
+  .welcome-xsub > summary { min-height: 42px; font-size: 12.5px; }
+  .welcome-drop button.welcome-xl { min-height: 42px; font-size: 12.5px; }
+}
