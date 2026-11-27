@@ -3767,6 +3767,9 @@ async function loadShips() {
     }));
     if (token !== shipLoadToken || !state.layers.ships) return;
     const groups = settled.filter((item) => item.status === "fulfilled").map((item) => item.value);
+    const community = await communityShips();
+    if (token !== shipLoadToken || !state.layers.ships) return;
+    if (community.length) groups.push(community);
     if (!groups.length) {
       if (!state.live.ships.points.length) setStatus("MARITIME FEED UNAVAILABLE");
       return;
@@ -4226,7 +4229,7 @@ function placeLiveLayer(key, points) {
     if (key === "aircraft" && state.adsbIcons) {
       entityOptions.billboard = {
         image: aircraftIcon(point),
-        color: Cesium.Color.fromCssColorString(altitudeColor(point.alt)),
+        color: Cesium.Color.fromCssColorString(point.community ? COMMUNITY_COLOR : altitudeColor(point.alt)),
         rotation: -Cesium.Math.toRadians(track),
         width: PIN_SIZE,
         height: PIN_SIZE,
@@ -4256,8 +4259,10 @@ function placeLiveLayer(key, points) {
         }
         : key === "quakes"
           ? markerPoint(point.color || style.color, point.size || MARKER_SIZE)
-          : markerPoint(style.color);
+          : markerPoint(point.community ? COMMUNITY_COLOR : style.color);
+      if (point.community && key === "aircraft") entityOptions.point.color = Cesium.Color.fromCssColorString(COMMUNITY_COLOR);
     }
+    if (point.community) kind = "COMMUNITY SDR";
     const entity = layer.source.entities.add(entityOptions);
     entity._live = { ...point, kind, layer: key };
   }
@@ -4335,7 +4340,56 @@ function closeMapPopups() {
   for (const popup of document.querySelectorAll("[data-map-popup]")) popup.hidden = true;
 }
 
+// COMMUNITY LIVE SDR FEED (GS-58). Points shared from visitors' own radios, merged into
+// LIVE AIR TRAFFIC / GLOBAL MESH NODES by the server and GLOBAL MARITIME TRAFFIC here,
+// only when the regular feed does not already have that aircraft, vessel or node.
+const COMMUNITY_COLOR = "#c084fc";
+const COMMUNITY_KINDS = { adsb: "ADS-B 1090", uat: "UAT 978", ais: "AIS VESSEL", mesh: "MESH NODE" };
+function communityHtml(item) {
+  const age = Number(item.ageSec);
+  const facts = [
+    aircraftFact("Heard", Number.isFinite(age) ? (age < 60 ? `${Math.round(age)} s ago` : `${Math.round(age / 60)} min ago`) : ""),
+    aircraftFact("Signal", COMMUNITY_KINDS[item.k] || ""),
+    aircraftFact("ICAO", item.layer === "aircraft" && item.hex ? String(item.hex).toUpperCase() : ""),
+    aircraftFact("Altitude", item.layer === "aircraft" ? (aircraftOnGround(item) ? "on the ground" : aircraftNumber(item.alt, 0, " ft")) : ""),
+    aircraftFact("Groundspeed", item.layer === "aircraft" ? aircraftNumber(item.gs, 0, " kt") : ""),
+    aircraftFact("Track", item.layer === "aircraft" ? aircraftNumber(item.track, 0, "°") : ""),
+    aircraftFact("MMSI", item.layer === "ships" ? item.mmsi : ""),
+    aircraftFact("Speed", item.layer === "ships" && Number.isFinite(Number(item.sog)) ? `${Number(item.sog).toFixed(1)} kn` : ""),
+    aircraftFact("Ship type", item.layer === "ships" ? shipTypeLabel(item) : ""),
+    aircraftFact("Node", item.layer === "mesh" ? item.id : ""),
+    aircraftFact("Short name", item.layer === "mesh" ? item.short : ""),
+    aircraftFact("Protocol", item.layer === "mesh" ? item.hw : ""),
+    aircraftFact("Receivers", Number(item.reports) > 1 ? `${item.reports} contributors` : ""),
+  ].join("");
+  return `<b>COMMUNITY SDR</b> ${esc(item.name || "")}<br>${Number(item.lat).toFixed(2)}, ${Number(item.lon).toFixed(2)}`
+    + `<dl class="nearby-facts">${facts}</dl>`
+    + `<p class="community-note">Shared live by a Global Status visitor's own radio. Not verified. Shown because the regular feed does not have it right now.</p>`;
+}
+
+let communityShipsCache = { at: 0, points: [] };
+async function communityShips() {
+  if (Date.now() - communityShipsCache.at < 20000) return communityShipsCache.points;
+  try {
+    const response = await fetch("/api/community/feed?k=ais");
+    const body = await response.json();
+    const points = (Array.isArray(body.points) ? body.points : []).map((c) => ({
+      lat: c.lat, lon: c.lon, name: c.name || `MMSI ${c.id}`, sog: Number(c.sog) || 0,
+      cog: Number(c.cog) || 0, type: Number(c.type), source: "contributor", mmsi: String(c.id),
+      community: true, k: "ais", ageSec: c.ageSec, reports: c.reports,
+    }));
+    communityShipsCache = { at: Date.now(), points };
+  } catch (error) {
+    communityShipsCache.at = Date.now();
+  }
+  return communityShipsCache.points;
+}
+
 function showLive(item) {
+  if (item.community) {
+    fillSelected(liveHtml(item));
+    return;
+  }
   if (item.layer === "aircraft") {
     openAircraft(item);
     return;
@@ -4348,6 +4402,7 @@ function showLive(item) {
 // The text of a live pin's info box. opts.list: for the nearby card's pin list (no
 // popup bookkeeping in the layer modules).
 function liveHtml(item, opts = {}) {
+  if (item.community) return communityHtml(item);
   let extra = "";
   if (item.layer === "aircraft") {
     // Same facts as the aircraft card (renderAircraft), from the live feed row.

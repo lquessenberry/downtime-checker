@@ -69,11 +69,24 @@
 			}
 		}
 
+		# Aircraft and mesh go through PHP so community SDR contributions
+		# (gsa_cf_merge_aircraft / gsa_cf_merge_mesh) are included. Raw cache
+		# files would skip that merge. /api/community/* falls through to /api/*.
+		handle /api/aircraft {
+			rewrite * /router.php
+			php
+		}
+		handle /api/mesh {
+			rewrite * /router.php
+			php
+		}
+
 		# Runner snapshots. Written atomically only when the payload hash changes.
+
 		# Caddy's ETag follows mtime/size, so it only changes on a real content change.
 		# Precompressed zstd/gzip twins are written next to the JSON. PHP is the
 		# fallback until the first poll lands.
-		@cached path_regexp cached ^/api/(outages|mil|mesh|disease|animal|jamming|aircraft)$
+		@cached path_regexp cached ^/api/(outages|mil|disease|animal|jamming)$
 		handle @cached {
 			route {
 				try_files /data/{re.cached.1}-cache.json /router.php
