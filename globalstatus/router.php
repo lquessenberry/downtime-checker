@@ -14,6 +14,7 @@ if (!is_dir($dataDir)) {
 }
 
 require $root . '/poll-lib.php';
+require $root . '/community-feed.php';
 
 // Web requests only. poll-runner.php (cron) loads this file for its functions.
 if (!defined('GSA_RUNNER')) {
@@ -50,8 +51,15 @@ function gsa_http_routes()
         // data/stop.flag, so nobody can abort the scheduled pass.
         json_out(200, array('ok' => true, 'local' => true));
     }
+    // COMMUNITY LIVE SDR FEED (community-feed.php): opt-in uploads from visitors' radios.
+    if ($path === '/api/community/ingest' && $method === 'POST') {
+        gsa_cf_ingest();
+    }
+    if ($path === '/api/community/feed' && $method === 'GET') {
+        gsa_cf_feed();
+    }
     if ($path === '/api/aircraft' && $method === 'GET') {
-        json_out(200, gsa_aircraft_snapshot());
+        json_out(200, gsa_cf_merge_aircraft(gsa_aircraft_snapshot()));
     }
     if (preg_match('#^/api/aircraft/([0-9a-fA-F]{6})$#', $path, $match) && $method === 'GET') {
         json_out(200, aircraft_detail(strtolower($match[1]), $_GET));
@@ -72,7 +80,7 @@ function gsa_http_routes()
         json_out(200, military_snapshot());
     }
     if ($path === '/api/mesh' && $method === 'GET') {
-        json_out(200, mesh_snapshot());
+        json_out(200, gsa_cf_merge_mesh(mesh_snapshot()));
     }
     if ($path === '/api/disease' && $method === 'GET') {
         json_out(200, disease_snapshot());

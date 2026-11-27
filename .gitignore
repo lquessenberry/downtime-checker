@@ -49,3 +49,6 @@ data/designations/geo/*.geojson
 
 # Local QA screenshots (verify_all_layers / Playwright). Never committed.
 screenshots/
+
+# Community live SDR feed runtime store (GS-58). Lives only on the server.
+globalstatus/data/community-*
