@@ -449,8 +449,10 @@
   }
 
   // On every page open: if the browser already granted GPS, use it silently (no
-  // prompt). Otherwise a fresh IP lookup. If that fails, return null so the map
-  // keeps a neutral world view and no pin. Never reuse a saved or default city.
+  // prompt and no locate-note toast). Otherwise a fresh IP lookup, also silent.
+  // If that fails, return null so the map keeps a neutral world view and no pin.
+  // Never reuse a saved or default city. Status notes stay on user-initiated
+  // locateExact / locateApprox only.
   async function locateStartup() {
     const seq = ++locateSeq;
     const perm = await geoPermission();
@@ -460,7 +462,6 @@
       if (seq !== locateSeq) return null;
       if (exact) {
         if (root.GsaOrigin) root.GsaOrigin.set(exact);
-        note("Your exact location.", 8000);
         return exact;
       }
     }
@@ -468,7 +469,6 @@
     if (seq !== locateSeq) return null;
     if (!info) return null;
     if (root.GsaOrigin) root.GsaOrigin.set(info);
-    note("Approximate, from your internet connection" + (info.service ? `, via ${info.service}` : "") + ".", 15000);
     return info;
   }
 
