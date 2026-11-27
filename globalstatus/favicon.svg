@@ -1,7 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#070b10"/>
-  <circle cx="16" cy="16" r="12" fill="#10283a" stroke="#7ec8ff" stroke-width="1.7"/>
-  <ellipse cx="16" cy="16" rx="5.2" ry="12" fill="none" stroke="#7ec8ff" stroke-width="1.15"/>
-  <path d="M4.2 16h23.6" stroke="#7ec8ff" stroke-width="1.15"/>
-  <text x="16" y="21.2" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#f4f8fa">?</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs><radialGradient id="g" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#11202c"/><stop offset="1" stop-color="#070b10"/></radialGradient></defs><rect x="0.0" y="0.0" width="1024.0" height="1024.0" rx="184.32" fill="url(#g)"/><g transform="translate(71.68 71.68) scale(13.76)">
+<circle cx="32" cy="32" r="24" fill="#10283a"/>
+<circle cx="32" cy="32" r="24" fill="none" stroke="#7ec8ff" stroke-width="4.6"/>
+<path d="M7 32 H21.5 L25.5 23 L30.5 43 L35.5 17 L39.5 32 H57" fill="none" stroke="#3dff9a" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g></svg>

@@ -1,0 +1,16 @@
+CATS = [
+ ("conflict","Conflict & violence","#ff5a5f","crossed-swords / burst"),
+ ("casualties","Casualties","#ff8fc8","tally / figure"),
+ ("humanitarian","Humanitarian & displacement","#4cc9f0","tent / arrow"),
+ ("food","Food insecurity","#d9b44a","wheat"),
+ ("disease","Disease outbreaks","#b78bff","virus"),
+ ("natural","Natural hazards","#ff8a3d","triangle / wave"),
+ ("airquality","Air quality","#8fe04a","wind"),
+ ("nuclear","Nuclear & radiation","#ffe14d","trefoil"),
+ ("aviation","Aviation & maritime","#3dffd0","plane / ship"),
+ ("infrastructure","Infrastructure","#7aa2ff","bolt / tower"),
+ ("emergency","Emergency resources","#f4f8fa","cross / shelter"),
+ ("crime","Crime","#d4e06a","shield"),
+ ("registries","Sex-offender registries","#e879f9","link (external)"),
+ ("historic","Historic: Cold War & Nuclear Age","#c8b28a","hourglass"),
+]
