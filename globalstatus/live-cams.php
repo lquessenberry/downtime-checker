@@ -28,7 +28,7 @@ function gsa_lc_layers()
         'canada' => array('drivebc', 'calgary', 'toronto'),
         'uk' => array('tfl'),
         'europe' => array('dgt', 'digitraffic', 'iceland'),
-        'asiapac' => array('hongkong', 'singapore', 'qld', 'nzta'),
+        'asiapac' => array('hongkong', 'singapore', 'nzta'),
         'border' => array('border'),
         'volcano' => array('usgsvolc'),
     );
@@ -55,7 +55,6 @@ function gsa_lc_sources()
         'iceland' => array('credit' => 'Vegagerdin, Icelandic Road and Coastal Administration', 'ttl' => 43200, 'img' => 'direct', 'hosts' => array('www.vegagerdin.is')),
         'hongkong' => array('credit' => 'Transport Department, Hong Kong SAR (DATA.GOV.HK)', 'ttl' => 43200, 'img' => 'direct', 'hosts' => array('tdcctv.data.one.gov.hk')),
         'singapore' => array('credit' => 'Land Transport Authority via data.gov.sg (Singapore Open Data Licence)', 'ttl' => 60, 'img' => 'resolve', 'hosts' => array('images.data.gov.sg')),
-        'qld' => array('credit' => 'QLDTraffic, Queensland Department of Transport and Main Roads, CC BY 4.0', 'ttl' => 21600, 'img' => 'direct', 'hosts' => array('cameras.qldtraffic.qld.gov.au')),
         'nzta' => array('credit' => 'NZ Transport Agency Waka Kotahi (trafficnz.info), CC BY 4.0', 'ttl' => 21600, 'img' => 'direct', 'hosts' => array('trafficnz.info', 'www.trafficnz.info')),
         'border' => array('credit' => 'Caltrans CCTV and DriveBC border crossing cameras', 'ttl' => 21600, 'img' => 'direct', 'hosts' => array('cwwp2.dot.ca.gov', 'wzmedia.dot.ca.gov', 'www.drivebc.ca')),
         'usgsvolc' => array('credit' => 'USGS Volcano Hazards Program webcams (public domain)', 'ttl' => 3600, 'img' => 'direct', 'hosts' => array('volcview.wr.usgs.gov')),
@@ -480,22 +479,6 @@ function gsa_lc_fetch_singapore($hosts)
     foreach ($j['items'][0]['cameras'] ?? array() as $c) {
         $id = (string) ($c['camera_id'] ?? '');
         $cam = gsa_lc_cam($id, 'Traffic camera ' . $id, 'Singapore expressways', $c['location']['latitude'] ?? null, $c['location']['longitude'] ?? null, $c['image'] ?? '', '', $hosts);
-        if ($cam) {
-            $out[] = $cam;
-        }
-    }
-    return $out;
-}
-
-function gsa_lc_fetch_qld($hosts)
-{
-    // QLDTraffic publishes this key for public use in its developer guide.
-    $j = gsa_lc_json('https://api.qldtraffic.qld.gov.au/v1/webcams?apikey=3e83add325cbb69ac4d8e5bf433d770b');
-    $out = array();
-    foreach ($j['features'] ?? array() as $f) {
-        $p = $f['properties'] ?? array();
-        $co = $f['geometry']['coordinates'] ?? array(null, null);
-        $cam = gsa_lc_cam($p['id'] ?? '', $p['description'] ?? '', trim(($p['locality'] ?? '') . ', ' . ($p['district'] ?? '') . ', Queensland', ', '), $co[1] ?? null, $co[0] ?? null, $p['image_url'] ?? '', '', $hosts);
         if ($cam) {
             $out[] = $cam;
         }

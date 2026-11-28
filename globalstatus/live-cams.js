@@ -16,7 +16,7 @@
     { key: "canada", name: "CANADA ROADS", color: "#a5b4fc", desc: "DriveBC highways, Calgary and Toronto city cameras" },
     { key: "uk", name: "UK ROADS (LONDON)", color: "#f9a8d4", desc: "Transport for London JamCams with short video clips" },
     { key: "europe", name: "EUROPE ROADS", color: "#fbbf24", desc: "Spain DGT, Finland road weather cameras and Iceland roads" },
-    { key: "asiapac", name: "ASIA & PACIFIC ROADS", color: "#fdba74", desc: "Hong Kong, Singapore, Queensland and New Zealand highways" },
+    { key: "asiapac", name: "ASIA & PACIFIC ROADS", color: "#fdba74", desc: "Hong Kong, Singapore and New Zealand highways" },
     { key: "border", name: "BORDER CROSSINGS", color: "#f87171", desc: "US-Mexico (San Ysidro, Otay Mesa, Calexico) and Canada-US (BC) crossings" },
     { key: "volcano", name: "VOLCANO & NATURE", color: "#fb923c", desc: "USGS volcano webcams in Alaska, Hawaii and the Cascades" },
   ];
