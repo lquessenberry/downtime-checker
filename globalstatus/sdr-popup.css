@@ -238,3 +238,5 @@
 .gsr-chat-text { min-height: 72px; resize: vertical; line-height: 1.45; }
 .gsr-chat .gsr-row { align-items: center; }
 .gsr-table tr.is-out td { color: #e2e8f0; }
+/* MY DEVICES ONLY viewing mode */
+.welcome-drop .gsr-layer[data-sdr-act="mydev"].on, .gsr-rail-layer[data-sdr-act="mydev"].on { border-color: #c4b5fd; }

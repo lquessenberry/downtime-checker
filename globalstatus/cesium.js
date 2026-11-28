@@ -4892,3 +4892,26 @@ window.GsaOrigin = {
   get: () => (visitorOrigin ? { ...visitorOrigin } : null),
   set: setVisitorOrigin,
 };
+window.GsaMap = {
+  setLayer: (layer, on, options) => setLayer(layer, on, options),
+  isOn: (layer) => Boolean(layerShown(layer)),
+  onKeys: () => Object.keys(state.layers).filter((key) => layerShown(key)),
+  scanVisible: () => {
+    const src = state.scanSource;
+    if (!src || !src.show) return false;
+    const grid = document.getElementById("grid-tester");
+    if (grid && !grid.hidden) return true;
+    try { return src.entities.values.length > 0; } catch (error) { return false; }
+  },
+  setScanVisible: (on) => { if (state.scanSource) state.scanSource.show = Boolean(on); },
+  closeGridIfOpen: () => {
+    const welcome = document.getElementById("welcome");
+    const grid = document.getElementById("grid-tester");
+    if (!grid || grid.hidden) return;
+    const home = welcome && welcome.querySelector("[data-welcome-home]");
+    grid.hidden = true;
+    if (home) home.hidden = false;
+    if (welcome) welcome.setAttribute("aria-labelledby", "welcome-title");
+    syncGridTesterButton();
+  },
+};
