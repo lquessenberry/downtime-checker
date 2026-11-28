@@ -3,36 +3,37 @@
 <head>
   <meta charset="UTF-8" />
   <script>
-    // SPLASH_MODE picks the loading screen: 'classic' (the original looping satellite clip
-    // with the timed terminal lines, default) or 'video' (the later satellite video splash).
-    // To try either one, open /?splash=classic or /?splash=video.
+    // SPLASH_MODE picks the loading screen. Revert the default with one line:
+    // change DEFAULT_SPLASH to "classic" (looping satellite) or "video" / "video-v3"
+    // (the 24s v3 clip and its original text timings). "video-v4" is the 15s clip.
+    // Override with /?splash=classic, /?splash=video, /?splash=video-v3, or /?splash=video-v4.
     (function () {
-      var DEFAULT_SPLASH = "classic";
+      var DEFAULT_SPLASH = "video-v4";
       var mode = DEFAULT_SPLASH;
-      try { var m = /[?&]splash=(classic|video)(?:&|$)/.exec(window.location.search); if (m) mode = m[1]; } catch (e) {}
+      try { var m = /[?&]splash=(classic|video-v3|video-v4|video)(?:&|$)/.exec(window.location.search); if (m) mode = m[1]; } catch (e) {}
       window.SPLASH_MODE = mode;
       document.documentElement.setAttribute("data-splash", mode);
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
-    /* Splash: html[data-splash] is 'classic' (default) or 'video'. See SPLASH_MODE below. */
+    /* Splash: html[data-splash] is 'classic', 'video'/'video-v3', or 'video-v4'. See SPLASH_MODE. */
     /* ---- video splash ---- */
-    html[data-splash="video"] #boot-splash { position: fixed; top: 0; left: 0; right: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; width: 100%; height: 100%; height: 100dvh; max-height: 100dvh; box-sizing: border-box; background: #000; color: #fff; font-family: ui-monospace, "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace; text-align: left; }
-    html[data-splash="video"] #boot-splash .boot-visual { position: relative; display: flex; align-items: center; justify-content: center; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
-    html[data-splash="video"] #boot-splash video { position: static; display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; object-position: center; background: #000; }
-    html[data-splash="video"] #boot-splash .boot-copy { flex: 0 0 auto; box-sizing: border-box; width: 100%; padding: 14px 16px 18px; background: #000; }
-    html[data-splash="video"] #boot-splash .boot-term { width: min(100%, 760px); margin: 0 auto; }
-    html[data-splash="video"] #boot-splash .boot-title { margin: 0 0 8px; font-size: clamp(18px, 4.6vw, 28px); font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #fff; line-height: 1.2; }
-    html[data-splash="video"] #boot-splash .boot-log p { margin: 0; padding-left: 2ch; text-indent: -2ch; color: #fff; font-size: clamp(11px, 2.8vw, 14px); line-height: 1.6; letter-spacing: 0.02em; overflow-wrap: anywhere; }
-    html[data-splash="video"] #boot-splash .boot-log p.is-latest::after { content: "\2588"; margin-left: 0.5ch; animation: boot-caret 1s steps(1) infinite; }
+    html[data-splash^="video"] #boot-splash { position: fixed; top: 0; left: 0; right: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; width: 100%; height: 100%; height: 100dvh; max-height: 100dvh; box-sizing: border-box; background: #000; color: #fff; font-family: ui-monospace, "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace; text-align: left; }
+    html[data-splash^="video"] #boot-splash .boot-visual { position: relative; display: flex; align-items: center; justify-content: center; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
+    html[data-splash^="video"] #boot-splash video { position: static; display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; object-position: center; background: #000; }
+    html[data-splash^="video"] #boot-splash .boot-copy { flex: 0 0 auto; box-sizing: border-box; width: 100%; padding: 14px 16px 18px; background: #000; }
+    html[data-splash^="video"] #boot-splash .boot-term { width: min(100%, 760px); margin: 0 auto; }
+    html[data-splash^="video"] #boot-splash .boot-title { margin: 0 0 8px; font-size: clamp(18px, 4.6vw, 28px); font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #fff; line-height: 1.2; }
+    html[data-splash^="video"] #boot-splash .boot-log p { margin: 0; padding-left: 2ch; text-indent: -2ch; color: #fff; font-size: clamp(11px, 2.8vw, 14px); line-height: 1.6; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+    html[data-splash^="video"] #boot-splash .boot-log p.is-latest::after { content: "\2588"; margin-left: 0.5ch; animation: boot-caret 1s steps(1) infinite; }
     @keyframes boot-caret { 50% { opacity: 0; } }
-    html[data-splash="video"] #boot-splash.is-done { opacity: 0; pointer-events: none; transition: opacity 1s ease; }
-    @media (prefers-reduced-motion: reduce) { html[data-splash="video"] #boot-splash.is-done { transition: none; } html[data-splash="video"] #boot-splash .boot-log p.is-latest::after { animation: none; } }
+    html[data-splash^="video"] #boot-splash.is-done { opacity: 0; pointer-events: none; transition: opacity 1s ease; }
+    @media (prefers-reduced-motion: reduce) { html[data-splash^="video"] #boot-splash.is-done { transition: none; } html[data-splash^="video"] #boot-splash .boot-log p.is-latest::after { animation: none; } }
     @media (max-width: 800px) {
-      html[data-splash="video"] #boot-splash .boot-visual { flex: 1 1 auto; }
-      html[data-splash="video"] #boot-splash video { width: 100%; height: auto; max-height: 100%; object-fit: contain; }
-      html[data-splash="video"] #boot-splash .boot-copy { margin-top: auto; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+      html[data-splash^="video"] #boot-splash .boot-visual { flex: 1 1 auto; }
+      html[data-splash^="video"] #boot-splash video { width: 100%; height: auto; max-height: 100%; object-fit: contain; }
+      html[data-splash^="video"] #boot-splash .boot-copy { margin-top: auto; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
     }
     /* ---- classic splash (the original, kept so it can be switched back) ---- */
     html[data-splash="classic"] #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; background: #000; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
@@ -67,7 +68,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261127classic1" />
+  <link rel="stylesheet" href="/cesium.css?v=20261128v4" />
   <link rel="stylesheet" href="/extra-layers.css?v=20261127e" />
   <link rel="stylesheet" href="/sdr-popup.css?v=20261127mydev1" />
   <link rel="stylesheet" href="/community-layers.css?v=20261127icon3" />
@@ -95,11 +96,130 @@
     </div>
   </div>
   <script>
-    // Loading screen. Both versions are kept: runVideo() is the new one, runClassic() is the
-    // original (kept intact so it can be switched back). Which one runs is set by SPLASH_MODE above.
+    // Loading screen. runVideoV4() is the default 15s clip. runVideo() is the kept 24s v3
+    // splash (same files, text, and timings). runClassic() is the original looping satellite.
     // Terminal lines are driven by the video clock (video.currentTime), so they stay in
     // step if the video buffers or pauses. If the video is blocked, errors or never starts,
     // a wall-clock timer runs the same schedule so the site never sticks on the splash.
+    function runVideoV4() {
+      var LINES = [
+        [0.0, "GLOBAL STATUS"],
+        [0.5, "> AUTHENTICATING OPERATOR SESSION..."],
+        [1.4, "> CLEARANCE GRANTED \u2013 GLOBAL MONITORING NODE"],
+        [3.0, "> OPENING SATELLITE DOWNLINK FEEDS..."],
+        [5.2, "> LIVE ADS-B AIR TRAFFIC LAYER ONLINE"],
+        [6.8, "> MARITIME AIS / POWER GRID / OUTAGE OVERLAYS SYNCING"],
+        [9.8, "> ALL SENSOR LAYERS ACTIVE \u2013 GLOBE READY"],
+        [11.2, "> NUCLEAR DETONATIONS DETECTED \u2013 MULTIPLE SITES"],
+        [12.6, "> MUSHROOM CLOUDS CONFIRMED \u2013 GLOBAL ALERT"]
+      ];
+      // 15.04s clip. Satellite shot ~0-4.5s; world-map cut at 5s; first red/orange ~11s;
+      // mushroom-like towers fully visible from ~12s. Last line lands at 12.6s and holds
+      // until the clip ends, then fade. Do not treat a normal 15s end as ended-early.
+      var FADE_AT = 15.04;
+      var START_WAIT = 6000;      // ms to wait for the video to start before the timer takes over
+      var STALL_WAIT = 3000;      // ms of no video progress mid-play before the timer takes over
+      var HARD_LIMIT = 28000;     // ms from page start: finish no matter what
+      var video = document.getElementById("boot-video");
+      var narrow = false;
+      try { narrow = window.innerWidth <= 800; } catch (e) {}
+      video.setAttribute("width", "1280");
+      video.setAttribute("height", "720");
+      video.setAttribute("aria-label", "A satellite opens its downlink above the Earth, then the globe lights up with live data layers and nuclear detonations appear");
+      video.poster = "/media/globalstatus-loading-v4-poster.jpg?v=20261128v4";
+      video.autoplay = true;
+      video.src = narrow
+        ? "/media/globalstatus-loading-v4-720.mp4?v=20261128v4"
+        : "/media/globalstatus-loading-v4-1080.mp4?v=20261128v4";
+      var title = document.getElementById("boot-title");
+      var log = document.getElementById("boot-log");
+      var reduce = false;
+      try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+      var T = window.__bootTrace = { lines: [], fadeAt: 0, fadeVideoT: 0, mode: "video", fallbackReason: "", videoStart: 0 };
+      // Every line is in the layout from the start, hidden, so nothing jumps as lines appear.
+      var rows = [];
+      for (var k = 1; k < LINES.length; k += 1) {
+        var row = document.createElement("p");
+        row.textContent = LINES[k][1];
+        row.setAttribute("aria-hidden", "true");
+        row.style.visibility = "hidden";
+        log.appendChild(row);
+        rows.push(row);
+      }
+      title.style.visibility = "hidden";
+      var shown = 0;
+      var done = false;
+      function now() { return window.performance && performance.now ? performance.now() : Date.now(); }
+      function reveal(i, t) {
+        var row = i === 0 ? title : rows[i - 1];
+        if (i > 1) rows[i - 2].classList.remove("is-latest");
+        row.style.visibility = "visible";
+        row.removeAttribute("aria-hidden");
+        if (i > 0) row.classList.add("is-latest");
+        T.lines.push({ i: i, at: LINES[i][0], t: Math.round(t * 1000) / 1000, mode: T.mode, video: video ? Math.round(video.currentTime * 1000) / 1000 : -1 });
+        shown = i + 1;
+      }
+      function finish() {
+        if (done) return;
+        done = true;
+        T.fadeAt = Math.round(now());
+        T.fadeVideoT = video ? Math.round(video.currentTime * 1000) / 1000 : -1;
+        window.__bootLogDone = true;
+      }
+      function fallback(reason) {
+        if (T.mode === "timer") return;
+        T.mode = "timer";
+        T.fallbackReason = reason;
+      }
+      if (reduce || !video) {
+        // Reduced motion: the poster picture, every line at once, then straight on.
+        try { if (video) { video.removeAttribute("autoplay"); video.pause(); } } catch (e) {}
+        T.mode = "static";
+        for (var n = 0; n < LINES.length; n += 1) reveal(n, 0);
+        window.setTimeout(finish, 1200);
+        return;
+      }
+      var t = 0, lastVt = 0, lastProgress = now(), lastTick = now(), pageStart = now(), started = false;
+      video.addEventListener("error", function () { fallback("error"); });
+      video.addEventListener("playing", function () { if (!T.videoStart) T.videoStart = Math.round(now()); });
+      var p;
+      try { p = video.play(); } catch (e) { p = null; }
+      if (p && p.catch) p.catch(function () { fallback("autoplay-blocked"); });
+      function frame() {
+        if (done) return;
+        var n2 = now();
+        var vt = video.currentTime || 0;
+        if (T.mode === "video") {
+          if (vt > lastVt + 0.001) {
+            lastVt = vt; lastProgress = n2; started = true;
+            if (vt > t) t = vt;
+          } else if (!video.ended && n2 - lastProgress > (started ? STALL_WAIT : START_WAIT)) {
+            fallback(started ? "stalled" : "no-start");
+          }
+          if (video.ended && t + 0.25 < FADE_AT) fallback("ended-early");
+          else if (video.ended) t = Math.max(t, FADE_AT);
+        } else {
+          t += (n2 - lastTick) / 1000;
+          if (vt > t + 0.05 && !video.paused) { t = vt; T.mode = "video"; lastVt = vt; lastProgress = n2; started = true; }
+        }
+        lastTick = n2;
+        while (shown < LINES.length && t >= LINES[shown][0]) reveal(shown, t);
+        if (t >= FADE_AT || n2 - pageStart > HARD_LIMIT) {
+          while (shown < LINES.length) reveal(shown, t);
+          finish();
+          return;
+        }
+        window.requestAnimationFrame(frame);
+      }
+      window.requestAnimationFrame(frame);
+      // rAF is paused in a background tab; keep the schedule moving so the site still opens.
+      window.setTimeout(function hardStop() {
+        if (done) return;
+        if (now() - pageStart > HARD_LIMIT) { while (shown < LINES.length) reveal(shown, t); finish(); }
+        else window.setTimeout(hardStop, 500);
+      }, HARD_LIMIT);
+    }
+
     function runVideo() {
       var LINES = [
         [0.0, "GLOBAL STATUS"],
@@ -266,7 +386,9 @@
       }
       window.setTimeout(step, 400);
     }
-    if (window.SPLASH_MODE === "classic") runClassic(); else runVideo();
+    if (window.SPLASH_MODE === "classic") runClassic();
+    else if (window.SPLASH_MODE === "video-v4") runVideoV4();
+    else runVideo();
   </script>
   <header class="hud-top">
     <div class="brand">
