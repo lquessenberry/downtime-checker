@@ -2098,22 +2098,22 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 }
 
 /* Boot splash. The same rules are inlined in index.html so the screen is black before this file arrives.
-   html[data-splash] is 'classic' (default) or 'video'; see SPLASH_MODE in index.html. */
-html[data-splash="video"] #boot-splash { position: fixed; top: 0; left: 0; right: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; width: 100%; height: 100%; height: 100dvh; max-height: 100dvh; box-sizing: border-box; background: #000; color: #fff; font-family: ui-monospace, "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace; text-align: left; }
-html[data-splash="video"] #boot-splash .boot-visual { position: relative; display: flex; align-items: center; justify-content: center; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
-html[data-splash="video"] #boot-splash video { position: static; display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; object-position: center; background: #000; }
-html[data-splash="video"] #boot-splash .boot-copy { flex: 0 0 auto; box-sizing: border-box; width: 100%; padding: 14px 16px 18px; background: #000; }
-html[data-splash="video"] #boot-splash .boot-term { width: min(100%, 760px); margin: 0 auto; }
-html[data-splash="video"] #boot-splash .boot-title { margin: 0 0 8px; font-size: clamp(18px, 4.6vw, 28px); font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #fff; line-height: 1.2; }
-html[data-splash="video"] #boot-splash .boot-log p { margin: 0; padding-left: 2ch; text-indent: -2ch; color: #fff; font-size: clamp(11px, 2.8vw, 14px); line-height: 1.6; letter-spacing: 0.02em; overflow-wrap: anywhere; }
-html[data-splash="video"] #boot-splash .boot-log p.is-latest::after { content: "\2588"; margin-left: 0.5ch; animation: boot-caret 1s steps(1) infinite; }
+   html[data-splash] is 'classic', 'video'/'video-v3', or 'video-v4'; see SPLASH_MODE in index.html. */
+html[data-splash^="video"] #boot-splash { position: fixed; top: 0; left: 0; right: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; width: 100%; height: 100%; height: 100dvh; max-height: 100dvh; box-sizing: border-box; background: #000; color: #fff; font-family: ui-monospace, "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace; text-align: left; }
+html[data-splash^="video"] #boot-splash .boot-visual { position: relative; display: flex; align-items: center; justify-content: center; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
+html[data-splash^="video"] #boot-splash video { position: static; display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; object-position: center; background: #000; }
+html[data-splash^="video"] #boot-splash .boot-copy { flex: 0 0 auto; box-sizing: border-box; width: 100%; padding: 14px 16px 18px; background: #000; }
+html[data-splash^="video"] #boot-splash .boot-term { width: min(100%, 760px); margin: 0 auto; }
+html[data-splash^="video"] #boot-splash .boot-title { margin: 0 0 8px; font-size: clamp(18px, 4.6vw, 28px); font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #fff; line-height: 1.2; }
+html[data-splash^="video"] #boot-splash .boot-log p { margin: 0; padding-left: 2ch; text-indent: -2ch; color: #fff; font-size: clamp(11px, 2.8vw, 14px); line-height: 1.6; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+html[data-splash^="video"] #boot-splash .boot-log p.is-latest::after { content: "\2588"; margin-left: 0.5ch; animation: boot-caret 1s steps(1) infinite; }
 @keyframes boot-caret { 50% { opacity: 0; } }
-html[data-splash="video"] #boot-splash.is-done { opacity: 0; pointer-events: none; transition: opacity 1s ease; }
-@media (prefers-reduced-motion: reduce) { html[data-splash="video"] #boot-splash.is-done { transition: none; } html[data-splash="video"] #boot-splash .boot-log p.is-latest::after { animation: none; } }
+html[data-splash^="video"] #boot-splash.is-done { opacity: 0; pointer-events: none; transition: opacity 1s ease; }
+@media (prefers-reduced-motion: reduce) { html[data-splash^="video"] #boot-splash.is-done { transition: none; } html[data-splash^="video"] #boot-splash .boot-log p.is-latest::after { animation: none; } }
 @media (max-width: 800px) {
-  html[data-splash="video"] #boot-splash .boot-visual { flex: 1 1 auto; }
-  html[data-splash="video"] #boot-splash video { width: 100%; height: auto; max-height: 100%; object-fit: contain; }
-  html[data-splash="video"] #boot-splash .boot-copy { margin-top: auto; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  html[data-splash^="video"] #boot-splash .boot-visual { flex: 1 1 auto; }
+  html[data-splash^="video"] #boot-splash video { width: 100%; height: auto; max-height: 100%; object-fit: contain; }
+  html[data-splash^="video"] #boot-splash .boot-copy { margin-top: auto; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
 }
 /* Classic splash (the original, kept so it can be switched back). */
 html[data-splash="classic"] #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; background: #000; color: var(--text); font-family: var(--font); text-align: center; }
