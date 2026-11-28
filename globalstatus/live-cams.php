@@ -23,14 +23,14 @@ defined('GSA_LC_FETCH_TIMEOUT') || define('GSA_LC_FETCH_TIMEOUT', 30);
 function gsa_lc_layers()
 {
     return array(
-        'ushighways' => array('caltrans', 'iowadot', 'deldot'),
-        'uscity' => array('nyc', 'austin'),
+        'ushighways' => array('caltrans', 'iowadot', 'deldot', 'illinois', 'modot'),
+        'uscity' => array('nyc', 'austin', 'batonrouge'),
         'canada' => array('drivebc', 'calgary', 'toronto'),
         'uk' => array('tfl'),
         'europe' => array('dgt', 'digitraffic', 'iceland'),
         'asiapac' => array('hongkong', 'singapore', 'nzta'),
         'border' => array('border'),
-        'volcano' => array('usgsvolc'),
+        'volcano' => array('usgsvolc', 'ndbc'),
     );
 }
 
@@ -44,8 +44,11 @@ function gsa_lc_sources()
         'caltrans' => array('credit' => 'Caltrans CCTV (California DOT)', 'ttl' => 43200, 'img' => 'direct', 'hosts' => array('cwwp2.dot.ca.gov', 'wzmedia.dot.ca.gov')),
         'iowadot' => array('credit' => 'Iowa DOT traffic cameras (Iowa DOT open data)', 'ttl' => 43200, 'img' => 'direct', 'hosts' => array('atmsqf.iowadot.gov')),
         'deldot' => array('credit' => 'DelDOT Transportation Management Center', 'ttl' => 21600, 'img' => 'direct', 'hosts' => array('video.deldot.gov')),
+        'illinois' => array('credit' => 'Illinois DOT, Illinois Gateway traffic cameras (CC BY-SA 2.0)', 'ttl' => 43200, 'img' => 'direct', 'hosts' => array('cctv.travelmidwest.com', 'www.lakecountypassage.com')),
+        'modot' => array('credit' => 'Missouri DOT Traveler Information and Ozarks Traffic', 'ttl' => 21600, 'img' => 'direct', 'hosts' => array('sfs03-traveler.modot.mo.gov', 'sfs04-traveler.modot.mo.gov', 's2.ozarkstrafficoneview.com')),
         'nyc' => array('credit' => 'NYC DOT Traffic Management Center', 'ttl' => 43200, 'img' => 'direct', 'hosts' => array('webcams.nyctmc.org')),
         'austin' => array('credit' => 'City of Austin Transportation (Austin open data)', 'ttl' => 43200, 'img' => 'direct', 'hosts' => array('cctv.austinmobility.io')),
+        'batonrouge' => array('credit' => 'Louisiana DOTD cameras via Open Data BR, City of Baton Rouge (public domain)', 'ttl' => 43200, 'img' => 'direct', 'hosts' => array('511la.org')),
         'drivebc' => array('credit' => 'DriveBC, BC Ministry of Transportation and Transit', 'ttl' => 21600, 'img' => 'direct', 'hosts' => array('www.drivebc.ca')),
         'calgary' => array('credit' => 'City of Calgary (Open Calgary)', 'ttl' => 43200, 'img' => 'direct', 'hosts' => array('trafficcam.calgary.ca')),
         'toronto' => array('credit' => 'City of Toronto Open Data (Open Government Licence - Toronto)', 'ttl' => 43200, 'img' => 'direct', 'hosts' => array('opendata.toronto.ca')),
@@ -58,6 +61,7 @@ function gsa_lc_sources()
         'nzta' => array('credit' => 'NZ Transport Agency Waka Kotahi (trafficnz.info), CC BY 4.0', 'ttl' => 21600, 'img' => 'direct', 'hosts' => array('trafficnz.info', 'www.trafficnz.info')),
         'border' => array('credit' => 'Caltrans CCTV and DriveBC border crossing cameras', 'ttl' => 21600, 'img' => 'direct', 'hosts' => array('cwwp2.dot.ca.gov', 'wzmedia.dot.ca.gov', 'www.drivebc.ca')),
         'usgsvolc' => array('credit' => 'USGS Volcano Hazards Program webcams (public domain)', 'ttl' => 3600, 'img' => 'direct', 'hosts' => array('volcview.wr.usgs.gov')),
+        'ndbc' => array('credit' => 'NOAA National Data Buoy Center BuoyCAMs (public domain)', 'ttl' => 21600, 'img' => 'direct', 'hosts' => array('www.ndbc.noaa.gov')),
     );
 }
 
@@ -553,6 +557,99 @@ function gsa_lc_fetch_usgsvolc($hosts)
             continue; // camera has not sent a picture in three days
         }
         $cam = gsa_lc_cam($w['webcamCode'] ?? '', $w['webcamName'] ?? '', trim(($w['vName'] ?? '') . ' volcano'), $w['latitude'] ?? null, $w['longitude'] ?? null, $w['currentMediumImageUrl'] ?? ($w['currentImageUrl'] ?? ''), '', $hosts);
+        if ($cam) {
+            $out[] = $cam;
+        }
+    }
+    return $out;
+}
+
+// Illinois DOT's public ArcGIS layer (one row per camera direction). One pin
+// per site; the first direction is shown.
+function gsa_lc_fetch_illinois($hosts)
+{
+    $base = 'https://services2.arcgis.com/aIrBD8yn1TDTEXoz/arcgis/rest/services/TrafficCamerasTM_Public/FeatureServer/0/query?where=1%3D1&outFields=OBJECTID,CameraLocation,CameraDirection,y,x,SnapShot,TooOld&orderByFields=OBJECTID&resultRecordCount=1000&f=json&resultOffset=';
+    $out = array();
+    $sites = array();
+    for ($off = 0; $off < 10000; $off += 1000) {
+        $j = gsa_lc_json($base . $off);
+        foreach ($j['features'] ?? array() as $f) {
+            $a = $f['attributes'] ?? array();
+            if (($a['TooOld'] ?? 'false') === 'true') {
+                continue;
+            }
+            $k = round((float) ($a['x'] ?? 0), 4) . ',' . round((float) ($a['y'] ?? 0), 4);
+            if (isset($sites[$k])) {
+                $sites[$k]++;
+                continue;
+            }
+            $dir = (string) ($a['CameraDirection'] ?? '');
+            $road = 'Illinois' . ($dir !== '' && $dir !== 'NONE' ? ' · looking ' . $dir : '');
+            $cam = gsa_lc_cam('il' . ($a['OBJECTID'] ?? ''), $a['CameraLocation'] ?? '', $road, $a['y'] ?? null, $a['x'] ?? null, $a['SnapShot'] ?? '', '', $hosts);
+            if ($cam) {
+                $sites[$k] = 1;
+                $out[] = $cam;
+            }
+        }
+        if (empty($j['exceededTransferLimit'])) {
+            break;
+        }
+    }
+    return $out;
+}
+
+// MoDOT's keyless streaming camera list. Only the stream hosts that answer
+// are allowlisted; the others time out.
+function gsa_lc_fetch_modot($hosts)
+{
+    $j = gsa_lc_json('https://traveler.modot.org/timconfig/feed/desktop/StreamingCams2.json');
+    $out = array();
+    foreach ($j as $i => $c) {
+        $u = (string) ($c['html'] ?? '');
+        $p = parse_url($u);
+        if (!$p || !in_array(strtolower($p['host'] ?? ''), $hosts, true)) {
+            continue;
+        }
+        $u = 'https://' . strtolower($p['host']) . ($p['path'] ?? '');
+        if (!preg_match('#/playlist\.m3u8$#', $u)) {
+            continue;
+        }
+        $id = 'mo' . substr(md5($u), 0, 10);
+        $cam = gsa_lc_cam($id, $c['location'] ?? '', 'Missouri', $c['y'] ?? null, $c['x'] ?? null, '', 'hls:' . $u, $hosts);
+        if ($cam) {
+            $out[] = $cam;
+        }
+    }
+    return $out;
+}
+
+function gsa_lc_fetch_batonrouge($hosts)
+{
+    $j = gsa_lc_json('https://data.brla.gov/resource/6z6u-ts44.json?$limit=2000');
+    $out = array();
+    foreach ($j as $c) {
+        $co = $c['the_geom']['coordinates'] ?? array(null, null);
+        $u = (string) ($c['image_view'] ?? '');
+        $id = preg_replace('#^.*/#', '', $u);
+        $cam = gsa_lc_cam('br' . ($c['id'] ?? ''), 'Baton Rouge camera ' . preg_replace('#--\d+$#', '', $id), 'Baton Rouge, Louisiana', $co[1] ?? null, $co[0] ?? null, $u, '', $hosts);
+        if ($cam) {
+            $out[] = $cam;
+        }
+    }
+    return $out;
+}
+
+// NOAA buoy cameras: a six-view panorama strip, refreshed about hourly.
+function gsa_lc_fetch_ndbc($hosts)
+{
+    $j = gsa_lc_json('https://www.ndbc.noaa.gov/buoycams.php');
+    $out = array();
+    foreach ($j as $b) {
+        $id = (string) ($b['id'] ?? '');
+        if (!preg_match('/^[A-Za-z0-9]+$/', $id) || empty($b['img'])) {
+            continue;
+        }
+        $cam = gsa_lc_cam($id, 'Buoy ' . $id . ' · ' . ($b['name'] ?? ''), 'Ocean buoy camera, six views', $b['lat'] ?? null, $b['lng'] ?? null, 'https://www.ndbc.noaa.gov/buoycam.php?station=' . rawurlencode($id), '', $hosts);
         if ($cam) {
             $out[] = $cam;
         }

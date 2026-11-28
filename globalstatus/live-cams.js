@@ -11,14 +11,14 @@
 (function (root) {
   "use strict";
   const LAYERS = [
-    { key: "ushighways", name: "US HIGHWAYS", color: "#60a5fa", desc: "Caltrans (California), Iowa DOT and DelDOT (Delaware) highway cameras" },
-    { key: "uscity", name: "US CITY CAMERAS", color: "#38bdf8", desc: "New York City DOT and City of Austin intersection cameras" },
+    { key: "ushighways", name: "US HIGHWAYS", color: "#60a5fa", desc: "Caltrans (California), Iowa, Illinois, Missouri and Delaware highway cameras" },
+    { key: "uscity", name: "US CITY CAMERAS", color: "#38bdf8", desc: "New York City, Austin and Baton Rouge traffic cameras" },
     { key: "canada", name: "CANADA ROADS", color: "#a5b4fc", desc: "DriveBC highways, Calgary and Toronto city cameras" },
     { key: "uk", name: "UK ROADS (LONDON)", color: "#f9a8d4", desc: "Transport for London JamCams with short video clips" },
     { key: "europe", name: "EUROPE ROADS", color: "#fbbf24", desc: "Spain DGT, Finland road weather cameras and Iceland roads" },
     { key: "asiapac", name: "ASIA & PACIFIC ROADS", color: "#fdba74", desc: "Hong Kong, Singapore and New Zealand highways" },
     { key: "border", name: "BORDER CROSSINGS", color: "#f87171", desc: "US-Mexico (San Ysidro, Otay Mesa, Calexico) and Canada-US (BC) crossings" },
-    { key: "volcano", name: "VOLCANO & NATURE", color: "#fb923c", desc: "USGS volcano webcams in Alaska, Hawaii and the Cascades" },
+    { key: "volcano", name: "VOLCANO & NATURE", color: "#fb923c", desc: "USGS volcano webcams and NOAA ocean buoy cameras" },
   ];
   const BYKEY = Object.fromEntries(LAYERS.map((l) => [l.key, l]));
   const KEYS = LAYERS.map((l) => l.key);
