@@ -666,7 +666,7 @@
     }
     var splash = document.getElementById("boot-splash");
     if (!splash) { go(); return; }
-    root.setTimeout(go, 30000);
+    root.setTimeout(go, 45000);
     function check() {
       if (fired) return;
       var node = document.getElementById("boot-splash");
