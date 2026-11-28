@@ -85,4 +85,31 @@ t("MeshCore framing both ways", () => {
   assert.strictEqual(out.length, 1); assert.strictEqual(out[0].name, "Hill Repeater");
 });
 t("malformed protobuf throws instead of hanging", () => { assert.throws(() => M.decodeFromRadio(Uint8Array.from([0x12, 0x40, 0x01]))); });
+t("ToRadio text encodings match official protobufs", () => {
+  const eq = (got, exp) => assert.strictEqual(Buffer.from(got).toString("hex"), exp);
+  eq(M.mtTextPacket({ to: 0xffffffff, id: 0x12345678, hopLimit: 3, text: "hello" }), "0a1715ffffffff22090801120568656c6c6f35785634124803");
+  eq(M.mtTextPacket({ to: 0xffffffff, channel: 1, id: 0x12345678, hopLimit: 3, text: "hello" }), "0a1915ffffffff180122090801120568656c6c6f35785634124803");
+  eq(M.mtTextPacket({ to: 0xdeadbeef, id: 0xa1b2c3d4, hopLimit: 3, wantAck: true, text: "Hi Ridge" }), "0a1e15efbeadde220c08011208486920526964676535d4c3b2a1480350015846");
+  eq(M.mtTextPacket({ to: 0xffffffff, id: 7, hopLimit: 3, text: "Hello 👋" }), "0a1c15ffffffff220e0801120a48656c6c6f20f09f918b35070000004803");
+});
+t("Routing ACK / error decode and encode", () => {
+  const ok = M.decodeFromRadio(M.mtFromRouting(0xa1b2c3d4, 0, 0xdeadbeef, 0x433a1b2c));
+  assert.strictEqual(ok.port, 5); assert.strictEqual(ok.routing, 0); assert.strictEqual(ok.routingName, "Delivered"); assert.strictEqual(ok.requestId, 0xa1b2c3d4);
+  const nr = M.decodeFromRadio(M.mtFromRouting(0xa1b2c3d4, 1, 0xdeadbeef, 0x433a1b2c));
+  assert.strictEqual(nr.routingName, "No route");
+  const tl = M.decodeFromRadio(M.mtFromRouting(0xa1b2c3d4, 7, 0xdeadbeef, 0x433a1b2c));
+  assert.strictEqual(tl.routingName, "Too large");
+});
+t("MeshCore send-text command bytes", () => {
+  const ts = 1764280000, text = new TextEncoder().encode("Hi");
+  const dm = M.mcSendDm(Uint8Array.from("c0ffee01aabb".match(/.{2}/g).map((x) => parseInt(x, 16))), text, ts, 0);
+  assert.strictEqual(Buffer.from(dm).toString("hex"), "0200" + "00" + Buffer.from([ts & 255, (ts>>>8)&255, (ts>>>16)&255, (ts>>>24)&255]).toString("hex") + "c0ffee01aabb" + "4869");
+  const ch = M.mcSendChan(1, text, ts);
+  assert.strictEqual(ch[0], 3); assert.strictEqual(ch[1], 0); assert.strictEqual(ch[2], 1);
+  const sent = M.decodeMeshCore(Uint8Array.from([6, 1, 0x11, 0x22, 0x33, 0x44, 0x40, 0x1f, 0, 0]));
+  assert.deepStrictEqual([sent.type, sent.ack, sent.timeoutMs], ["mcSent", "11223344", 8000]);
+  const ack = M.decodeMeshCore(Uint8Array.from([0x82, 0x11, 0x22, 0x33, 0x44, 150, 0, 0, 0]));
+  assert.deepStrictEqual([ack.type, ack.ack, ack.tripMs], ["mcAck", "11223344", 150]);
+});
+t("payload limits", () => { assert.strictEqual(M.MT_MAX_TEXT, 233); assert.strictEqual(M.MC_MAX_TEXT, 160); });
 console.log(`\n${n} tests passed`);
