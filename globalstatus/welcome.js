@@ -457,7 +457,7 @@
     syncCategoryIcons();
   }
 
-  // Red icon tile when any layer in that category is on; otherwise the default slate tile.
+  // Green icon tile when any layer in that category is on; otherwise the default slate tile.
   function categoryHasOn(cat) {
     return Boolean(cat.querySelector(
       "[data-welcome-layer][aria-pressed='true'], [data-welcome-xl][aria-pressed='true'], " +
