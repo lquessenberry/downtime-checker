@@ -19,7 +19,7 @@
  */
 (function (root) {
   "use strict";
-  const V = "20261127mydev1";
+  const V = "20261127meshwb1";
   const D = () => root.GsaSdrDriver;
   const L = () => root.GsaSdrLayers;
 
@@ -138,6 +138,7 @@
       `<button type="button" class="gsr-btn" data-sdr-act="bias" aria-pressed="false">BIAS-T OFF</button>` +
       `<button type="button" class="gsr-btn" data-sdr-act="mesh-tab">MESH RADIO</button>` +
       `<button type="button" class="gsr-btn gsr-wide" data-sdr-act="workbench">OPEN SDR WORKBENCH</button>` +
+      `<button type="button" class="gsr-btn gsr-wide" data-sdr-act="mesh-workbench">OPEN MESH WORKBENCH</button>` +
       `<button type="button" class="gsr-btn gsr-wide gsr-share" data-sdr-act="share" aria-pressed="false">SHARE LIVE FEED: OFF</button>` +
       `</div>` +
       `<p class="gsr-bar-note gsr-share-note" data-sdr-sharenote>${esc(SHARE_OFF_NOTE)}</p>` +
@@ -858,7 +859,7 @@
     wb.setAttribute("aria-label", "SDR Workbench");
     wb.hidden = true;
     wb.innerHTML =
-      `<header class="gsr-wb-head"><div class="gsr-wb-title"><strong>SDR WORKBENCH</strong><span data-gsr-head></span></div>` +
+      `<header class="gsr-wb-head"><div class="gsr-wb-title"><strong data-gsr-wbtitle>SDR WORKBENCH</strong><span data-gsr-head></span></div>` +
       `<button type="button" class="pin-card-close gsr-wb-close" data-gsr="close" aria-label="Close SDR Workbench" title="Close">×</button></header>` +
       `<nav class="gsr-tabs" role="tablist">${TABS.map(([id, label]) => `<button type="button" role="tab" data-gsr-tab="${id}" aria-selected="false">${label}<em data-gsr-badge="${id}"></em></button>`).join("")}</nav>` +
       `<div class="gsr-wb-body">` +
@@ -927,6 +928,16 @@
   }
   function renderWorkbenchHead() {
     if (!st.wb) return;
+    const meshMode = st.tab === "mesh";
+    const title = meshMode ? "MESH WORKBENCH" : "SDR WORKBENCH";
+    const t = st.wb.querySelector("[data-gsr-wbtitle]");
+    if (t && t.textContent !== title) t.textContent = title;
+    st.wb.setAttribute("aria-label", meshMode ? "Mesh Workbench" : "SDR Workbench");
+    const close = st.wb.querySelector(".gsr-wb-close");
+    if (close) {
+      close.setAttribute("aria-label", meshMode ? "Close Mesh Workbench" : "Close SDR Workbench");
+      close.setAttribute("title", "Close");
+    }
     const h = st.wb.querySelector("[data-gsr-head]");
     const text = (st.dev ? `${st.dev.name} · ${mhz(st.tuned)} MHz ${st.mode}` : "No SDR connected") + (st.mesh.dev ? ` · Mesh: ${st.mesh.dev.name}` : "");
     if (h.textContent !== text) h.textContent = text;
@@ -1894,6 +1905,7 @@
       else if (a === "mesh-usb") meshConnect("serial");
       else if (a === "mesh-ble") meshConnect("ble");
       else if (a === "mesh-tab") openWorkbench("mesh");
+      else if (a === "mesh-workbench") { if (st.wbOpen && st.tab === "mesh") closeWorkbench(); else openWorkbench("mesh"); }
       else if (a === "mesh-send") meshSend();
       else if (a === "mydev") myDevicesClick();
       else if (a === "workbench") { if (st.wbOpen) closeWorkbench(); else openWorkbench(); }
