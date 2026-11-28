@@ -2166,6 +2166,15 @@ body:has(#sdr-listen:not([hidden])) .stage-meta { display: none; }
 .welcome-icon { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; color: var(--dim); background: rgba(120, 190, 210, 0.08); border: 1px solid var(--line); border-radius: 8px; }
 .welcome-row:hover .welcome-icon, .welcome-row:focus-visible .welcome-icon { color: var(--text); }
 .welcome-row.is-primary .welcome-icon { color: var(--text); background: rgba(120, 190, 210, 0.12); border-color: #9fd4e2; }
+/* Any layer on in this category: the icon tile turns red (site red #ff3b3b). Off = default slate tile. */
+.welcome-row.is-active .welcome-icon,
+.welcome-row.is-active:hover .welcome-icon,
+.welcome-row.is-active:focus-visible .welcome-icon,
+.welcome-row.is-primary.is-active .welcome-icon {
+  color: #fff;
+  background: #ff3b3b;
+  border-color: #9a1a1a;
+}
 .welcome-text { display: grid; gap: 3px; min-width: 0; }
 .welcome-text strong { color: var(--text); font-size: 12.5px; letter-spacing: 0.1em; }
 .welcome-text em { color: var(--dim); font-size: 11.5px; font-style: normal; line-height: 1.35; }

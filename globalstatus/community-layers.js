@@ -15,7 +15,7 @@
  */
 (function (root) {
   "use strict";
-  const V = "20261127cf2";
+  const V = "20261127icon2";
   const COLOR = "#c084fc";
   const POLL_MS = 20000;
   const LAYERS = [
@@ -124,6 +124,7 @@
       setText(`[data-cf-count="${l.key}"]`, label);
     }
     if (typeof root.gsSyncLayerGroups === "function") root.gsSyncLayerGroups();
+    if (root.GsaWelcome && root.GsaWelcome.syncCategoryIcons) root.GsaWelcome.syncCategoryIcons();
   }
 
   function asLive(p) {

@@ -70,8 +70,6 @@
 #group-sdr .gsr-bar { margin: 4px 0 6px; }
 #group-sdr .gsr-note { margin: 4px 0 2px; }
 .welcome-cats.welcome-sdr { grid-template-columns: 1fr; }
-.welcome-sdr-cat .welcome-row.is-category .welcome-icon { color: #e2e8f0; border-color: rgba(56, 189, 248, 0.55); background: rgba(56, 189, 248, 0.08); }
-.welcome-sdr-cat .welcome-row.is-category .welcome-text em { color: #cbd5e1; }
 
 /* ---- workbench ---- */
 .gsr-wb {

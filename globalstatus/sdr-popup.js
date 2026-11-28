@@ -17,7 +17,7 @@
  */
 (function (root) {
   "use strict";
-  const V = "20261127mesh1";
+  const V = "20261127icon2";
   const D = () => root.GsaSdrDriver;
   const L = () => root.GsaSdrLayers;
 
@@ -231,6 +231,7 @@
     setText("[data-sdr-bandnote]", bandNote());
     renderMeshBar();
     if (root.gsSyncLayerGroups) root.gsSyncLayerGroups();
+    if (root.GsaWelcome && root.GsaWelcome.syncCategoryIcons) root.GsaWelcome.syncCategoryIcons();
     renderWorkbenchHead();
   }
   function bandNote() {
