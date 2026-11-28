@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <script>
-    // SPLASH_MODE picks the loading screen: 'video' (new satellite video, default) or 'classic'
-    // (the original looping satellite clip with the timed terminal lines). To switch back for
-    // everyone, change DEFAULT_SPLASH to 'classic'. To try either one, open /?splash=classic or /?splash=video.
+    // SPLASH_MODE picks the loading screen: 'classic' (the original looping satellite clip
+    // with the timed terminal lines, default) or 'video' (the later satellite video splash).
+    // To try either one, open /?splash=classic or /?splash=video.
     (function () {
-      var DEFAULT_SPLASH = "video";
+      var DEFAULT_SPLASH = "classic";
       var mode = DEFAULT_SPLASH;
       try { var m = /[?&]splash=(classic|video)(?:&|$)/.exec(window.location.search); if (m) mode = m[1]; } catch (e) {}
       window.SPLASH_MODE = mode;
@@ -16,7 +16,7 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
-    /* Splash: html[data-splash] is 'video' (default) or 'classic'. See SPLASH_MODE below. */
+    /* Splash: html[data-splash] is 'classic' (default) or 'video'. See SPLASH_MODE below. */
     /* ---- video splash ---- */
     html[data-splash="video"] #boot-splash { position: fixed; top: 0; left: 0; right: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; width: 100%; height: 100%; height: 100dvh; max-height: 100dvh; box-sizing: border-box; background: #000; color: #fff; font-family: ui-monospace, "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace; text-align: left; }
     html[data-splash="video"] #boot-splash .boot-visual { position: relative; display: flex; align-items: center; justify-content: center; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
@@ -67,7 +67,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261127vs3" />
+  <link rel="stylesheet" href="/cesium.css?v=20261127classic1" />
   <link rel="stylesheet" href="/extra-layers.css?v=20261127e" />
   <link rel="stylesheet" href="/sdr-popup.css?v=20261127mydev1" />
   <link rel="stylesheet" href="/community-layers.css?v=20261127icon3" />
@@ -123,11 +123,11 @@
       video.setAttribute("width", narrow ? "1280" : "1920");
       video.setAttribute("height", narrow ? "720" : "1080");
       video.setAttribute("aria-label", "A satellite opens its downlink above the Earth, then the globe lights up with live data layers and nuclear detonations appear");
-      video.poster = "/media/globalstatus-loading-poster.jpg?v=20261127vs3";
+      video.poster = "/media/globalstatus-loading-poster.jpg?v=20261127classic1";
       video.autoplay = true;
       video.src = narrow
-        ? "/media/globalstatus-loading-720.mp4?v=20261127vs3"
-        : "/media/globalstatus-loading-1080.mp4?v=20261127vs3";
+        ? "/media/globalstatus-loading-720.mp4?v=20261127classic1"
+        : "/media/globalstatus-loading-1080.mp4?v=20261127classic1";
       var title = document.getElementById("boot-title");
       var log = document.getElementById("boot-log");
       var reduce = false;
@@ -818,7 +818,7 @@
   <script src="/paranormal.js?v=20261126t"></script>
   <script src="/geocoder.js?v=20261127a"></script>
   <script src="/nearby.js?v=20261126l"></script>
-  <script src="/welcome.js?v=20261127vs3"></script>
+  <script src="/welcome.js?v=20261127classic1"></script>
   <script src="/extra-layers-registry.js?v=20261127a"></script>
   <script src="/extra-layers.js?v=20261127a"></script>
   <script src="/custom-packs-loader.js?v=20261127a"></script>
@@ -828,6 +828,6 @@
   <script src="/sdr-layers.js?v=20261127sdr2"></script>
   <script src="/sdr-popup.js?v=20261127meshwb1"></script>
   <script src="/community-layers.js?v=20261127icon2"></script>
-  <script src="/cesium.js?v=20261127vs3"></script>
+  <script src="/cesium.js?v=20261127classic1"></script>
 </body>
 </html>
