@@ -1,6 +1,6 @@
 /* COMMUNITY FEED category: sits under SDR & MESH. Uniform full-width boxes.
    Category icon uses the same default slate tile as every other category;
-   it turns red with the shared .is-active rule in cesium.css. Layer switches
+   it turns green with the shared .is-active rule in cesium.css. Layer switches
    use the same slate on-state as the other picker layers (no violet). */
 .welcome-cats.welcome-community { grid-template-columns: 1fr; }
 .welcome-drop button[data-welcome-cf] {
