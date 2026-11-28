@@ -105,19 +105,22 @@
         [4.0, "> OPENING SATELLITE DOWNLINK FEEDS..."],
         [6.5, "> LIVE ADS-B AIR TRAFFIC LAYER ONLINE"],
         [8.8, "> MARITIME AIS / POWER GRID / OUTAGE OVERLAYS SYNCING"],
-        [11.8, "> ALL SENSOR LAYERS ACTIVE \u2013 GLOBE READY"]
+        [11.8, "> ALL SENSOR LAYERS ACTIVE \u2013 GLOBE READY"],
+        [14.5, "> NUCLEAR DETONATIONS DETECTED \u2013 MULTIPLE SITES"],
+        [17.5, "> MUSHROOM CLOUDS CONFIRMED \u2013 GLOBAL ALERT"],
+        [20.5, "> NUCLEAR SNAP COUNT COMPLETE"]
       ];
       var HOLD = 1.25;            // seconds the last line holds before the fade
       var FADE_AT = LINES[LINES.length - 1][0] + HOLD;
       var START_WAIT = 6000;      // ms to wait for the video to start before the timer takes over
       var STALL_WAIT = 3000;      // ms of no video progress mid-play before the timer takes over
-      var HARD_LIMIT = 24000;     // ms from page start: finish no matter what
+      var HARD_LIMIT = 38000;     // ms from page start: finish no matter what
       var video = document.getElementById("boot-video");
       video.setAttribute("width", "1280"); video.setAttribute("height", "720");
-      video.setAttribute("aria-label", "A satellite opens its downlink above the Earth, then the globe lights up with live data layers");
-      video.poster = "/media/globalstatus-loading-poster.jpg?v=20261128r";
+      video.setAttribute("aria-label", "A satellite opens its downlink above the Earth, then the globe lights up with live data layers and nuclear detonations appear");
+      video.poster = "/media/globalstatus-loading-poster.jpg?v=20261128s";
       video.autoplay = true;
-      video.src = "/media/globalstatus-loading.mp4?v=20261128r";
+      video.src = "/media/globalstatus-loading.mp4?v=20261128s";
       var title = document.getElementById("boot-title");
       var log = document.getElementById("boot-log");
       var reduce = false;
@@ -808,7 +811,7 @@
   <script src="/paranormal.js?v=20261127b"></script>
   <script src="/geocoder.js?v=20261127c"></script>
   <script src="/nearby.js?v=20261127b"></script>
-  <script src="/welcome.js?v=20261128r"></script>
+  <script src="/welcome.js?v=20261128s"></script>
   <script src="/extra-layers-registry.js?v=20261127b"></script>
   <script src="/extra-layers.js?v=20261127b"></script>
   <script src="/custom-packs-loader.js?v=20261127b"></script>
