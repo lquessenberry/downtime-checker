@@ -2,22 +2,51 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <script>
+    // SPLASH_MODE picks the loading screen: 'video' (new satellite video, default) or 'classic'
+    // (the original looping satellite clip with the timed terminal lines). To switch back for
+    // everyone, change DEFAULT_SPLASH to 'classic'. To try either one, open /?splash=classic or /?splash=video.
+    (function () {
+      var DEFAULT_SPLASH = "video";
+      var mode = DEFAULT_SPLASH;
+      try { var m = /[?&]splash=(classic|video)(?:&|$)/.exec(window.location.search); if (m) mode = m[1]; } catch (e) {}
+      window.SPLASH_MODE = mode;
+      document.documentElement.setAttribute("data-splash", mode);
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
-    #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; background: #000; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
-    #boot-splash .boot-visual { position: relative; display: block; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
-    #boot-splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center bottom; display: block; background: #000; }
+    /* Splash: html[data-splash] is 'video' (default) or 'classic'. See SPLASH_MODE below. */
+    /* ---- video splash ---- */
+    html[data-splash="video"] #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; background: #000; color: #fff; font-family: ui-monospace, "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace; text-align: left; }
+    html[data-splash="video"] #boot-splash .boot-visual { position: relative; display: block; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; overflow: hidden; }
+    html[data-splash="video"] #boot-splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 22%; display: block; background: #000; }
     @media (max-width: 800px) {
-      #boot-splash .boot-visual { flex: 0 0 auto; height: auto; }
-      #boot-splash video { position: static; width: 100%; height: auto; object-fit: contain; }
+      html[data-splash="video"] #boot-splash .boot-visual { flex: 0 0 auto; height: auto; aspect-ratio: 16 / 9; }
     }
-    #boot-splash .boot-copy { flex: 0 0 auto; padding: 16px 14px 22px; background: #000; }
-    #boot-splash .boot-title { margin: 0; font-size: clamp(20px, 4.2vw, 32px); font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; }
-    #boot-splash .boot-log { width: min(100%, 720px); margin: 14px auto 0; text-align: left; }
-    #boot-splash .boot-log p { margin: 0; color: #7f97a1; font-size: clamp(11px, 2.7vw, 14px); line-height: 1.55; letter-spacing: 0.02em; }
-    #boot-splash .boot-log p.is-latest { color: #d7e6ea; }
-    #boot-splash.is-done { opacity: 0; pointer-events: none; transition: opacity 0.7s ease; }
-    @media (prefers-reduced-motion: reduce) { #boot-splash.is-done { transition: none; } }
+    html[data-splash="video"] #boot-splash .boot-copy { flex: 0 0 auto; box-sizing: border-box; width: 100%; padding: 14px 16px calc(18px + env(safe-area-inset-bottom, 0px)); background: #000; }
+    html[data-splash="video"] #boot-splash .boot-term { width: min(100%, 760px); margin: 0 auto; }
+    html[data-splash="video"] #boot-splash .boot-title { margin: 0 0 8px; font-size: clamp(18px, 4.6vw, 28px); font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #fff; line-height: 1.2; }
+    html[data-splash="video"] #boot-splash .boot-log p { margin: 0; padding-left: 2ch; text-indent: -2ch; color: #fff; font-size: clamp(11px, 2.8vw, 14px); line-height: 1.6; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+    html[data-splash="video"] #boot-splash .boot-log p.is-latest::after { content: "\2588"; margin-left: 0.5ch; animation: boot-caret 1s steps(1) infinite; }
+    @keyframes boot-caret { 50% { opacity: 0; } }
+    html[data-splash="video"] #boot-splash.is-done { opacity: 0; pointer-events: none; transition: opacity 1s ease; }
+    @media (prefers-reduced-motion: reduce) { html[data-splash="video"] #boot-splash.is-done { transition: none; } html[data-splash="video"] #boot-splash .boot-log p.is-latest::after { animation: none; } }
+    /* ---- classic splash (the original, kept so it can be switched back) ---- */
+    html[data-splash="classic"] #boot-splash { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; margin: 0; padding: 0; background: #000; color: #d7e6ea; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
+    html[data-splash="classic"] #boot-splash .boot-visual { position: relative; display: block; flex: 1 1 auto; min-height: 0; width: 100%; background: #000; }
+    html[data-splash="classic"] #boot-splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center bottom; display: block; background: #000; }
+    @media (max-width: 800px) {
+      html[data-splash="classic"] #boot-splash .boot-visual { flex: 0 0 auto; height: auto; }
+      html[data-splash="classic"] #boot-splash video { position: static; width: 100%; height: auto; object-fit: contain; }
+    }
+    html[data-splash="classic"] #boot-splash .boot-copy { flex: 0 0 auto; padding: 16px 14px 22px; background: #000; }
+    html[data-splash="classic"] #boot-splash .boot-title { margin: 0; font-size: clamp(20px, 4.2vw, 32px); font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; }
+    html[data-splash="classic"] #boot-splash .boot-log { width: min(100%, 720px); margin: 14px auto 0; text-align: left; }
+    html[data-splash="classic"] #boot-splash .boot-log p { margin: 0; color: #7f97a1; font-size: clamp(11px, 2.7vw, 14px); line-height: 1.55; letter-spacing: 0.02em; }
+    html[data-splash="classic"] #boot-splash .boot-log p.is-latest { color: #d7e6ea; }
+    html[data-splash="classic"] #boot-splash.is-done { opacity: 0; pointer-events: none; transition: opacity 0.7s ease; }
+    @media (prefers-reduced-motion: reduce) { html[data-splash="classic"] #boot-splash.is-done { transition: none; } }
   </style>
   <!-- Phone numbers in cards stay plain text: no automatic tel: links on phones. -->
   <meta name="format-detection" content="telephone=no, address=no, email=no" />
@@ -36,7 +65,7 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261127icon3" />
+  <link rel="stylesheet" href="/cesium.css?v=20261127vs1" />
   <link rel="stylesheet" href="/extra-layers.css?v=20261127e" />
   <link rel="stylesheet" href="/sdr-popup.css?v=20261127mydev1" />
   <link rel="stylesheet" href="/community-layers.css?v=20261127icon3" />
@@ -53,17 +82,131 @@
 <body>
   <div id="boot-splash" class="boot-splash">
     <div class="boot-visual">
-      <video autoplay muted loop playsinline preload="auto" width="736" height="416" aria-label="Satellite above the Earth">
-        <source src="/start-satellite.mp4?v=20261126n" type="video/mp4" />
-      </video>
+      <video id="boot-video" muted playsinline preload="auto"></video>
     </div>
     <div class="boot-copy">
-      <p class="boot-title">Global Status</p>
-      <div id="boot-log" class="boot-log" aria-live="polite"></div>
+      <div class="boot-term">
+        <p id="boot-title" class="boot-title">Global Status</p>
+        <div id="boot-log" class="boot-log" aria-live="polite"></div>
+      </div>
     </div>
   </div>
   <script>
-    (function () {
+    // Loading screen. Both versions are kept: runVideo() is the new one, runClassic() is the
+    // original (kept intact so it can be switched back). Which one runs is set by SPLASH_MODE above.
+    // Terminal lines are driven by the video clock (video.currentTime), so they stay in
+    // step if the video buffers or pauses. If the video is blocked, errors or never starts,
+    // a wall-clock timer runs the same schedule so the site never sticks on the splash.
+    function runVideo() {
+      var LINES = [
+        [0.0, "GLOBAL STATUS"],
+        [0.8, "> AUTHENTICATING OPERATOR SESSION..."],
+        [2.2, "> CLEARANCE GRANTED \u2013 GLOBAL MONITORING NODE"],
+        [4.0, "> OPENING SATELLITE DOWNLINK FEEDS..."],
+        [6.5, "> LIVE ADS-B AIR TRAFFIC LAYER ONLINE"],
+        [8.8, "> MARITIME AIS / POWER GRID / OUTAGE OVERLAYS SYNCING"],
+        [11.8, "> ALL SENSOR LAYERS ACTIVE \u2013 GLOBE READY"]
+      ];
+      var HOLD = 1.25;            // seconds the last line holds before the fade
+      var FADE_AT = LINES[LINES.length - 1][0] + HOLD;
+      var START_WAIT = 6000;      // ms to wait for the video to start before the timer takes over
+      var STALL_WAIT = 3000;      // ms of no video progress mid-play before the timer takes over
+      var HARD_LIMIT = 24000;     // ms from page start: finish no matter what
+      var video = document.getElementById("boot-video");
+      video.setAttribute("width", "1280"); video.setAttribute("height", "720");
+      video.setAttribute("aria-label", "A satellite opens its downlink above the Earth, then the globe lights up with live data layers");
+      video.poster = "/media/globalstatus-loading-poster.jpg?v=20261127vs1";
+      video.autoplay = true;
+      video.src = "/media/globalstatus-loading.mp4?v=20261127vs1";
+      var title = document.getElementById("boot-title");
+      var log = document.getElementById("boot-log");
+      var reduce = false;
+      try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+      var T = window.__bootTrace = { lines: [], fadeAt: 0, fadeVideoT: 0, mode: "video", fallbackReason: "", videoStart: 0 };
+      // Every line is in the layout from the start, hidden, so nothing jumps as lines appear.
+      var rows = [];
+      for (var k = 1; k < LINES.length; k += 1) {
+        var row = document.createElement("p");
+        row.textContent = LINES[k][1];
+        row.setAttribute("aria-hidden", "true");
+        row.style.visibility = "hidden";
+        log.appendChild(row);
+        rows.push(row);
+      }
+      title.style.visibility = "hidden";
+      var shown = 0;
+      var done = false;
+      function now() { return window.performance && performance.now ? performance.now() : Date.now(); }
+      function reveal(i, t) {
+        var row = i === 0 ? title : rows[i - 1];
+        if (i > 1) rows[i - 2].classList.remove("is-latest");
+        row.style.visibility = "visible";
+        row.removeAttribute("aria-hidden");
+        if (i > 0) row.classList.add("is-latest");
+        T.lines.push({ i: i, at: LINES[i][0], t: Math.round(t * 1000) / 1000, mode: T.mode, video: video ? Math.round(video.currentTime * 1000) / 1000 : -1 });
+        shown = i + 1;
+      }
+      function finish() {
+        if (done) return;
+        done = true;
+        T.fadeAt = Math.round(now());
+        T.fadeVideoT = video ? Math.round(video.currentTime * 1000) / 1000 : -1;
+        window.__bootLogDone = true;
+      }
+      function fallback(reason) {
+        if (T.mode === "timer") return;
+        T.mode = "timer";
+        T.fallbackReason = reason;
+      }
+      if (reduce || !video) {
+        // Reduced motion: the poster picture, every line at once, then straight on.
+        try { if (video) { video.removeAttribute("autoplay"); video.pause(); } } catch (e) {}
+        T.mode = "static";
+        for (var n = 0; n < LINES.length; n += 1) reveal(n, 0);
+        window.setTimeout(finish, 1200);
+        return;
+      }
+      var t = 0, lastVt = 0, lastProgress = now(), lastTick = now(), pageStart = now(), started = false;
+      video.addEventListener("error", function () { fallback("error"); });
+      video.addEventListener("playing", function () { if (!T.videoStart) T.videoStart = Math.round(now()); });
+      var p;
+      try { p = video.play(); } catch (e) { p = null; }
+      if (p && p.catch) p.catch(function () { fallback("autoplay-blocked"); });
+      function frame() {
+        if (done) return;
+        var n2 = now();
+        var vt = video.currentTime || 0;
+        if (T.mode === "video") {
+          if (vt > lastVt + 0.001) {
+            lastVt = vt; lastProgress = n2; started = true;
+            if (vt > t) t = vt;
+          } else if (!video.ended && n2 - lastProgress > (started ? STALL_WAIT : START_WAIT)) {
+            fallback(started ? "stalled" : "no-start");
+          }
+          if (video.ended && t < FADE_AT) t = FADE_AT;
+        } else {
+          t += (n2 - lastTick) / 1000;
+          if (vt > t + 0.05 && !video.paused) { t = vt; T.mode = "video"; lastVt = vt; lastProgress = n2; started = true; }
+        }
+        lastTick = n2;
+        while (shown < LINES.length && t >= LINES[shown][0]) reveal(shown, t);
+        if (t >= FADE_AT || n2 - pageStart > HARD_LIMIT) {
+          while (shown < LINES.length) reveal(shown, t);
+          finish();
+          return;
+        }
+        window.requestAnimationFrame(frame);
+      }
+      window.requestAnimationFrame(frame);
+      // rAF is paused in a background tab; keep the schedule moving so the site still opens.
+      window.setTimeout(function hardStop() {
+        if (done) return;
+        if (now() - pageStart > HARD_LIMIT) { while (shown < LINES.length) reveal(shown, t); finish(); }
+        else window.setTimeout(hardStop, 500);
+      }, HARD_LIMIT);
+    }
+
+    function runClassic() {
       var lines = [
         "> AUTHENTICATING OPERATOR SESSION...",
         "> CLEARANCE GRANTED — GLOBAL MONITORING NODE",
@@ -72,6 +215,12 @@
         "> MARITIME AIS / POWER GRID / OUTAGE OVERLAYS SYNCING",
         "> ALL SENSOR LAYERS ACTIVE — GLOBE READY"
       ];
+      var v = document.getElementById("boot-video");
+      v.setAttribute("width", "736"); v.setAttribute("height", "416");
+      v.setAttribute("aria-label", "Satellite above the Earth");
+      v.loop = true; v.autoplay = true;
+      v.src = "/start-satellite.mp4?v=20261126n";
+      var p0 = v.play(); if (p0 && p0.catch) p0.catch(function () {});
       var log = document.getElementById("boot-log");
       var reduce = false;
       try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
@@ -105,7 +254,8 @@
         else window.setTimeout(function () { window.__bootLogDone = true; }, 800);
       }
       window.setTimeout(step, 400);
-    })();
+    }
+    if (window.SPLASH_MODE === "classic") runClassic(); else runVideo();
   </script>
   <header class="hud-top">
     <div class="brand">
@@ -658,7 +808,7 @@
   <script src="/paranormal.js?v=20261126t"></script>
   <script src="/geocoder.js?v=20261127a"></script>
   <script src="/nearby.js?v=20261126l"></script>
-  <script src="/welcome.js?v=20261127icon3"></script>
+  <script src="/welcome.js?v=20261127vs1"></script>
   <script src="/extra-layers-registry.js?v=20261127a"></script>
   <script src="/extra-layers.js?v=20261127a"></script>
   <script src="/custom-packs-loader.js?v=20261127a"></script>
@@ -668,6 +818,6 @@
   <script src="/sdr-layers.js?v=20261127sdr2"></script>
   <script src="/sdr-popup.js?v=20261127mydev1"></script>
   <script src="/community-layers.js?v=20261127icon2"></script>
-  <script src="/cesium.js?v=20261127mydev1"></script>
+  <script src="/cesium.js?v=20261127vs1"></script>
 </body>
 </html>
