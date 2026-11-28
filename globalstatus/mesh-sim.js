@@ -42,7 +42,7 @@
   function meshtastic(center) {
     const N = nodes(center);
     let onBytes = null, timer = 0, step = 0, rxState = [];
-    const sim = { writes: [], sent: { wantConfig: 0, heartbeat: 0, other: 0 } };
+    const sim = { writes: [], sent: { wantConfig: 0, heartbeat: 0, other: 0, texts: [] }, acks: [] };
     const emit = (p) => { if (onBytes) onBytes(Uint8Array.from(frame(p))); };
     function config(nonce) {
       emit([].concat(...m(3, [u(1, N[0].num), u(8, 3), u(15, N.length)])));
@@ -79,6 +79,15 @@
           const f = root.GsaMeshDevice.pb(p);
           if (f[3]) { sim.sent.wantConfig += 1; config(f[3][0].u); }
           else if (f[7]) sim.sent.heartbeat += 1;
+          else if (f[1]) {
+            const ev = root.GsaMeshDevice.decodeToRadio(p);
+            const rec = { to: ev.to, toId: ev.toId, channel: ev.channel || 0, id: ev.id, wantAck: ev.wantAck, text: ev.text || "", port: ev.port, bytes: Array.from(p) };
+            sim.sent.texts.push(rec);
+            if (ev.wantAck && ev.id) {
+              const err = sim.ackError != null ? sim.ackError : 0;
+              setTimeout(() => emit(Array.from(root.GsaMeshDevice.mtFromRouting(ev.id, err, ev.to, N[0].num))), 200);
+            }
+          }
           else sim.sent.other += 1;
         });
         if (!any && bytes[0] !== 0x94) sim.sent.other += 1;
@@ -92,7 +101,7 @@
 
   function meshcore(center) {
     let onBytes = null, timer = 0, queue = [];
-    const sim = { writes: [], sent: { cmds: [] } };
+    const sim = { writes: [], sent: { cmds: [], texts: [] } };
     const enc = new TextEncoder();
     const le = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
     const pad = (text, n) => { const b = Array.from(enc.encode(text)).slice(0, n); while (b.length < n) b.push(0); return b; };
@@ -117,6 +126,20 @@
       else if (code === 4) { out([2].concat(le(C.length))); C.forEach((c) => out(contact(c))); out([4].concat(le(Math.floor(Date.now() / 1000)))); }
       else if (code === 31) { if (p[1] === 0) out([18, 0].concat(pad("Public", 32), new Array(16).fill(0))); else if (p[1] === 1) out([18, 1].concat(pad("Hikers", 32), new Array(16).fill(0))); else out([1, 2]); }
       else if (code === 10) { const q = queue.shift(); out(q || [10]); }
+      else if (code === 2) {
+        const dest = p.slice(7, 13), textBytes = p.slice(13), msg = new TextDecoder().decode(Uint8Array.from(textBytes));
+        sim.sent.texts.push({ kind: "dm", dest: dest.map((x) => x.toString(16).padStart(2, "0")).join(""), text: msg, cmd: p.slice() });
+        if (textBytes.length > 160) { out([1, 7]); return; }
+        const ack = [0x11, 0x22, 0x33, 0x44];
+        out([6, 1].concat(ack, le(8000)));
+        setTimeout(() => out([0x82].concat(ack, le(150))), 200);
+      }
+      else if (code === 3) {
+        const ch = p[2], textBytes = p.slice(7), msg = new TextDecoder().decode(Uint8Array.from(textBytes));
+        sim.sent.texts.push({ kind: "channel", channel: ch, text: msg, cmd: p.slice() });
+        if (textBytes.length > 160) { out([1, 7]); return; }
+        out([0]);
+      }
       else out([1, 1]);
     }
     let buf = [];

@@ -4,7 +4,9 @@
  *   connection bar, thirteen uniform full-width map layer switches and a compare note.
  * - SDR Workbench popup: Tuner & Waterfall, Spectrum / Looking Glass, Pagers, Devices, Bluetooth,
  *   Voice & Ham, Trains / Cell / TV, Capture, Log.
- * - There is no transmit code anywhere in the SDR category.
+ * - Transmit is limited to text chat: only when a mesh radio is connected, and only after
+ *   the user taps SEND in the MESH RADIO tab (a channel or a direct message). No auto-send.
+ *   Device config, position and reboot are never written.
  * - One radio hears one band at a time: switching a map layer on tunes the radio to it; the
  *   other band layers keep their pins and show PAUSED until the radio is tuned back.
  * Nothing runs until the user clicks Connect SDR: no USB calls, no Web Worker, no AudioContext,
@@ -17,7 +19,7 @@
  */
 (function (root) {
   "use strict";
-  const V = "20261128n";
+  const V = "20261128p";
   const D = () => root.GsaSdrDriver;
   const L = () => root.GsaSdrLayers;
 
@@ -76,7 +78,7 @@
     portapackSerial: false, step: 12500, fftRow: null, wfFloor: -95, stats: { workers: 0, usbCalls: 0, audioCtx: 0 },
     lastCardId: "", support: null, sim: false, queue: Promise.resolve(),
     share: { on: false, armed: false, timer: 0, busy: false, sent: 0, lastAt: 0, lastCount: 0, note: "", wait: 0 },
-    mesh: { dev: null, sess: null, connecting: false, choosing: false, message: "", msgKind: "", info: {}, lora: null, channels: [], messages: [], nodes: new Map(), myId: "", sim: null, ready: false, otaSkipped: 0, filter: "" },
+    mesh: { dev: null, sess: null, connecting: false, choosing: false, message: "", msgKind: "", info: {}, lora: null, channels: [], messages: [], nodes: new Map(), myId: "", sim: null, ready: false, otaSkipped: 0, filter: "", chat: { to: "ch:0", text: "", sending: false } },
   };
 
   const SHARE_OFF_NOTE = "Off. Turn on to share the aircraft, ships, mesh nodes, APRS stations, weather balloons, ACARS positions and HD Radio towers your radio decodes live with everyone on the site (COMMUNITY FEED and the matching regular layers). Pagers, tire sensors, Bluetooth, meters, radio GPS units, mesh messages and audio are never shared. Your receiver location is blurred to about 25 km.";
@@ -1060,12 +1062,14 @@
     if (t.matches("[data-gsr-sq]")) { st.squelch = Number(t.value); config(); renderTuner(); }
     else if (t.matches("[data-gsr-gain]")) { st.gain = Number(t.value); st.wb.querySelector("[data-gsr-gv]").textContent = st.gain + "%"; clearTimeout(st.gainTimer); st.gainTimer = setTimeout(applyGain, 120); }
     else if (t.matches("[data-gsr-pagerfilter]")) { st.pagerFilter = t.value; renderPagers(true); }
+    else if (t.matches("[data-mesh-chat-text]")) { st.mesh.chat.text = t.value; meshChatMeta(); }
   }
   async function applyGain() { if (st.dev) { await serial(() => st.dev.setGain(st.gain)).catch(() => {}); renderTuner(); render(); } }
   function onWbChange(e) {
     const t = e.target;
     if (t.matches("[data-gsr-freq]")) { const v = parseFloat(String(t.value).replace(",", ".")); if (Number.isFinite(v) && v > 0) tune(Math.round(v * 1e6)); else renderTuner(); }
     else if (t.matches("[data-gsr-step]")) st.step = Number(t.value);
+    else if (t.matches("[data-mesh-chat-to]")) st.mesh.chat.to = t.value;
   }
   // SCAN: step through the presets (not 1090), holding while the signal is above squelch.
   function scanStep(first) {
@@ -1480,6 +1484,7 @@
     if (m.connecting || m.dev) return;
     m.choosing = false; m.connecting = true;
     m.nodes = new Map(); m.messages = []; m.channels = []; m.info = {}; m.lora = null; m.myId = ""; m.ready = false; m.otaSkipped = 0;
+    m.chat = { to: "ch:0", text: "", sending: false };
     meshMsg(kind === "ble" ? "Pick your radio in the Bluetooth list. Meshtastic default PIN is 123456 if it asks." : kind === "serial" ? "Pick your radio's USB port in the list." : "");
     try {
       await loadScript("/mesh-device.js?v=" + V);
@@ -1578,22 +1583,26 @@
         if (e.telemetry && e.telemetry.env) { const v = e.telemetry.env; Object.assign(patch, { tempC: v.tempC, rh: v.rh, pressure: v.pressure }); }
         meshNode(e.fromId, patch);
         if (e.port === 1 && e.text) meshMessage({ ch: e.broadcast ? chName(e.channel) : "Direct", dm: !e.broadcast, fromId: e.fromId, from: nodeName(e.fromId), snr: e.snr, hops: e.hops, text: e.text });
+        if (e.port === 5 && e.requestId) meshChatResult(e.requestId, e.routing ? "failed" : "delivered", e.routingName || (e.routing ? "Failed" : "Delivered"));
         break;
       }
       case "configComplete": m.ready = true; addLog(`Mesh radio: ${m.nodes.size} nodes, ${m.channels.length} channels loaded`); break;
       case "rebooted": addLog("Mesh radio restarted"); break;
-      case "mcSelf": m.myId = e.id; Object.assign(m.info, { nodeId: e.id, name: e.name, kind: e.kind, freq: e.freqMHz ? e.freqMHz.toFixed(3) + " MHz" : "", lora: e.sf ? `SF${e.sf} · ${e.bwKHz} kHz · CR 4/${e.cr}` : "" }); meshNode(e.id, { own: true, longName: e.name, nodeKind: e.kind, proto: "MeshCore", lat: e.lat, lon: e.lon, heardAt: now }); break;
+      case "mcSelf": m.myId = e.id; Object.assign(m.info, { nodeId: e.id, name: e.name, kind: e.kind, freq: e.freqMHz ? e.freqMHz.toFixed(3) + " MHz" : "", lora: e.sf ? `SF${e.sf} · ${e.bwKHz} kHz · CR 4/${e.cr}` : "" }); meshNode(e.id, { own: true, longName: e.name, nodeKind: e.kind, proto: "MeshCore", pubkey: e.pubkey, lat: e.lat, lon: e.lon, heardAt: now }); break;
       case "mcDeviceInfo": Object.assign(m.info, { hw: e.model, firmware: e.version || (e.fwVer ? "v" + e.fwVer : "") }); break;
-      case "mcContact": meshNode(e.id, { longName: e.name, nodeKind: e.kind, role: e.kind, proto: "MeshCore", lat: e.lat, lon: e.lon, hops: e.hops, heardAt: secsToMs(e.lastAdvert) || (e.push ? now : undefined) }); break;
+      case "mcContact": meshNode(e.id, { longName: e.name, nodeKind: e.kind, role: e.kind, proto: "MeshCore", pubkey: e.pubkey, lat: e.lat, lon: e.lon, hops: e.hops, heardAt: secsToMs(e.lastAdvert) || (e.push ? now : undefined) }); break;
       case "mcChannel": m.channels = m.channels.filter((c) => c.index !== e.index); if (e.name) { m.channels.push({ index: e.index, name: plain(e.name), role: e.index === 0 ? "Primary" : "Secondary" }); m.channels.sort((a, b) => a.index - b.index); } break;
       case "mcText": {
         let from = "", fromId = "", text = e.text || "";
         if (e.dm) { fromId = e.fromId; from = nodeName(fromId); }
         else { const mm = /^([^:]{1,32}):\s*([\s\S]*)$/.exec(text); if (mm) { from = mm[1]; text = mm[2]; } }
-        if (fromId) meshNode(fromId, { heardAt: now, snr: e.snr });
+        if (fromId) meshNode(fromId, { heardAt: now, snr: e.snr, pubkeyPrefix: e.fromPrefix });
         meshMessage({ ch: e.dm ? "Direct" : chName(e.channel), dm: e.dm, fromId, from: from || "Unknown", snr: e.snr, hops: e.hops, text });
         break;
       }
+      case "mcSent": meshChatByAck(e.ack, "sent", "Sent, waiting for delivery", e.timeoutMs); break;
+      case "mcAck": meshChatByAck(e.ack, "delivered", "Delivered"); break;
+      case "mcError": meshChatFailPending("The radio did not accept this message"); break;
       default: break;
     }
     if (m.dev) { if (st.wbOpen && st.tab === "mesh" && e.type !== "packet") renderMeshTab(); }
@@ -1604,6 +1613,122 @@
     const src = `<span data-sdr-card="${esc(item.id)}" hidden></span><p class="gsr-src">${t.own ? "Your own mesh radio" : "From your mesh radio"}${d ? " · " + esc(d.name) + " · " + esc(d.proto) : ""}</p>`;
     return src + rows([["Node", t.nodeId], ["Long name", t.longName], ["Short name", t.shortName], ["Protocol", t.proto], ["Type", t.nodeKind && t.nodeKind !== t.role ? t.nodeKind : ""], ["Role", t.role], ["Hardware", t.hw], ["Battery", Number.isFinite(t.battery) ? (t.battery > 100 ? "external power" : t.battery + " %") : ""], ["Voltage", Number.isFinite(t.voltage) && t.voltage ? t.voltage.toFixed(2) + " V" : ""], ["Channel use", Number.isFinite(t.chUtil) ? t.chUtil.toFixed(1) + " %" : ""], ["Airtime (TX)", Number.isFinite(t.airUtilTx) ? t.airUtilTx.toFixed(1) + " %" : ""], ["Temperature", Number.isFinite(t.tempC) ? t.tempC.toFixed(1) + " °C" : ""], ["Humidity", Number.isFinite(t.rh) ? Math.round(t.rh) + " %" : ""], ["Pressure", Number.isFinite(t.pressure) ? t.pressure.toFixed(1) + " hPa" : ""], ["Altitude", Number.isFinite(t.alt) && t.alt ? t.alt + " m" : ""], ["Position", Number.isFinite(t.precisionBits) && t.precisionBits > 0 && t.precisionBits < 32 ? "approximate (shared at reduced precision)" : ""], ["Hops away", t.hops], ["SNR", Number.isFinite(t.snr) && !t.own ? t.snr + " dB" : ""], ["Signal", Number.isFinite(t.rssi) && t.rssi && !t.own ? t.rssi + " dBm" : ""], ["Last packet", t.lastPort], ["Heard via", t.viaMqtt ? "internet (MQTT), not over the air" : ""], ["Range", rangeText(t)], ["Last heard", t.own ? "now (connected)" : agoLong(t.heardAt)]]);
   }
+
+  function meshMax() { return st.mesh.sess && st.mesh.sess.maxText ? st.mesh.sess.maxText() : 233; }
+  function utf8len(t) { return new TextEncoder().encode(t || "").length; }
+  function meshChatDraft() {
+    if (!st.wb) return;
+    const to = st.wb.querySelector("[data-mesh-chat-to]");
+    const tx = st.wb.querySelector("[data-mesh-chat-text]");
+    if (to) st.mesh.chat.to = to.value;
+    if (tx) st.mesh.chat.text = tx.value;
+  }
+  function parseChatDest(value) {
+    const m = st.mesh;
+    const raw = String(value || "ch:0");
+    if (raw.slice(0, 3) === "ch:") {
+      const ch = parseInt(raw.slice(3), 10) || 0;
+      return { kind: "channel", channel: ch, to: 0xffffffff, wantAck: false, label: chName(ch) };
+    }
+    const id = raw.replace(/^dm:/, "");
+    const n = m.nodes.get(id);
+    if (m.dev && m.dev.proto === "MeshCore") {
+      const hex = (n && (n.pubkey || n.pubkeyPrefix)) || "";
+      if (!hex || String(hex).length < 12) throw new Error("NO_DEST");
+      return { kind: "dm", to: String(hex), label: nodeName(id) || id, id, wantAck: true };
+    }
+    const num = parseInt((id[0] === "!" ? id.slice(1) : id), 16);
+    if (!Number.isFinite(num)) throw new Error("NO_DEST");
+    return { kind: "dm", to: num, channel: 0, wantAck: true, label: nodeName(id) || id, id };
+  }
+  function meshChatOptions() {
+    const m = st.mesh;
+    const chans = (m.channels.length ? m.channels : [{ index: 0, name: "Primary (default)" }]);
+    const ch = chans.map((c) => `<option value="ch:${c.index}">Channel: ${esc(c.name || (c.index === 0 ? "Primary" : "Channel " + c.index))}</option>`).join("");
+    const dms = Array.from(m.nodes.values())
+      .filter((n) => !n.own && (m.dev.proto !== "MeshCore" || ((n.pubkey || n.pubkeyPrefix || "").length >= 12)))
+      .sort((a, b) => String(a.longName || a.id).localeCompare(String(b.longName || b.id)))
+      .map((n) => `<option value="dm:${esc(n.id)}">${esc((n.longName || n.shortName || n.id) + " · " + n.id)}</option>`).join("");
+    return ch + (dms ? `<optgroup label="Direct message">${dms}</optgroup>` : "");
+  }
+  function meshChatMeta() {
+    if (!st.wb) return;
+    const max = meshMax(), n = utf8len(st.mesh.chat.text), over = n > max, empty = !String(st.mesh.chat.text || "").trim();
+    const c = st.wb.querySelector("[data-mesh-chat-count]");
+    if (c) c.textContent = over ? `${n} / ${max} bytes — too long for this radio` : `${n} / ${max} bytes`;
+    const b = st.wb.querySelector("[data-sdr-act=mesh-send]");
+    if (b) { b.disabled = !st.mesh.dev || st.mesh.chat.sending || empty || over; b.textContent = st.mesh.chat.sending ? "SENDING…" : "SEND"; }
+  }
+  function meshChatResult(pktId, status, text) {
+    const msg = st.mesh.messages.find((x) => x.outgoing && x.pktId === pktId);
+    if (!msg) return;
+    if (msg.timer) clearTimeout(msg.timer);
+    msg.status = status; msg.statusText = text;
+    if (st.wbOpen && st.tab === "mesh") renderMeshTab();
+  }
+  function meshChatByAck(ack, status, text, timeoutMs) {
+    const msg = st.mesh.messages.find((x) => x.outgoing && ((ack && x.ackCode === ack) || (!x.ackCode && x.status === "sending")));
+    if (!msg) return;
+    if (ack) msg.ackCode = ack;
+    if (msg.timer) clearTimeout(msg.timer);
+    msg.status = status; msg.statusText = text;
+    if (status === "sent") {
+      const ms = Math.min(60000, Math.max(8000, timeoutMs || 8000));
+      msg.timer = setTimeout(() => { if (msg.status === "sent") { msg.status = "failed"; msg.statusText = "Timed out"; if (st.wbOpen && st.tab === "mesh") renderMeshTab(); } }, ms);
+    }
+    if (st.wbOpen && st.tab === "mesh") renderMeshTab();
+  }
+  function meshChatFailPending(text) {
+    const msg = st.mesh.messages.find((x) => x.outgoing && (x.status === "sending" || x.status === "sent"));
+    if (!msg) return;
+    if (msg.timer) clearTimeout(msg.timer);
+    msg.status = "failed"; msg.statusText = text;
+    if (st.wbOpen && st.tab === "mesh") renderMeshTab();
+  }
+  async function meshSend(to, textArg) {
+    const m = st.mesh;
+    if (!m.dev || !m.sess || m.chat.sending) return { ok: false, reason: "busy" };
+    meshChatDraft();
+    if (to != null) m.chat.to = to;
+    if (textArg != null) m.chat.text = textArg;
+    const text = String(m.chat.text || "");
+    const n = utf8len(text);
+    if (!text.trim()) return { ok: false, reason: "empty" };
+    if (n > meshMax()) return { ok: false, reason: "too_long" };
+    let dest;
+    try { dest = parseChatDest(m.chat.to); }
+    catch (e) { return { ok: false, reason: "no_dest" }; }
+    m.chat.sending = true;
+    const row = { outgoing: true, at: Date.now(), t: nowTime(), ch: dest.label, dm: dest.kind === "dm", from: "You", text: plain(text).slice(0, 400), status: "sending", statusText: "Sending…" };
+    m.messages.unshift(row);
+    if (m.messages.length > 300) m.messages.length = 300;
+    renderMeshTab();
+    try {
+      const hop = m.lora && m.lora.hopLimit != null ? m.lora.hopLimit : 3;
+      const result = await m.sess.sendText({ to: dest.to, channel: dest.channel || 0, text, hopLimit: hop, wantAck: dest.wantAck, dm: dest.kind === "dm" });
+      if (result.proto === "meshtastic") {
+        row.pktId = result.id;
+        if (dest.wantAck) {
+          row.status = "sent"; row.statusText = "Sent, waiting for delivery";
+          row.timer = setTimeout(() => { if (row.status === "sent") { row.status = "failed"; row.statusText = "Timed out"; if (st.wbOpen && st.tab === "mesh") renderMeshTab(); } }, 30000);
+        } else { row.status = "sent"; row.statusText = "Sent"; }
+      } else {
+        const ev = result.ev;
+        if (!ev || ev.type === "mcError") { row.status = "failed"; row.statusText = "The radio did not accept this message"; }
+        else if (ev.type === "mcSent") { row.ackCode = ev.ack; row.status = "sent"; row.statusText = "Sent, waiting for delivery"; }
+        else { row.status = "sent"; row.statusText = "Sent"; }
+      }
+      m.chat.text = "";
+    } catch (e) {
+      const why = String((e && e.message) || e || "");
+      row.status = "failed";
+      row.statusText = why === "TOO_LONG" ? "Too long for this radio" : why === "NOT_CONNECTED" ? "Mesh radio disconnected" : "Could not send";
+    }
+    m.chat.sending = false;
+    if (st.wbOpen && st.tab === "mesh") renderMeshTab();
+    return { ok: row.status !== "failed", status: row.status, statusText: row.statusText };
+  }
+
   function renderMeshTab() {
     const pane = st.wb && st.wb.querySelector('[data-gsr-pane="mesh"]');
     if (!pane || st.tab !== "mesh") return;
@@ -1613,7 +1738,7 @@
     if (!sup.ok) html += `<p class="gsr-empty">${esc(sup.reason)}</p>`;
     if (m.message) html += `<p class="gsr-hint">${esc(m.message)}</p>`;
     if (!d) {
-      html += `<p class="gsr-empty">${st.dev ? "Mesh nodes are coming from your SDR over the air (LOCAL MESH NODES). Connect a Meshtastic or MeshCore radio to read its node list, channels and messages; it then becomes the mesh source." : "Connect a Meshtastic or MeshCore radio by USB cable or Bluetooth to see its nodes on the map, plus its channels and messages here."}</p>`;
+      html += `<p class="gsr-empty">${st.dev ? "Mesh nodes are coming from your SDR over the air (LOCAL MESH NODES). Chat is only available when a mesh radio is connected. Connect a Meshtastic or MeshCore radio to read its node list, channels and messages, and to send a text." : "Connect a Meshtastic or MeshCore radio by USB cable or Bluetooth to see its nodes on the map, read its messages, and send a text on a channel or as a direct message."}</p>`;
       html += `<p class="gsr-hint">Works in Chrome, Edge and Opera on a computer (USB or Bluetooth) and Chrome on Android (Bluetooth). Safari, Firefox and iPhone / iPad browsers can't connect to radios.</p>`;
       pane.innerHTML = html;
       return;
@@ -1622,15 +1747,34 @@
     html += `<h4 class="gsr-h">RADIO</h4>` + rows([["Radio", d.name], ["Protocol", d.proto], ["Connection", d.transport === "ble" ? "Bluetooth" : d.transport === "serial" ? "USB cable" : "Simulated"], ["Node", m.info.nodeId], ["Name", m.info.name || (m.nodes.get(m.myId) || {}).longName], ["Hardware", m.info.hw], ["Firmware", m.info.firmware], ["Role", m.info.role || m.info.kind]].concat(lora, [["Nodes in radio", m.nodes.size], ["SDR mesh decodes skipped", st.dev ? m.otaSkipped : ""]]));
     const ch = m.channels.map((c) => `<tr><td>${esc(c.index)}</td><td>${esc(c.name)}</td><td>${esc(c.role || "")}</td></tr>`).join("");
     html += `<h4 class="gsr-h">CHANNELS</h4>` + (ch ? `<div class="gsr-list">${tableHtml(["#", "NAME", "ROLE"], ch)}</div>` : `<p class="gsr-empty">Reading channels…</p>`);
-    const msgs = m.messages.slice(0, 100).map((x) => `<tr><td>${esc(x.t)}</td><td>${esc(x.ch)}</td><td>${esc(x.from || x.fromId || "")}</td><td class="gsr-msg">${esc(x.text)}</td></tr>`).join("");
-    html += `<h4 class="gsr-h">MESSAGES <em>${m.messages.length}</em></h4>` + (msgs ? `<div class="gsr-list">${tableHtml(["TIME", "CHANNEL", "FROM", "MESSAGE"], msgs)}</div>` : `<p class="gsr-empty">No messages since connecting. New channel and direct messages your radio receives appear here.</p>`);
+    const active = document.activeElement;
+    const keep = active && active.closest && active.closest("[data-mesh-chat]");
+    const caret = keep && "selectionStart" in active ? { start: active.selectionStart, end: active.selectionEnd, which: active.hasAttribute("data-mesh-chat-text") ? "text" : "to" } : null;
+    meshChatDraft();
+    if (!m.channels.length && m.chat.to === "ch:0") { /* default stays primary */ }
+    html += `<h4 class="gsr-h">SEND A MESSAGE</h4><div class="gsr-chat" data-mesh-chat>` +
+      `<label class="gsr-chat-to">To<select class="gsr-input" data-mesh-chat-to aria-label="Send to a channel or a node">${meshChatOptions()}</select></label>` +
+      `<textarea class="gsr-input gsr-chat-text" data-mesh-chat-text rows="3" spellcheck="false" aria-label="Message text" placeholder="Type a message, then tap SEND."></textarea>` +
+      `<div class="gsr-row"><span class="gsr-hint" data-mesh-chat-count></span><button type="button" class="gsr-btn gsr-primary" data-sdr-act="mesh-send">SEND</button></div>` +
+      `<p class="gsr-hint">Messages go out through your mesh radio only when you tap SEND. They stay on this device and are never shared. Nothing is sent automatically, and radio settings are never changed.</p></div>`;
+    const msgs = m.messages.slice(0, 100).map((x) => `<tr class="${x.outgoing ? "is-out" : ""}"><td>${esc(x.t)}</td><td>${esc(x.ch)}</td><td>${esc(x.outgoing ? "You" : (x.from || x.fromId || ""))}</td><td class="gsr-msg">${esc(x.text)}${x.statusText ? ` <em>${esc(x.statusText)}</em>` : ""}</td></tr>`).join("");
+    html += `<h4 class="gsr-h">MESSAGES <em>${m.messages.length}</em></h4>` + (msgs ? `<div class="gsr-list" data-mesh-msglist>${tableHtml(["TIME", "TO / CHANNEL", "FROM", "MESSAGE"], msgs)}</div>` : `<p class="gsr-empty">No messages since connecting. New channel and direct messages your radio receives appear here. Messages you send show up with a delivery status.</p>`);
     const list = Array.from(m.nodes.values()).sort((a, b) => (b.own ? 1 : 0) - (a.own ? 1 : 0) || (b.heardAt || 0) - (a.heardAt || 0)).slice(0, 150);
     const nb = list.map((n) => `<tr><td>${esc((n.own ? "★ " : "") + (n.longName || n.shortName || n.id))}</td><td>${esc(n.id)}</td><td>${esc(n.hw || n.nodeKind || "")}</td><td>${esc(Number.isFinite(n.battery) ? (n.battery > 100 ? "ext" : n.battery + "%") : "")}</td><td>${esc(Number.isFinite(n.lat) ? "yes" : "no")}</td><td>${esc(n.hops != null ? n.hops : "")}</td><td>${esc(n.own ? "now" : agoLong(n.heardAt))}</td></tr>`).join("");
     html += `<h4 class="gsr-h">NODES <em>${m.nodes.size}</em></h4><div class="gsr-list">${tableHtml(["NAME", "ID", "HARDWARE", "BATTERY", "ON MAP", "HOPS", "HEARD"], nb)}</div>`;
-    html += `<p class="gsr-hint">Read only: Global Status never sends messages, changes settings or restarts your radio. Messages stay on this device and are never shared. With SHARE LIVE FEED on, only node positions heard over the air in the last 15 minutes are shared (never your own node or anything within 2 km of it).</p>`;
+    html += `<p class="gsr-hint">Settings, position and reboot are never written to the radio. With SHARE LIVE FEED on, only node positions heard over the air in the last 15 minutes are shared (never message text, never your own node or anything within 2 km of it).</p>`;
     const top = pane.scrollTop;
     pane.innerHTML = html;
     pane.scrollTop = top;
+    const to = pane.querySelector("[data-mesh-chat-to]");
+    const tx = pane.querySelector("[data-mesh-chat-text]");
+    if (to) { const ok = [...to.options].some((o) => o.value === m.chat.to); to.value = ok ? m.chat.to : (to.options[0] ? to.options[0].value : "ch:0"); m.chat.to = to.value; }
+    if (tx) tx.value = m.chat.text || "";
+    meshChatMeta();
+    if (caret) {
+      const el = caret.which === "text" ? tx : to;
+      if (el && el.focus) { el.focus(); if ("selectionStart" in el) { el.selectionStart = caret.start; el.selectionEnd = caret.end; } }
+    }
   }
 
   function onDocClick(e) {
@@ -1648,6 +1792,7 @@
       else if (a === "mesh-usb") meshConnect("serial");
       else if (a === "mesh-ble") meshConnect("ble");
       else if (a === "mesh-tab") openWorkbench("mesh");
+      else if (a === "mesh-send") meshSend();
       else if (a === "workbench") { if (st.wbOpen) closeWorkbench(); else openWorkbench(); }
       return;
     }
@@ -1689,7 +1834,8 @@
         return st.mesh.dev ? st.mesh.dev.proto : st.mesh.message;
       },
       disconnectMesh: () => meshDisconnect(),
-      mesh: () => ({ dev: st.mesh.dev, myId: st.mesh.myId, nodes: st.mesh.nodes.size, onMap: visibleTargets("mesh").filter((t) => t.src === "device").length, sdrMeshOnMap: visibleTargets("mesh").filter((t) => t.src === "sdr").length, messages: st.mesh.messages.map((x) => ({ ch: x.ch, from: x.from, text: x.text })), channels: st.mesh.channels, info: st.mesh.info, lora: st.mesh.lora, otaSkipped: st.mesh.otaSkipped, source: meshSourceText(), meshLive: isLive("mesh"), tuned: st.tuned, simSent: root.__gsMeshSimState ? root.__gsMeshSimState.sent : null }),
+      mesh: () => ({ dev: st.mesh.dev, myId: st.mesh.myId, nodes: st.mesh.nodes.size, onMap: visibleTargets("mesh").filter((t) => t.src === "device").length, sdrMeshOnMap: visibleTargets("mesh").filter((t) => t.src === "sdr").length, messages: st.mesh.messages.map((x) => ({ ch: x.ch, from: x.from, text: x.text, outgoing: !!x.outgoing, status: x.status || "", statusText: x.statusText || "", pktId: x.pktId })), channels: st.mesh.channels, info: st.mesh.info, lora: st.mesh.lora, otaSkipped: st.mesh.otaSkipped, source: meshSourceText(), meshLive: isLive("mesh"), tuned: st.tuned, simSent: root.__gsMeshSimState ? root.__gsMeshSimState.sent : null, chat: { to: st.mesh.chat.to, text: st.mesh.chat.text, sending: st.mesh.chat.sending, hasUi: Boolean(st.wb && st.wb.querySelector("[data-mesh-chat]")), max: meshMax(), sendDisabled: Boolean(st.wb && st.wb.querySelector("[data-sdr-act=mesh-send]") && st.wb.querySelector("[data-sdr-act=mesh-send]").disabled) } }),
+      sendMeshChat: (to, text) => meshSend(to, text),
       injectSdrMesh: (m) => onMesh(m),
       setReceiver: (lat, lon, name) => setReceiver({ lat, lon, name: name || "Receiver pin" }),
       tune: (mhzValue, mode) => tune(Math.round(mhzValue * 1e6), { mode }),

@@ -3,14 +3,14 @@
  * - Web Serial (USB cable) and Web Bluetooth, Chrome / Edge / Opera on desktop and
  *   Chrome on Android (Bluetooth). Safari, Firefox and iOS have neither API.
  * - Meshtastic: stream framing (0x94 0xC3 + 16-bit big-endian length) over USB, raw
- *   protobuf over Bluetooth. Only two things are ever written to the radio: the
- *   want_config_id request that starts the session and a periodic heartbeat.
+ *   protobuf over Bluetooth. Written to the radio: the want_config_id handshake,
+ *   a periodic heartbeat, and (only after a Send click) a text message packet.
  * - MeshCore companion radios: '<' + 16-bit little-endian length frames over USB,
- *   raw frames over the Nordic UART service on Bluetooth. Only read commands are
- *   sent: app start, device query, list contacts, read channel names and fetch
- *   waiting messages.
- * - Nothing is transmitted over the air, no settings are changed and the radio is
- *   never rebooted. Loaded only when the user clicks Connect Mesh.
+ *   raw frames over the Nordic UART service on Bluetooth. Read commands: app start,
+ *   device query, list contacts, channel names and waiting messages. Text is sent
+ *   only after a Send click (channel or direct).
+ * - No settings are changed and the radio is never rebooted. No auto-send. Loaded
+ *   only when the user clicks Connect Mesh.
  * Original clean-room code for Global Status App, written from the public protocol
  * descriptions and protobuf field numbers. No third-party code.
  */
@@ -77,6 +77,9 @@
   const sub = (f, n) => { const v = bytes(f, n); return v ? pb(v) : null; };
 
   // ------------------------------------------------------------------ Meshtastic enums (public values)
+  const MT_MAX_TEXT = 233; // Meshtastic Constants.DATA_PAYLOAD_LEN
+  const MC_MAX_TEXT = 160; // MeshCore companion text limit
+  const ROUTING_ERR = { 0: "Delivered", 1: "No route", 2: "NAK", 3: "Timed out", 4: "No interface", 5: "Max retransmit", 6: "No channel", 7: "Too large", 8: "No response", 9: "Duty cycle limit", 32: "Bad request", 33: "Not authorized", 34: "Encryption failed", 38: "Rate limited" };
   const PORTS = { 1: "Text", 3: "Position", 4: "Node info", 5: "Routing", 6: "Admin", 7: "Text (compressed)", 8: "Waypoint", 10: "Detection sensor", 32: "Reply", 34: "Paxcounter", 64: "Serial", 65: "Store & forward", 66: "Range test", 67: "Telemetry", 70: "Traceroute", 71: "Neighbor info", 72: "ATAK", 73: "Map report" };
   const ROLES = ["Client", "Client mute", "Router", "Router client", "Repeater", "Tracker", "Sensor", "TAK", "Client hidden", "Lost and found", "TAK tracker", "Router late", "Client base"];
   const REGIONS = ["Unset", "US", "EU 433", "EU 868", "China", "Japan", "Australia / NZ", "Korea", "Taiwan", "Russia", "India", "NZ 865", "Thailand", "LoRa 2.4 GHz", "Ukraine 433", "Ukraine 868", "Malaysia 433", "Malaysia 919", "Singapore 923", "Philippines 433", "Philippines 868", "Philippines 915", "Australia / NZ 433", "Kazakhstan 433", "Kazakhstan 863", "Nepal 865", "Brazil 902"];
@@ -121,7 +124,9 @@
   function meshPacket(f) {
     const from = fixed(f, 1), to = fixed(f, 2);
     const ev = { type: "packet", from, fromId: from !== undefined ? nodeId(from) : "", to, toId: to !== undefined ? nodeId(to) : "", broadcast: to === 0xffffffff, channel: uint(f, 3) || 0, id: fixed(f, 6), rxTime: fixed(f, 7), snr: float(f, 8), rssi: int32(f, 12), viaMqtt: bool(f, 14) };
-    const hopLimit = uint(f, 9), hopStart = uint(f, 15);
+    ev.wantAck = bool(f, 10);
+    ev.hopLimit = uint(f, 9);
+    const hopLimit = ev.hopLimit, hopStart = uint(f, 15);
     if (hopStart !== undefined && hopLimit !== undefined && hopStart >= hopLimit) ev.hops = hopStart - hopLimit;
     const d = sub(f, 4);
     if (!d) { ev.encrypted = has(f, 5); return ev; }
@@ -133,7 +138,9 @@
       else if (ev.port === 3) ev.position = position(pb(pl));
       else if (ev.port === 4) ev.user = user(pb(pl));
       else if (ev.port === 67) ev.telemetry = telemetry(pb(pl));
+      else if (ev.port === 5) { const r = pl.length ? pb(pl) : {}; ev.routing = uint(r, 3) || 0; ev.routingName = ROUTING_ERR[ev.routing] || ("Error " + ev.routing); ev.requestId = fixed(d, 6) !== undefined ? fixed(d, 6) : uint(d, 6); }
     } catch (e) { ev.bad = true; }
+    ev.requestId = ev.requestId || (fixed(d, 6) !== undefined ? fixed(d, 6) : uint(d, 6));
     return ev;
   }
   // One FromRadio protobuf -> one normalized event (or null for things we do not show).
@@ -166,6 +173,36 @@
   function varintBytes(n) { const out = []; n = Math.floor(n); while (n > 127) { out.push((n % 128) | 128); n = Math.floor(n / 128); } out.push(n); return out; }
   const mtWantConfig = (nonce) => Uint8Array.from([0x18].concat(varintBytes(nonce))); // ToRadio.want_config_id (field 3)
   const mtHeartbeat = () => Uint8Array.from([0x3a, 0x00]); // ToRadio.heartbeat (field 7), empty message
+  const u8 = (parts) => Uint8Array.from([].concat(...parts));
+  const kv = (f, v) => [f * 8].concat(varintBytes(v));
+  const kfx = (f, v) => [f * 8 + 5, v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+  const kby = (f, arr) => [f * 8 + 2].concat(varintBytes(arr.length), Array.from(arr));
+  // ToRadio.packet (field 1) carrying a TEXT_MESSAGE_APP (port 1) MeshPacket.
+  function mtTextPacket(opts) {
+    const to = opts.to == null ? 0xffffffff : (opts.to >>> 0);
+    const id = opts.id >>> 0;
+    const hop = opts.hopLimit == null ? 3 : opts.hopLimit;
+    const text = opts.textBytes || new TextEncoder().encode(opts.text || "");
+    const data = kv(1, 1).concat(kby(2, text));
+    const mp = kfx(2, to)
+      .concat(opts.channel ? kv(3, opts.channel) : [], kby(4, data), kfx(6, id), kv(9, hop))
+      .concat(opts.wantAck ? kv(10, 1).concat(kv(11, 70)) : []);
+    return u8([kby(1, mp)]);
+  }
+  // FromRadio.packet with Routing (port 5) for tests and the simulator ACK.
+  function mtFromRouting(requestId, error, fromNum, toNum) {
+    const routing = kv(3, error || 0);
+    const data = kv(1, 5).concat(kby(2, routing), kfx(6, requestId >>> 0));
+    const mp = kfx(1, fromNum >>> 0).concat(kfx(2, toNum >>> 0), kby(4, data));
+    return u8([kby(2, mp)]);
+  }
+  function decodeToRadio(buf) {
+    const f = pb(buf);
+    if (has(f, 1)) return meshPacket(sub(f, 1));
+    if (has(f, 3)) return { type: "wantConfig", id: uint(f, 3) };
+    if (has(f, 7)) return { type: "heartbeat" };
+    return { type: "toRadio" };
+  }
   function mtFrame(payload) { const out = new Uint8Array(payload.length + 4); out[0] = 0x94; out[1] = 0xc3; out[2] = (payload.length >> 8) & 0xff; out[3] = payload.length & 0xff; out.set(payload, 4); return out; }
   function MtFramer() {
     let state = 0, len = 0, buf = null, at = 0;
@@ -186,6 +223,16 @@
   const MC_TYPES = ["", "Companion", "Repeater", "Room server", "Sensor"];
   function mcFrame(payload) { const out = new Uint8Array(payload.length + 3); out[0] = 0x3c; out[1] = payload.length & 0xff; out[2] = (payload.length >> 8) & 0xff; out.set(payload, 3); return out; }
   function mcAppStart() { const name = "GlobalStatus"; const out = new Uint8Array(8 + name.length); out[0] = MC.APP_START; out[1] = 3; for (let i = 0; i < name.length; i += 1) out[8 + i] = name.charCodeAt(i); return out; }
+  function leBytes(v) { return [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]; }
+  // SEND_TXT_MSG (0x02): plain DM. dest is the first 6 bytes of the contact's public key.
+  function mcSendDm(dest, textBytes, ts, attempt) {
+    const d = dest instanceof Uint8Array ? dest : Uint8Array.from(dest);
+    return u8([[2, 0, attempt || 0], leBytes(ts >>> 0), Array.from(d.subarray(0, 6)), Array.from(textBytes)]);
+  }
+  // SEND_CHANNEL_TXT_MSG (0x03): channel message, txt type 0 (plain).
+  function mcSendChan(channel, textBytes, ts) {
+    return u8([[3, 0, channel & 255], leBytes(ts >>> 0), Array.from(textBytes)]);
+  }
   function McFramer() {
     let state = 0, len = 0, buf = null, at = 0;
     return function push(chunk, emit) {
@@ -237,8 +284,10 @@
       return { type: "mcText", dm: false, channel: ch, snr, hops: pathLen === 255 ? undefined : pathLen & 0x3f, time: ts, text: utf8(b.subarray(o)).replace(/\u0000/g, "") };
     }
     if (code === 18) return b.length >= 34 ? { type: "mcChannel", index: b[1], name: cstr(b.subarray(2, 34)) } : null;
+    if (code === 6 && b.length >= 9) return { type: "mcSent", kind: b[1], ack: hex(b.subarray(2, 6)), timeoutMs: le32(b, 6) };
     if (code === 10) return { type: "mcNoMore" };
     if (code === 0x80) return { type: "mcAdvert", pubkey: hex(b.subarray(1, 33)) };
+    if (code === 0x82) return { type: "mcAck", ack: b.length >= 5 ? hex(b.subarray(1, 5)) : "", tripMs: b.length >= 9 ? le32(b, 5) : undefined };
     if (code === 0x83) return { type: "mcWaiting" };
     if (code === 0) return { type: "mcOk" };
     if (code === 1) return { type: "mcError", err: b[1] };
@@ -339,6 +388,30 @@
       if (s.proto === "meshcore") { startMeshCore(); return; }
       throw new Error("NO_ANSWER");
     }
+    s.maxText = () => (s.proto === "meshcore" ? MC_MAX_TEXT : MT_MAX_TEXT);
+    s.sendText = async function (opts) {
+      if (!s.open || !s.proto) throw new Error("NOT_CONNECTED");
+      const textBytes = opts.textBytes || new TextEncoder().encode(opts.text || "");
+      if (!textBytes.length) throw new Error("EMPTY");
+      if (textBytes.length > s.maxText()) throw new Error("TOO_LONG");
+      if (s.proto === "meshtastic") {
+        const id = (opts.id != null ? opts.id : (Math.floor(Math.random() * 0xfffffffe) + 1)) >>> 0;
+        const payload = mtTextPacket({ to: opts.to, channel: opts.channel || 0, id, hopLimit: opts.hopLimit, wantAck: !!opts.wantAck, textBytes });
+        await writeMt(payload);
+        return { proto: "meshtastic", id, payload };
+      }
+      const ts = opts.ts != null ? opts.ts : Math.floor(Date.now() / 1000);
+      if (opts.dm) {
+        const dest = typeof opts.to === "string" ? Uint8Array.from(opts.to.match(/.{2}/g).map((x) => parseInt(x, 16))) : opts.to;
+        if (!dest || dest.length < 6) throw new Error("NO_DEST");
+        const cmd = mcSendDm(dest, textBytes, ts, 0);
+        const ev = await mcRequest(Array.from(cmd), [6], 4000);
+        return { proto: "meshcore", ev, ts, cmd };
+      }
+      const cmd = mcSendChan(opts.channel || 0, textBytes, ts);
+      const ev = await mcRequest(Array.from(cmd), [0], 4000);
+      return { proto: "meshcore", ev, ts, cmd };
+    };
     s.useStream = async (stream, transport, name) => {
       s.transport = transport; s.name = name;
       writeRaw = stream.write; closeTransport = stream.close;
@@ -451,7 +524,7 @@
     return "Couldn't connect to the mesh radio: " + m.replace(/(https?:\/\/|www\.)\S*/g, "").slice(0, 140);
   }
 
-  const api = { support, connect, friendlyError, decodeFromRadio, decodeMeshCore, MtFramer, McFramer, mtFrame, mcFrame, mtWantConfig, mtHeartbeat, mcAppStart, pb, nodeId, hwName, ROLES, MT_SVC, NUS_SVC };
+  const api = { support, connect, friendlyError, decodeFromRadio, decodeToRadio, decodeMeshCore, MtFramer, McFramer, mtFrame, mcFrame, mtWantConfig, mtHeartbeat, mtTextPacket, mtFromRouting, mcAppStart, mcSendDm, mcSendChan, pb, nodeId, hwName, ROLES, MT_MAX_TEXT, MC_MAX_TEXT, ROUTING_ERR, MT_SVC, NUS_SVC };
   root.GsaMeshDevice = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

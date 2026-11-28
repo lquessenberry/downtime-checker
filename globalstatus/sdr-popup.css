@@ -230,3 +230,11 @@
 .gsr-wb .gsr-h { margin: 12px 0 4px; font-size: 10.5px; letter-spacing: 0.1em; color: #94a3b8; font-weight: 600; }
 .gsr-wb .gsr-h em { font-style: normal; color: #64748b; margin-left: 6px; }
 .gsr-wb .gsr-mesh-src { margin: 6px 0 2px; color: #cbd5e1; }
+
+/* Mesh chat (MESH RADIO tab, only with a mesh radio connected) */
+.gsr-chat { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; width: 100%; }
+.gsr-chat-to { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; letter-spacing: 0.08em; color: #94a3b8; }
+.gsr-chat-to select, .gsr-chat-text { width: 100%; box-sizing: border-box; }
+.gsr-chat-text { min-height: 72px; resize: vertical; line-height: 1.45; }
+.gsr-chat .gsr-row { align-items: center; }
+.gsr-table tr.is-out td { color: #e2e8f0; }
