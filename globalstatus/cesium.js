@@ -688,6 +688,10 @@ async function startGlobe() {
   if (window.GsaCommunity) {
     try { window.GsaCommunity.init({ viewer: () => state.viewer }); } catch (error) { console.warn("Community Feed init failed", error); }
   }
+  // LIVE CAMS (live-cams.js): public camera pins, loaded per layer when switched on.
+  if (window.GsaLiveCams) {
+    try { window.GsaLiveCams.init({ viewer: () => state.viewer }); } catch (error) { console.warn("Live Cams init failed", error); }
+  }
   for (const key of Object.keys(state.layers)) setLayer(key, state.layers[key]);
   state.mapReady = true;
   viewer.camera.setView({
@@ -746,6 +750,13 @@ async function startGlobe() {
       if (viewer.selectedEntity) viewer.selectedEntity = undefined;
       closeMapPopups();
       showLive(paranormalHit);
+      return;
+    }
+    const camHit = window.GsaLiveCams && window.GsaLiveCams.pick(click.position);
+    if (camHit) {
+      if (viewer.selectedEntity) viewer.selectedEntity = undefined;
+      if (!camHit.cluster) closeMapPopups();
+      window.GsaLiveCams.open(camHit, showLive);
       return;
     }
     const extraHit = window.GsaExtraLayers && window.GsaExtraLayers.pick(click.position);
@@ -2108,7 +2119,7 @@ function syncLayerGroups() {
   for (const group of document.querySelectorAll(".rail .layer-group")) {
     const el = group.querySelector(".layer-group-count");
     if (!el) continue;
-    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"], [data-xl-toggle][aria-pressed="true"], [data-sdr-toggle][aria-pressed="true"], [data-cf-toggle][aria-pressed="true"]').length;
+    const n = group.querySelectorAll('[data-layer-toggle][aria-pressed="true"], [data-xl-toggle][aria-pressed="true"], [data-sdr-toggle][aria-pressed="true"], [data-cf-toggle][aria-pressed="true"], [data-lc-toggle][aria-pressed="true"]').length;
     el.textContent = n ? `${n} ON` : "";
   }
 }
@@ -2123,6 +2134,7 @@ function clearLayers() {
   if (window.GsaExtraLayers) window.GsaExtraLayers.clearAll();
   if (window.GsaSdr) window.GsaSdr.clearAll();
   if (window.GsaCommunity) window.GsaCommunity.clearAll();
+  if (window.GsaLiveCams) window.GsaLiveCams.clearAll();
 }
 
 const VIEW_US = [-127, 22, -65, 51];
@@ -4554,6 +4566,9 @@ function liveHtml(item, opts = {}) {
   }
   else if (item.power && window.GsaPowerLines) {
     extra = window.GsaPowerLines.popupHtml(item, opts);
+  }
+  else if (item.livecam && window.GsaLiveCams) {
+    extra = window.GsaLiveCams.popupHtml(item, opts);
   }
   else if (item.xl && window.GsaExtraLayers) {
     extra = window.GsaExtraLayers.popupHtml(item, opts);
