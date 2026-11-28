@@ -1,0 +1,73 @@
+/* LIVE CAMS category (live-cams.js). Uniform full-width layer boxes, the same
+   default slate category tile as every other category (it turns green with the
+   shared .is-active rule), slate on-state switches. Card media fits the shared
+   #selected pin card on desktop and phones. */
+.welcome-drop button[data-welcome-lc] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  justify-self: stretch;
+  min-width: 0;
+}
+.welcome-drop button[data-welcome-lc].on { border-color: #9fd4e2; background: #163044; }
+.welcome-drop button[data-welcome-lc].on .switch,
+.rail [data-lc-toggle].on .switch { background: #3a4a5c; }
+.welcome-drop button[data-welcome-lc].on .switch::after,
+.rail [data-lc-toggle].on .switch::after { left: 16px; background: #cfe3ee; }
+.rail [data-lc-toggle].on { border-color: #9fd4e2; }
+.lc-pnote, .lc-note { color: #cbd5e1; }
+
+#selected .lc-road { color: #b8cbd2; display: inline-block; margin: 2px 0 6px; }
+#selected .lc-media {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 240px;
+  aspect-ratio: 16 / 9;
+  margin: 2px 0 6px;
+  background: #05090d;
+  border: 1px solid #263544;
+  border-radius: 6px;
+  overflow: hidden;
+}
+#selected .lc-media img,
+#selected .lc-media video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #05090d;
+}
+#selected .lc-badge {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(11, 18, 24, 0.82);
+  color: #e2e8f0;
+  font: 600 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+}
+#selected .lc-views { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 6px; }
+#selected .lc-view {
+  flex: 1 1 auto;
+  min-height: 28px;
+  padding: 2px 8px;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  background: #111c26;
+  color: #cbd5e1;
+  font: 600 10.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+}
+#selected .lc-view.on { border-color: #9fd4e2; background: #163044; color: #f1f5f9; }
+#selected .lc-status { display: block; color: var(--dim, #94a3b8); font-size: 0.9em; margin-bottom: 2px; }
+#selected .lc-credit { display: block; }
+@media (min-width: 801px) {
+  #selected .lc-media { width: 300px; }
+}
+@media (max-width: 800px) {
+  .welcome-drop button[data-welcome-lc] { min-height: 42px; font-size: 12.5px; }
+  #selected .lc-media { min-width: 0; }
+}

@@ -50,6 +50,7 @@
     capitol: '<path d="M12 3v2.2M8 10.2a4 4 0 0 1 8 0z" stroke-linejoin="round"/><path d="M5 10.2h14M6.5 10.2v7.6M10 10.2v7.6M14 10.2v7.6M17.5 10.2v7.6M4 20.5h16M4.8 17.8h14.4" stroke-linecap="round"/>',
     feed: '<circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M7.4 7.4a6.6 6.6 0 0 0 0 9.2M16.6 7.4a6.6 6.6 0 0 1 0 9.2" stroke-linecap="round"/><path d="M4.6 4.6a10.6 10.6 0 0 0 0 14.8M19.4 4.6a10.6 10.6 0 0 1 0 14.8" stroke-linecap="round"/>',
     radio: '<rect x="3" y="10" width="13" height="8" rx="1.6"/><path d="M16 12.2h3.6v3.6H16M19.6 13.3h1.4M19.6 14.7h1.4" stroke-linejoin="round"/><path d="M6.5 10V3.2" stroke-linecap="round"/><path d="M4 5.4a3.6 3.6 0 0 1 5 0M2.6 3.6a5.6 5.6 0 0 1 7.8 0" stroke-linecap="round"/><circle cx="6.5" cy="14" r="1.3"/><path d="M10 14h3.5" stroke-linecap="round"/>',
+    cam: '<rect x="2.6" y="7" width="13.4" height="10" rx="1.8"/><path d="m16 10.6 5.2-3v8.8l-5.2-3z" stroke-linejoin="round"/><circle cx="7.4" cy="12" r="1.6" fill="currentColor"/>',
     web: '<circle cx="12" cy="6.4" r="3.5"/><path d="M12 3.1v6.6M9.1 5.1h5.8M9.4 7.7h5.2M12 9.9v2M4.2 11.9h15.6M4.2 11.9v1.8M12 11.9v1.8M19.8 11.9v1.8M2.2 18.5h4.6M9.7 18.5h4.6M17.2 18.5h4.6"/><rect x="2.2" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="9.7" y="14.3" width="4.6" height="3.4" rx="0.7"/><rect x="17.2" y="14.3" width="4.6" height="3.4" rx="0.7"/>',
   };
   // group: the sidebar <details> id whose layers the row turns on (read from the page,
@@ -69,6 +70,7 @@
     { id: "sdr", group: "group-sdr", sdr: true, title: "SDR & MESH", sub: "Plug in your SDR or mesh radio to see live signals on the map", icon: I.radio },
     { id: "community", group: "group-community", community: true, title: "COMMUNITY FEED", sub: "Live aircraft, ships, mesh and radio pins shared from users' devices", icon: I.feed },
     { id: "transportation", group: "group-transportation", title: "TRANSPORTATION", sub: "Live aircraft, ships, airports, FAA TFRs and flight delays", view: VIEW_US, icon: I.plane },
+    { id: "livecams", group: "group-livecams", livecams: true, title: "LIVE CAMS", sub: "Public road, city, border crossing and volcano cameras", view: VIEW_WORLD, icon: I.cam },
     { id: "space", group: "group-space", title: "SPACE", sub: "ISS, satellites, aurora and the day / night line", view: VIEW_WORLD, icon: I.space },
     { id: "weather", group: "group-weather", title: "WEATHER", sub: "Global radar, US weather alerts and hurricanes", view: [-168, 5, -48, 74], icon: I.cloud },
     { id: "disasters", group: "group-natural-disasters", title: "NATURAL DISASTERS", sub: "Earthquakes, volcanoes, tsunamis, wildfires and disasters", view: VIEW_WORLD, icon: I.quake },
@@ -225,7 +227,7 @@
       var catName = strong ? strong.textContent.toLowerCase() : "";
       var drop = cats[i].querySelector(".welcome-drop");
       var hits = 0;
-      var layers = cats[i].querySelectorAll("[data-welcome-layer], [data-welcome-xl], [data-welcome-sdr], [data-welcome-cf]");
+      var layers = cats[i].querySelectorAll("[data-welcome-layer], [data-welcome-xl], [data-welcome-sdr], [data-welcome-cf], [data-welcome-lc]");
       for (j = 0; j < layers.length; j += 1) {
         var sub = layers[j].closest(".welcome-xsub");
         var hay = (layers[j].textContent + " " + catName + " " + (sub ? sub.getAttribute("data-welcome-sub") : "") + " " + (layers[j].getAttribute("title") || "")).toLowerCase();
@@ -275,7 +277,8 @@
       items += xlChoices(p);
       if (p.sdr) items += root.GsaSdr && root.GsaSdr.pickerHtml ? root.GsaSdr.pickerHtml() : "";
       if (p.community) items += root.GsaCommunity && root.GsaCommunity.pickerHtml ? root.GsaCommunity.pickerHtml() : "";
-      return '<div class="welcome-cat' + (p.sdr ? " welcome-sdr-cat" : "") + (p.community ? " welcome-community-cat" : "") + '">' +
+      if (p.livecams) items += root.GsaLiveCams && root.GsaLiveCams.pickerHtml ? root.GsaLiveCams.pickerHtml() : "";
+      return '<div class="welcome-cat' + (p.sdr ? " welcome-sdr-cat" : "") + (p.community ? " welcome-community-cat" : "") + (p.livecams ? " welcome-livecams-cat" : "") + '">' +
         '<button type="button" class="welcome-row is-category" data-welcome-toggle="' + p.id + '" aria-expanded="false">' +
         '<span class="welcome-icon">' + svg(p.icon) + "</span>" +
         '<span class="welcome-text"><strong>' + p.title.replace(/&/g, "&amp;") + "</strong><em>" + p.sub + "</em></span>" +
@@ -308,6 +311,14 @@
         if (typeof hooks.openGridTester === "function") hooks.openGridTester();
         return;
       }
+      var lcBtn = event.target.closest("[data-welcome-lc]");
+      if (lcBtn) {
+        stopSpin();
+        if (root.GsaLiveCams) root.GsaLiveCams.setActive(lcBtn.dataset.welcomeLc, !root.GsaLiveCams.isOn(lcBtn.dataset.welcomeLc));
+        syncSwitches();
+        return;
+      }
+      if (event.target.closest("[data-lc-ui]")) return;
       var xlBtn = event.target.closest("[data-welcome-xl]");
       if (xlBtn) {
         stopSpin();
@@ -442,6 +453,7 @@
     }
     if (root.GsaSdr && root.GsaSdr.render) root.GsaSdr.render();
     if (root.GsaCommunity && root.GsaCommunity.render) root.GsaCommunity.render();
+    if (root.GsaLiveCams && root.GsaLiveCams.render) root.GsaLiveCams.render();
     var rows = box.querySelectorAll(".welcome-row[data-welcome-preset]");
     for (var r = 0; r < rows.length; r += 1) {
       if (!rows[r].querySelector(".switch")) continue;
@@ -462,7 +474,8 @@
     return Boolean(cat.querySelector(
       "[data-welcome-layer][aria-pressed='true'], [data-welcome-xl][aria-pressed='true'], " +
       "[data-welcome-sdr][aria-pressed='true'], [data-welcome-cf][aria-pressed='true'], " +
-      "[data-welcome-layer].on, [data-welcome-xl].on, [data-welcome-sdr].on, [data-welcome-cf].on"
+      "[data-welcome-lc][aria-pressed='true'], " +
+      "[data-welcome-layer].on, [data-welcome-xl].on, [data-welcome-sdr].on, [data-welcome-cf].on, [data-welcome-lc].on"
     ));
   }
   function syncCategoryIcons() {

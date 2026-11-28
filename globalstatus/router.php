@@ -15,6 +15,7 @@ if (!is_dir($dataDir)) {
 
 require $root . '/poll-lib.php';
 require $root . '/community-feed.php';
+require $root . '/live-cams.php';
 
 // Web requests only. poll-runner.php (cron) loads this file for its functions.
 if (!defined('GSA_RUNNER')) {
@@ -57,6 +58,10 @@ function gsa_http_routes()
     }
     if ($path === '/api/community/feed' && $method === 'GET') {
         gsa_cf_feed();
+    }
+    // LIVE CAMS (live-cams.php): public camera lists, cached, plus the snapshot helper.
+    if (strncmp($path, '/api/live-cams/', 15) === 0) {
+        gsa_lc_routes($path, $method);
     }
     if ($path === '/api/aircraft' && $method === 'GET') {
         json_out(200, gsa_cf_merge_aircraft(gsa_aircraft_snapshot()));
