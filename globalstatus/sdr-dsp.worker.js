@@ -1274,4 +1274,4 @@ function encodeTpms(tp) {
 }
 
 // Phase 2 decoders (LoRa / Meshtastic, UAT, ACARS, FLEX, DFM, BLE, EOT, Z-Wave, LTE, HD, ...). Receive only.
-importScripts("/sdr-dsp2.js?v=20261127sdr2");
+importScripts("/sdr-dsp2.js?v=20261127sdr3");

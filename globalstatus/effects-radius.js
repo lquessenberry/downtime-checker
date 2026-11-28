@@ -977,6 +977,15 @@ function formatYield(kt) {
     return true;
   }
 
+  var mediaWarm = false;
+  function warmMedia() {
+    if (mediaWarm) return;
+    mediaWarm = true;
+    getSound("alarm");
+    getSound("blast");
+    preloadGif();
+  }
+
   function setActive(on) {
     active = Boolean(on);
     var hud = el("effects-hud");
@@ -988,6 +997,7 @@ function formatYield(kt) {
       setNote("Pick a weapon or type a yield, then press Launch Nuke.");
     } else {
       updateLede();
+      warmMedia();
     }
     if (source) source.show = active;
     syncReopen();
@@ -1045,9 +1055,7 @@ function formatYield(kt) {
       chip.addEventListener("click", function () { setMuted(!isMuted()); });
       updateSoundChip();
     }
-    getSound("alarm");
-    getSound("blast");
-    preloadGif();
+    // Media (about 740 KB) loads when the layer is first turned on, not at page load.
     document.addEventListener("keydown", function (event) {
       if (launch && (event.key === "Escape" || event.key === "Esc")) {
         event.preventDefault();

@@ -150,6 +150,49 @@ const state = {
   scanCheckedAt: 0,
 };
 
+
+// Small layer manifest (hash, ts). Clients fetch a layer only when its hash changed.
+const GsaManifest = {
+  data: null,
+  hashes: Object.create(null),
+  inflight: null,
+  async refresh() {
+    if (this.inflight) return this.inflight;
+    this.inflight = fetch("/api/manifest")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (body && body.layers) this.data = body;
+        return this.data;
+      })
+      .catch(() => this.data)
+      .finally(() => { this.inflight = null; });
+    return this.inflight;
+  },
+  layer(name) {
+    return (this.data && this.data.layers && this.data.layers[name]) || null;
+  },
+  unchanged(name) {
+    const row = this.layer(name);
+    if (!row || !row.hash) return false;
+    return this.hashes[name] === row.hash;
+  },
+  remember(name, hash) {
+    const value = hash || (this.layer(name) && this.layer(name).hash) || "";
+    if (value) this.hashes[name] = value;
+  },
+};
+window.GsaManifest = GsaManifest;
+
+async function fetchLayer(name, url) {
+  await GsaManifest.refresh();
+  if (GsaManifest.unchanged(name)) return { skipped: true, body: null };
+  const response = await fetch(url);
+  const body = await response.json();
+  if (!response.ok) throw new Error((body && body.error) || `${name} failed`);
+  GsaManifest.remember(name, (body && body.hash) || "");
+  return { skipped: false, response, body };
+}
+
 // SPACE & WEATHER layer keys (spaceweather.js owns their data and timers).
 const SPACE_KEYS = ["iss", "volcanoes", "disasters", "radar", "nwsalerts", "rivers", "coastal", "aurora", "tsunami", "hurricanes", "wildfires"];
 // INFRASTRUCTURE layer keys (infra.js draws them as point primitives, not entities).
@@ -262,6 +305,8 @@ async function boot() {
     // debugging a live pass.
     tickClock();
     setInterval(syncCheckedNote, 30000);
+    // Scanners (1.5 MB) and the aircraft/GPS-jamming feed load when
+    // their layer or list is opened, not at startup.
     Promise.allSettled([
       loadOutages(),
       loadHunger(),
@@ -274,10 +319,10 @@ async function boot() {
       else statusLive();
     });
     setInterval(() => {
-      if (!document.hidden) pollAircraft().catch((error) => statusLive(error.message || String(error)));
+      if (!document.hidden && state.layers.aircraft) pollAircraft().catch((error) => statusLive(error.message || String(error)));
     }, 45000);
     setInterval(() => {
-      if (!document.hidden) pollJamming().catch((error) => statusLive(error.message || String(error)));
+      if (!document.hidden && state.layers.jamming) pollJamming().catch((error) => statusLive(error.message || String(error)));
     }, 60000);
     setInterval(tickAircraft, 1000);
     setInterval(() => {
@@ -311,7 +356,7 @@ function tuneQuality(basemapId) {
   const sharp = basemapId === "satellite" || basemapId === "sentinel" || basemapId === "streets" || basemapId === "osm";
   viewer.scene.globe.maximumScreenSpaceError = sharp ? 2 : 4;
   const dpr = window.devicePixelRatio || 1;
-  const cap = sharp ? (phoneLayout() ? 1.25 : 2) : (phoneLayout() ? 1 : 1.5);
+  const cap = sharp ? (phoneLayout() ? 1 : 2) : (phoneLayout() ? 0.85 : 1.5);
   // Pixel ratio is devicePixelRatio times resolutionScale only when this is false.
   viewer.useBrowserRecommendedResolution = false;
   viewer.resolutionScale = Math.min(dpr, cap) / dpr;
@@ -481,6 +526,14 @@ async function startGlobe() {
   viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#070b10");
   viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10202c");
   viewer.scene.globe.enableLighting = false;
+  // Draw only when something changes (camera, tiles, entities). Saves phone battery.
+  viewer.scene.requestRenderMode = true;
+  viewer.scene.maximumRenderTimeChange = Infinity;
+  if (phoneLayout()) {
+    viewer.scene.globe.preloadSiblings = false;
+    viewer.scene.fog.enabled = true;
+    viewer.scene.fog.screenSpaceErrorFactor = 4;
+  }
   state.viewer = viewer;
   if (window.GsaSearch) window.GsaSearch.attach(viewer);
   state.basemap = startupMap;
@@ -509,6 +562,12 @@ async function startGlobe() {
     state.live[key].source = new Cesium.CustomDataSource(key);
     viewer.dataSources.add(state.live[key].source);
   }
+  // With requestRenderMode, redraw whenever any layer adds or removes pins.
+  for (let i = 0; i < viewer.dataSources.length; i += 1) {
+    viewer.dataSources.get(i).entities.collectionChanged.addEventListener(kickRender);
+  }
+  viewer.entities.collectionChanged.addEventListener(kickRender);
+  viewer.selectedEntityChanged.addEventListener(kickRender);
   viewer.scene.preRender.addEventListener(cullAircraftHorizon);
   viewer.scene.preRender.addEventListener(keepFlatMapIntact);
   viewer.scene.preRender.addEventListener(placeCreditBehindGlobe);
@@ -1513,6 +1572,7 @@ function replayScan(snap) {
       }
       g += 1;
     }
+    kickRender();
     updateHud();
     syncGridResultsButton();
     if (g < groups) {
@@ -1760,6 +1820,7 @@ function upsertArc(result) {
 }
 
 function upsertPoint(result) {
+  kickRender();
   if (!state.viewer || !state.scanSource || result.lat == null || result.lon == null) return;
   const color = COLORS[result.status] || COLORS.pending;
   const pixelSize = result.status === "down" ? 16 : 12;
@@ -1870,6 +1931,7 @@ function tickClock() {
 function setFeedMode(mode) {
   const allowed = ["outages", "hunger", "stream", "conflicts", "returns"];
   state.feedMode = allowed.includes(mode) ? mode : "outages";
+  if (state.feedMode === "stream") ensureStreams();
   for (const name of allowed) {
     const pane = document.getElementById(`${name}-pane`);
     if (!pane) continue;
@@ -1930,6 +1992,7 @@ function sourceFor(layer) {
 }
 
 function setCount(key, value) {
+  kickRender();
   const text = String(value);
   for (const el of document.querySelectorAll(`[data-count="${key}"]`)) el.textContent = text;
 }
@@ -2165,6 +2228,7 @@ function setLayer(layer, on, options) {
       pollJamming().catch((error) => statusLive(error.message || String(error)));
     }
   }
+  if (layer === "stream" && state.layers.stream) ensureStreams();
   if (layer === "ships" && state.layers.ships) scheduleShips();
   if (layer === "mesh" && state.layers.mesh) scheduleMesh();
   if (layer === "disease" && state.layers.disease) scheduleDisease();
@@ -2245,11 +2309,16 @@ function setLayer(layer, on, options) {
     loadHunger().catch((error) => statusLive(error.message || String(error)));
   }
   syncMobilePick(layer);
+  kickRender();
   if (window.GsaWelcome && window.GsaWelcome.syncSwitches) window.GsaWelcome.syncSwitches();
   if (["aircraft", "ships", "mesh", "amfm"].includes(layer) && window.GsaCommunity && window.GsaCommunity.syncRegular) {
     window.GsaCommunity.syncRegular();
   }
   if (state.mapReady && fly && state.layers[layer] && !wasOn) flyLayerOverview(layer);
+}
+
+function kickRender() {
+  if (state.viewer) state.viewer.scene.requestRender();
 }
 
 const LAYER_LABEL = {
@@ -2477,9 +2546,9 @@ function paintRegionOutageNote(key) {
 }
 
 async function loadOutages() {
-  const response = await fetch("/api/outages");
-  const body = await response.json();
-  if (!response.ok) throw new Error(body.error || "Power outages failed");
+  const got = await fetchLayer("outages", "/api/outages");
+  if (got.skipped) return;
+  const body = got.body;
   state.outagePoints = (Array.isArray(body.points) ? body.points : []).map((point) => Object.assign({ layer: "outages" }, point));
   state.outageMeta = body;
   setCount("outages", state.outagePoints.length);
@@ -3127,6 +3196,17 @@ function closePin() {
   renderStreamList();
 }
 
+let streamsLoading = null;
+function ensureStreams() {
+  if (!streamsLoading) {
+    streamsLoading = loadStreams().catch((error) => {
+      streamsLoading = null;
+      statusLive(error.message || String(error));
+    });
+  }
+  return streamsLoading;
+}
+
 async function loadStreams() {
   const response = await fetch("/api/streams");
   const body = await response.json();
@@ -3732,9 +3812,9 @@ async function loadMesh() {
   if (!state.layers.mesh) return;
   const token = ++meshToken;
   try {
-    const response = await fetch("/api/mesh");
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || "Mesh Nodes failed");
+    const got = await fetchLayer("mesh", "/api/mesh");
+    if (got.skipped) return;
+    const body = got.body;
     if (token !== meshToken || !state.layers.mesh) return;
     const points = Array.isArray(body.points) ? body.points : [];
     state.live.mesh.points = points;
@@ -3758,9 +3838,9 @@ async function loadDisease() {
   if (!state.layers.disease) return;
   const token = ++diseaseToken;
   try {
-    const response = await fetch("/api/disease");
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || "Disease Outbreak failed");
+    const got = await fetchLayer("disease", "/api/disease");
+    if (got.skipped) return;
+    const body = got.body;
     if (token !== diseaseToken || !state.layers.disease) return;
     const points = Array.isArray(body.points) ? body.points : [];
     state.live.disease.points = points;
@@ -3786,9 +3866,9 @@ async function loadAnimal() {
   if (!state.layers.animal) return;
   const token = ++animalToken;
   try {
-    const response = await fetch("/api/animal");
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || "Animal Disease Outbreak failed");
+    const got = await fetchLayer("animal", "/api/animal");
+    if (got.skipped) return;
+    const body = got.body;
     if (token !== animalToken || !state.layers.animal) return;
     const points = Array.isArray(body.points) ? body.points : [];
     state.live.animal.points = points;
@@ -3938,8 +4018,9 @@ async function refreshMilitary() {
 }
 
 async function pollJamming() {
-  const data = await fetch("/api/feeds").then((response) => response.json());
-  const jam = data.jamming || {};
+  const got = await fetchLayer("jamming", "/api/jamming");
+  if (got.skipped) return;
+  const jam = got.body || {};
   state.live.jamming.points = jam.points || [];
   setCount("jamming", jam.count ?? state.live.jamming.points.length);
   placeLiveLayer("jamming", state.live.jamming.points);
@@ -3951,8 +4032,9 @@ async function pollAircraft() {
   } catch (error) {
     state.adsbIcons = null;
   }
-  const data = await fetch("/api/aircraft").then((response) => response.json());
-  applyAircraftSnapshot(data);
+  const got = await fetchLayer("aircraft", "/api/aircraft");
+  if (got.skipped) return;
+  applyAircraftSnapshot(got.body);
   statusLive();
 }
 
@@ -4210,6 +4292,7 @@ function placeLiveLayer(key, points) {
 }
 
 function hideFilteredShips() {
+  kickRender();
   const selected = state.viewer && state.viewer.selectedEntity;
   if (!selected || !selected._live || selected._live.layer !== "ships") return;
   if (shipMatches(selected._live)) return;
@@ -4219,6 +4302,7 @@ function hideFilteredShips() {
 }
 
 function hideFilteredAircraft(points) {
+  kickRender();
   const card = document.getElementById("aircraft-card");
   if (!card || card.hidden) return;
   const hex = (document.getElementById("ac-hex").textContent || "").trim().toLowerCase();

@@ -15,7 +15,7 @@
  */
 (function (root) {
   "use strict";
-  const V = "20261127icon2";
+  const V = "20261128n";
   const COLOR = "#c084fc";
   const POLL_MS = 20000;
   const LAYERS = [

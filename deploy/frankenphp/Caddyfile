@@ -1,0 +1,217 @@
+# FrankenPHP front door for the globalstatus/ Cesium site.
+# Mirrors globalstatus/.htaccess plus the perf plan
+# (docs/perf/php-replacement-and-cesium-perf.md):
+#   - plain /api JSON is served straight from files, compressed, cached
+#   - runner caches are served straight from data/*.json (no PHP re-encode)
+#   - PHP only runs for the few computed routes, in classic mode
+#   - PHP sources, data/ and dotfiles are never served
+{
+	skip_install_trust
+	auto_https off
+	admin off
+	frankenphp {
+		max_threads 32
+	}
+}
+
+:{$PORT:8080} {
+	root * /app/public
+	encode zstd br gzip
+
+	header {
+		-Server
+		-X-Powered-By
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	route {
+		# Never serve PHP source, runner data, dotfiles, or repo notes.
+		@blocked {
+			path *.php *.md *.sh /data /data/*
+		}
+		respond @blocked `{"error":"Not found"}` 404
+		@dotfile path_regexp dotfile /\.
+		respond @dotfile `{"error":"Not found"}` 404
+
+		respond /healthz `{"ok":true,"runtime":"frankenphp"}` 200
+
+		# The always-open result stream is retired (#24). The page no longer opens it.
+		respond /api/events `{"error":"Retired. Read /api/scan-state."}` 410
+
+		# Visitors cannot stop the scheduled grid pass.
+		@stop {
+			method POST
+			path /api/stop
+		}
+		respond @stop `{"error":"Stopping the grid pass is disabled here."}` 403
+
+		# Plain JSON routes: straight from files, precompressed, cached 5 minutes.
+		@plain path_regexp plain ^/api/(catalog|websdr|gpsjam|conflicts|hunger|guns-usa|guns-world|ccw-reciprocity|militias|radio|streams|amfm|designations|violence|zones|claims)$
+		handle @plain {
+			rewrite * /api/{re.plain.1}.json
+			header Cache-Control "public, max-age=300, stale-while-revalidate=600"
+			file_server {
+				precompressed zstd br gzip
+			}
+		}
+
+		# Tiny manifest: layer -> hash, ts. Clients use this to skip unchanged layers.
+		handle /api/manifest {
+			route {
+				try_files /data/manifest.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=15, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+
+		# Aircraft and mesh go through PHP so community SDR contributions
+		# (gsa_cf_merge_aircraft / gsa_cf_merge_mesh) are included. Raw cache
+		# files would skip that merge. /api/community/* falls through to /api/*.
+		handle /api/aircraft {
+			rewrite * /router.php
+			php
+		}
+		handle /api/mesh {
+			rewrite * /router.php
+			php
+		}
+
+		# Runner snapshots. Written atomically only when the payload hash changes.
+
+		# Caddy's ETag follows mtime/size, so it only changes on a real content change.
+		# Precompressed zstd/gzip twins are written next to the JSON. PHP is the
+		# fallback until the first poll lands.
+		@cached path_regexp cached ^/api/(outages|mil|disease|animal|jamming)$
+		handle @cached {
+			route {
+				try_files /data/{re.cached.1}-cache.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=60, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		@outreg path_regexp outreg ^/api/outages-(uk|ca|au)$
+		handle @outreg {
+			route {
+				try_files /data/outages-{re.outreg.1}-cache.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=60, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		handle /api/internet-outages {
+			route {
+				try_files /data/ioda-cache.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=60, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		handle /api/internet-probes {
+			route {
+				try_files /data/ripe-atlas-cache.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=60, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		handle /api/faa-tfr {
+			route {
+				try_files /data/tfr-cache.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=60, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		handle /api/flight-delays {
+			route {
+				try_files /data/flight-delays-cache.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=60, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		handle /api/air-quality {
+			route {
+				try_files /data/airquality-cache.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=60, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		handle /api/poll-status {
+			route {
+				try_files /data/poll-status.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=15, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		@space path_regexp space ^/api/space/(nws|hurricanes|wildfires|tsunami|rivers|coastal)$
+		handle @space {
+			route {
+				try_files /data/space-{re.space.1}.json /router.php
+				@json path *.json
+				header @json Cache-Control "public, max-age=60, stale-while-revalidate=600"
+				file_server @json {
+					precompressed zstd gzip
+				}
+				php
+			}
+		}
+		handle /api/feeds {
+			header Cache-Control "public, max-age=60, stale-while-revalidate=600"
+			try_files /data/feeds-cache.json /api/feeds.json
+			file_server {
+				precompressed zstd br gzip
+			}
+		}
+
+		# Everything else under /api goes to the PHP router (scan, scan-state,
+		# aircraft/:hex). router.php sets its own Cache-Control.
+		handle /api/* {
+			rewrite * /router.php
+			php
+		}
+
+		# Static site.
+		@vendor path /vendor/*
+		header @vendor Cache-Control "public, max-age=31536000, immutable"
+		@assets path /icons/* /images/* /sounds/* /geo/* /infra/* /layers-data/* /media/* /favicon.* /apple-touch-icon.png /icon-*.png /start-satellite.mp4
+		header @assets Cache-Control "public, max-age=86400"
+		@shell path / /index.html /cesium.js /cesium.css /extra-layers.css /blast.js /quakes.js /sats.js /spaceweather.js /effects-radius.js /infra.js /firearms.js /ccw.js /militias.js /internet.js /tfr.js /delays.js /airquality.js /powerlines.js /paranormal.js /geocoder.js /nearby.js /welcome.js /extra-layers-registry.js /extra-layers.js /custom-packs-loader.js /satellite-imagery-loader.js /live-feeds-loader.js /sdr-driver.js /sdr-dsp.worker.js /sdr-dsp2.js /sdr-layers.js /sdr-popup.js /sdr-popup.css /mesh-device.js /mesh-sim.js /community-layers.js /community-layers.css /live-cams.js /live-cams.css /sdr-sats.js /sw.js /manifest.webmanifest
+		header @shell Cache-Control "no-cache"
+		file_server {
+			precompressed zstd br gzip
+		}
+	}
+}

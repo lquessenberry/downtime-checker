@@ -59,7 +59,7 @@
   // Loaded tiles are dropped and refetched after this many, so panning the whole
   // country does not keep 140,000 points in the per-frame horizon cull.
   const CELL_KEEP_TILES = 90;
-  const PLANT_V = "20261124p";
+  const PLANT_V = "20261124q";
   const PLANT_URL = "/infra/power-plants/";
   // Plants under 50 MW appear below this camera height.
   const PLANT_NEAR_HEIGHT = 2500 * 1000;

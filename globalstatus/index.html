@@ -54,8 +54,8 @@
   <!-- Phone numbers in cards stay plain text: no automatic tel: links on phones. -->
   <meta name="format-detection" content="telephone=no, address=no, email=no" />
   <title>Global Status App</title>
-  <link rel="icon" href="/favicon.png?v=20261126h" type="image/png" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20261126h" />
+  <link rel="icon" href="/favicon.png?v=20261127b" type="image/png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20261127b" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#070b10" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -68,11 +68,11 @@
        Then open http://127.0.0.1:4180/ and refresh after edits.
        The live page loaded Cesium 1.128 from cesium.com. This copy uses vendor/cesium. -->
   <link rel="stylesheet" href="/vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="/cesium.css?v=20261128v4" />
-  <link rel="stylesheet" href="/extra-layers.css?v=20261127e" />
-  <link rel="stylesheet" href="/sdr-popup.css?v=20261127mydev1" />
-  <link rel="stylesheet" href="/community-layers.css?v=20261127icon3" />
-  <link rel="stylesheet" href="/live-cams.css?v=20261128lc2" />
+  <link rel="stylesheet" href="/cesium.css?v=20261128x" />
+  <link rel="stylesheet" href="/extra-layers.css?v=20261127f" />
+  <link rel="stylesheet" href="/sdr-popup.css?v=20261128q" />
+  <link rel="stylesheet" href="/community-layers.css?v=20261128o" />
+  <link rel="stylesheet" href="/live-cams.css?v=20261128w" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -244,11 +244,11 @@
       video.setAttribute("width", narrow ? "1280" : "1920");
       video.setAttribute("height", narrow ? "720" : "1080");
       video.setAttribute("aria-label", "A satellite opens its downlink above the Earth, then the globe lights up with live data layers and nuclear detonations appear");
-      video.poster = "/media/globalstatus-loading-poster.jpg?v=20261127classic1";
+      video.poster = "/media/globalstatus-loading-poster.jpg?v=20261128v";
       video.autoplay = true;
       video.src = narrow
-        ? "/media/globalstatus-loading-720.mp4?v=20261127classic1"
-        : "/media/globalstatus-loading-1080.mp4?v=20261127classic1";
+        ? "/media/globalstatus-loading-720.mp4?v=20261128v"
+        : "/media/globalstatus-loading-1080.mp4?v=20261128v";
       var title = document.getElementById("boot-title");
       var log = document.getElementById("boot-log");
       var reduce = false;
@@ -350,7 +350,7 @@
       v.setAttribute("width", "736"); v.setAttribute("height", "416");
       v.setAttribute("aria-label", "Satellite above the Earth");
       v.loop = true; v.autoplay = true;
-      v.src = "/start-satellite.mp4?v=20261126n";
+      v.src = "/start-satellite.mp4?v=20261127b";
       var p0 = v.play(); if (p0 && p0.catch) p0.catch(function () {});
       var log = document.getElementById("boot-log");
       var reduce = false;
@@ -929,33 +929,33 @@
   </div>
 
 
-  <script src="/effects-radius.js?v=20261126i"></script>
+  <script src="/effects-radius.js?v=20261127b"></script>
   <script src="/quakes.js"></script>
   <script src="/sats.js"></script>
-  <script src="/spaceweather.js?v=20261125e"></script>
-  <script src="/infra.js?v=20261125e"></script>
-  <script src="/firearms.js?v=20261124p"></script>
-  <script src="/ccw.js?v=20261126a"></script>
-  <script src="/militias.js?v=20261124k"></script>
-  <script src="/internet.js?v=20261125a"></script>
-  <script src="/tfr.js?v=20261125c"></script>
-  <script src="/delays.js?v=20261125e"></script>
-  <script src="/airquality.js?v=20261125f"></script>
-  <script src="/powerlines.js?v=20261124n"></script>
-  <script src="/paranormal.js?v=20261126t"></script>
-  <script src="/geocoder.js?v=20261127a"></script>
-  <script src="/nearby.js?v=20261126l"></script>
-  <script src="/welcome.js?v=20261128lc1"></script>
-  <script src="/extra-layers-registry.js?v=20261127a"></script>
-  <script src="/extra-layers.js?v=20261127a"></script>
-  <script src="/custom-packs-loader.js?v=20261127a"></script>
-  <script src="/satellite-imagery-loader.js?v=20261127a"></script>
-  <script src="/live-feeds-loader.js?v=20261127a"></script>
-  <script src="/sdr-driver.js?v=20261127sdr2"></script>
-  <script src="/sdr-layers.js?v=20261127sdr2"></script>
-  <script src="/sdr-popup.js?v=20261127meshwb1"></script>
-  <script src="/community-layers.js?v=20261127icon2"></script>
-  <script src="/live-cams.js?v=20261128lc2"></script>
-  <script src="/cesium.js?v=20261128lc1"></script>
+  <script src="/spaceweather.js?v=20261127b"></script>
+  <script src="/infra.js?v=20261127b"></script>
+  <script src="/firearms.js?v=20261127b"></script>
+  <script src="/ccw.js?v=20261127b"></script>
+  <script src="/militias.js?v=20261127b"></script>
+  <script src="/internet.js?v=20261127b"></script>
+  <script src="/tfr.js?v=20261127b"></script>
+  <script src="/delays.js?v=20261127b"></script>
+  <script src="/airquality.js?v=20261127b"></script>
+  <script src="/powerlines.js?v=20261127b"></script>
+  <script src="/paranormal.js?v=20261127b"></script>
+  <script src="/geocoder.js?v=20261127c"></script>
+  <script src="/nearby.js?v=20261127b"></script>
+  <script src="/welcome.js?v=20261128w"></script>
+  <script src="/extra-layers-registry.js?v=20261127b"></script>
+  <script src="/extra-layers.js?v=20261127b"></script>
+  <script src="/custom-packs-loader.js?v=20261127b"></script>
+  <script src="/satellite-imagery-loader.js?v=20261127b"></script>
+  <script src="/live-feeds-loader.js?v=20261127b"></script>
+  <script src="/sdr-driver.js?v=20261127sdr3"></script>
+  <script src="/sdr-layers.js?v=20261127sdr3"></script>
+  <script src="/sdr-popup.js?v=20261128u"></script>
+  <script src="/community-layers.js?v=20261128n"></script>
+  <script src="/live-cams.js?v=20261128w"></script>
+  <script src="/cesium.js?v=20261128w"></script>
 </body>
 </html>

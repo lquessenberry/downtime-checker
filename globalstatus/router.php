@@ -47,6 +47,12 @@ function gsa_http_routes()
     if ($path === '/api/poll-status' && $method === 'GET') {
         json_out(200, gsa_poll_status_read());
     }
+    if ($path === '/api/manifest' && $method === 'GET') {
+        json_out(200, gsa_manifest_read());
+    }
+    if ($path === '/api/jamming' && $method === 'GET') {
+        json_out(200, gsa_jamming_snapshot());
+    }
     if ($path === '/api/stop' && $method === 'POST') {
         // Stop is local to each visitor now. Visitors can no longer write
         // data/stop.flag, so nobody can abort the scheduled pass.
@@ -93,7 +99,7 @@ function gsa_http_routes()
     if ($path === '/api/animal' && $method === 'GET') {
         json_out(200, animal_snapshot());
     }
-    // USA / GLOBAL INTERNET OUTAGES: IODA cache, refreshed by the */5 cron (poll-lib.php).
+    // USA / GLOBAL INTERNET OUTAGES: IODA cache, refreshed by the FrankenPHP poller (poll-lib.php).
     if ($path === '/api/internet-outages' && $method === 'GET') {
         json_out(200, gsa_ioda_snapshot());
     }
@@ -270,8 +276,20 @@ function catalog_label($id)
 function load_targets()
 {
     global $dataDir;
-    $rows = json_decode((string) file_get_contents($dataDir . '/targets.json'), true);
-    return is_array($rows) ? $rows : array();
+    $candidates = array(
+        $dataDir . '/targets.json',
+        '/app/share/targets.json',
+    );
+    foreach ($candidates as $file) {
+        if (!is_file($file)) {
+            continue;
+        }
+        $rows = json_decode((string) file_get_contents($file), true);
+        if (is_array($rows) && $rows) {
+            return $rows;
+        }
+    }
+    return array();
 }
 
 function has_kind($row, $kind)
@@ -1545,12 +1563,17 @@ function outages_cache_write($file, $built)
 {
     $stored = $built;
     $stored['fetchedAt'] = time();
-    file_put_contents($file, json_encode($stored), LOCK_EX);
+    gsa_snapshot_put($file, $stored, gsa_source_from_file($file));
     return outages_cache_publish($stored, false);
 }
 
 function outages_cached_view($file, $builder, $emptyName)
 {
+    // HTTP visitors only read the poller cache (ETag/304 via Caddy, or this fallback).
+    $http = gsa_http_serve_cache($file, 600, 'Power outages', '');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = outages_cache_read($file);
     $age = outages_cache_age($cached);
     if ($cached && $age < 600) {
@@ -1908,7 +1931,11 @@ function mesh_snapshot_locked()
 {
     global $dataDir;
     $cacheFile = $dataDir . '/mesh-cache.json';
-    $ttl = 90;
+    $ttl = 300;
+    $http = gsa_http_serve_cache($cacheFile, $ttl, 'meshmap.net', 'https://meshmap.net/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = null;
     if (is_file($cacheFile)) {
         $cached = json_decode((string) file_get_contents($cacheFile), true);
@@ -2008,7 +2035,7 @@ function mesh_snapshot_locked()
     );
     $stored = $built;
     $stored['fetchedAt'] = time();
-    file_put_contents($cacheFile, json_encode($stored), LOCK_EX);
+    gsa_snapshot_put($cacheFile, $stored, gsa_source_from_file($cacheFile));
     return $built;
 }
 
@@ -2069,6 +2096,10 @@ function outbreak_fetch($url, $timeout)
 
 function outbreak_cached($cacheFile, $ttl, $fetch, $emptyError, $source, $sourceUrl)
 {
+    $http = gsa_http_serve_cache($cacheFile, $ttl, $source, $sourceUrl);
+    if ($http !== null) {
+        return $http;
+    }
     $cached = null;
     if (is_file($cacheFile)) {
         $cached = json_decode((string) file_get_contents($cacheFile), true);
@@ -2105,7 +2136,7 @@ function outbreak_cached($cacheFile, $ttl, $fetch, $emptyError, $source, $source
     );
     $stored = $built;
     $stored['fetchedAt'] = time();
-    file_put_contents($cacheFile, json_encode($stored), LOCK_EX);
+    gsa_snapshot_put($cacheFile, $stored, gsa_source_from_file($cacheFile));
     return $built;
 }
 
@@ -2181,7 +2212,7 @@ function disease_snapshot()
     return outbreak_lock('disease', function () use ($dataDir) {
         return outbreak_cached(
             $dataDir . '/disease-cache.json',
-            180,
+            300,
             function () {
                 $query = 'category%5B%5D=1&category%5B%5D=2&category%5B%5D=29&time_interval=1%20week&heatscore=1';
                 $raw = outbreak_fetch('https://www.healthmap.org/getAlerts.php?' . $query, 25);

@@ -31,11 +31,61 @@ function gsa_atomic_write($file, $body)
         @unlink($tmp);
         return false;
     }
+    // gzip + zstd twins let Caddy serve runner caches without compressing them per request.
+    if (substr($file, -5) === '.json') {
+        if (function_exists('gzencode')) {
+            $gz = gzencode($body, 6);
+            if ($gz !== false && file_put_contents($tmp . '.gz', $gz) !== false) {
+                @rename($tmp . '.gz', $file . '.gz');
+            }
+        }
+        $zstd = '/usr/bin/zstd';
+        if (is_executable($zstd)) {
+            $zst = $tmp . '.zst';
+            $cmd = $zstd . ' -q -6 -f -o ' . escapeshellarg($zst) . ' ' . escapeshellarg($tmp);
+            $code = 0;
+            @exec($cmd, $out, $code);
+            if ($code === 0 && is_file($zst)) {
+                @rename($zst, $file . '.zst');
+            } else {
+                @unlink($zst);
+            }
+        }
+    }
     if (!rename($tmp, $file)) {
         @unlink($tmp);
+        @unlink($tmp . '.gz');
         return false;
     }
     return true;
+}
+
+// HTTP visitors only read the file cache. The runner is the only writer.
+// Returns null in runner mode so the caller may fetch and write.
+function gsa_http_serve_cache($file, $ttl, $source, $sourceUrl)
+{
+    if (gsa_runner_mode()) {
+        return null;
+    }
+    if (is_file($file)) {
+        $cached = json_decode((string) file_get_contents($file), true);
+        if (is_array($cached)) {
+            $fetched = (int) ($cached['fetchedAt'] ?? 0);
+            unset($cached['fetchedAt']);
+            $cached['stale'] = $fetched <= 0 || (time() - $fetched) >= $ttl;
+            $cached['ageSec'] = $fetched > 0 ? max(0, time() - $fetched) : null;
+            return $cached;
+        }
+    }
+    return array(
+        'source' => $source,
+        'sourceUrl' => $sourceUrl,
+        'updated' => null,
+        'stale' => true,
+        'error' => 'Awaiting poller',
+        'count' => 0,
+        'points' => array(),
+    );
 }
 
 function gsa_fingerprint($payload)
@@ -50,20 +100,12 @@ function gsa_fingerprint($payload)
     return hash('sha256', json_encode($core));
 }
 
-function gsa_cache_put($file, $payload)
+function gsa_cache_put($file, $payload, $source = null)
 {
-    $payload['fetchedAt'] = time();
-    $payload['stale'] = false;
-    $body = json_encode($payload);
-    if ($body === false || !gsa_atomic_write($file, $body)) {
-        return array('changed' => false, 'error' => 'Could not save ' . basename($file));
+    if ($source === null) {
+        $source = gsa_source_from_file($file);
     }
-    return array(
-        'changed' => true,
-        'bytes' => strlen($body),
-        'fingerprint' => gsa_fingerprint($payload),
-        'count' => isset($payload['results']) ? count($payload['results']) : 0,
-    );
+    return gsa_snapshot_put($file, $payload, $source);
 }
 
 function gsa_poll_status_file()
@@ -86,21 +128,47 @@ function gsa_poll_status_read()
     return $decoded;
 }
 
+function gsa_poll_status_lock_file()
+{
+    global $dataDir;
+    return $dataDir . '/poll-status.lock';
+}
+
 function gsa_poll_status_note($job, $info)
 {
-    $all = gsa_poll_status_read();
-    if (!isset($all['jobs']) || !is_array($all['jobs'])) {
-        $all['jobs'] = array();
+    global $dataDir;
+    if (!is_dir($dataDir)) {
+        mkdir($dataDir, 0755, true);
     }
-    $info['at'] = gmdate('Y-m-d\TH:i:s\Z');
-    if (!empty($info['ok'])) {
-        $info['lastOkAt'] = $info['at'];
-    } elseif (isset($all['jobs'][$job]['lastOkAt'])) {
-        $info['lastOkAt'] = $all['jobs'][$job]['lastOkAt'];
+    $lock = fopen(gsa_poll_status_lock_file(), 'c');
+    if ($lock) {
+        flock($lock, LOCK_EX);
     }
-    $all['jobs'][$job] = $info;
-    $all['updated'] = $info['at'];
-    gsa_atomic_write(gsa_poll_status_file(), json_encode($all));
+    try {
+        $all = gsa_poll_status_read();
+        if (!isset($all['jobs']) || !is_array($all['jobs'])) {
+            $all['jobs'] = array();
+        }
+        $info['at'] = gmdate('Y-m-d\TH:i:s\Z');
+        if (!empty($info['ok'])) {
+            $info['lastOkAt'] = $info['at'];
+        } elseif (isset($all['jobs'][$job]['lastOkAt'])) {
+            $info['lastOkAt'] = $all['jobs'][$job]['lastOkAt'];
+        }
+        $all['jobs'][$job] = $info;
+        $all['updated'] = $info['at'];
+        $all['mode'] = 'one-user';
+        gsa_atomic_write(gsa_poll_status_file(), json_encode($all));
+        if (function_exists('gsa_cadence_note')) {
+            $statusHash = gsa_payload_hash($all);
+            gsa_cadence_note('poll-status', $statusHash, true, array('count' => count($all['jobs'])));
+        }
+    } finally {
+        if ($lock) {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
 }
 
 function gsa_scan_cache_file()
@@ -385,12 +453,13 @@ function gsa_aircraft_merge($map, $rows, $tag)
 
 function gsa_aircraft_publish($map, $meta)
 {
+    $count = count($map);
     $points = array_values($map);
-    usort($points, function ($a, $b) {
-        return ((int) ($b['ts'] ?? 0)) <=> ((int) ($a['ts'] ?? 0));
-    });
-    $count = count($points);
+    // Hash map already dedupes by hex. Only sort when we have to cap.
     if ($count > GSA_AIRCRAFT_CAP) {
+        usort($points, function ($a, $b) {
+            return ((int) ($b['ts'] ?? 0)) <=> ((int) ($a['ts'] ?? 0));
+        });
         $points = array_slice($points, 0, GSA_AIRCRAFT_CAP);
     }
     $layer = array(
@@ -423,14 +492,11 @@ function gsa_aircraft_publish($map, $meta)
         if (is_array($prev) && !empty($prev['updated'])) {
             $layer['updated'] = $prev['updated'];
         }
-        $body = json_encode($layer);
-        $ok = $body !== false && gsa_atomic_write(gsa_aircraft_cache_file(), $body);
-        $put = $ok
-            ? array('changed' => true, 'bytes' => strlen($body), 'count' => $layer['count'])
-            : array('changed' => false, 'error' => 'Could not save aircraft cache', 'bytes' => 0);
+        $put = gsa_snapshot_put(gsa_aircraft_cache_file(), $layer, 'aircraft');
     } else {
-        $put = gsa_cache_put(gsa_aircraft_cache_file(), $layer);
+        $put = gsa_cache_put(gsa_aircraft_cache_file(), $layer, 'aircraft');
     }
+    gsa_write_mil_from_aircraft($layer);
     $put['count'] = $layer['count'];
     $put['published'] = count($points);
     return array($layer, $put);
@@ -999,13 +1065,9 @@ function gsa_jamming_publish($layer)
             $layer['points'] = $prev['points'];
             $layer['count'] = $prev['count'] ?? count($prev['points']);
         }
-        $body = json_encode($layer);
-        $ok = $body !== false && gsa_atomic_write(gsa_jamming_cache_file(), $body);
-        $put = $ok
-            ? array('changed' => true, 'bytes' => strlen($body), 'count' => $layer['count'] ?? 0)
-            : array('changed' => false, 'error' => 'Could not save jamming cache', 'bytes' => 0);
+        $put = gsa_snapshot_put(gsa_jamming_cache_file(), $layer, 'jamming');
     } else {
-        $put = gsa_cache_put(gsa_jamming_cache_file(), $layer);
+        $put = gsa_cache_put(gsa_jamming_cache_file(), $layer, 'jamming');
     }
     $put['count'] = $layer['count'] ?? 0;
     $put['published'] = isset($layer['points']) && is_array($layer['points']) ? count($layer['points']) : 0;
@@ -2672,12 +2734,12 @@ function gsa_ioda_refresh($opts = array())
             if ($cached) {
                 $cached['lastError'] = 'IODA did not answer at ' . gmdate('H:i\Z');
                 $cached['lastErrorAt'] = time();
-                gsa_atomic_write(gsa_ioda_cache_file(), json_encode($cached));
+                gsa_snapshot_put(gsa_ioda_cache_file(), $cached, gsa_source_from_file(gsa_ioda_cache_file()));
             }
             return array('ok' => false, 'error' => 'IODA did not answer');
         }
         $built['fetchedAt'] = time();
-        gsa_atomic_write(gsa_ioda_cache_file(), json_encode($built));
+        gsa_snapshot_put(gsa_ioda_cache_file(), $built, gsa_source_from_file(gsa_ioda_cache_file()));
         return array('ok' => true, 'us' => $built['counts']['us'], 'global' => $built['counts']['global'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
     } finally {
         flock($lock, LOCK_UN);
@@ -2687,6 +2749,10 @@ function gsa_ioda_refresh($opts = array())
 
 function gsa_ioda_snapshot()
 {
+    $http = gsa_http_serve_cache(gsa_ioda_cache_file(), 600, 'IODA', 'https://ioda.inetintel.cc.gatech.edu/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = gsa_ioda_cache_read();
     $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
     if ($age > 1200) {
@@ -3086,12 +3152,12 @@ function gsa_ripe_refresh($opts = array())
             if ($cached) {
                 $cached['lastError'] = 'RIPE Atlas did not answer at ' . gmdate('H:i\Z');
                 $cached['lastErrorAt'] = time();
-                gsa_atomic_write(gsa_ripe_cache_file(), json_encode($cached));
+                gsa_snapshot_put(gsa_ripe_cache_file(), $cached, gsa_source_from_file(gsa_ripe_cache_file()));
             }
             return array('ok' => false, 'error' => 'RIPE Atlas did not answer');
         }
         $built['fetchedAt'] = time();
-        gsa_atomic_write(gsa_ripe_cache_file(), json_encode($built));
+        gsa_snapshot_put(gsa_ripe_cache_file(), $built, gsa_source_from_file(gsa_ripe_cache_file()));
         return array('ok' => true, 'us' => $built['counts']['us'], 'global' => $built['counts']['global'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
     } finally {
         flock($lock, LOCK_UN);
@@ -3101,6 +3167,10 @@ function gsa_ripe_refresh($opts = array())
 
 function gsa_ripe_snapshot()
 {
+    $http = gsa_http_serve_cache(gsa_ripe_cache_file(), 600, 'RIPE Atlas (RIPE NCC)', 'https://atlas.ripe.net/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = gsa_ripe_cache_read();
     $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
     if ($age > 1200) {
@@ -3403,12 +3473,12 @@ function gsa_tfr_refresh($opts = array())
             if ($cached) {
                 $cached['lastError'] = 'The FAA TFR feed did not answer at ' . gmdate('H:i\Z');
                 $cached['lastErrorAt'] = time();
-                gsa_atomic_write(gsa_tfr_cache_file(), json_encode($cached));
+                gsa_snapshot_put(gsa_tfr_cache_file(), $cached, gsa_source_from_file(gsa_tfr_cache_file()));
             }
             return array('ok' => false, 'error' => 'FAA TFR feed did not answer');
         }
         $built['fetchedAt'] = time();
-        gsa_atomic_write(gsa_tfr_cache_file(), json_encode($built));
+        gsa_snapshot_put(gsa_tfr_cache_file(), $built, gsa_source_from_file(gsa_tfr_cache_file()));
         return array('ok' => true, 'mapped' => $built['counts']['mapped'], 'details' => $built['detailFetched'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
     } finally {
         flock($lock, LOCK_UN);
@@ -3418,6 +3488,10 @@ function gsa_tfr_refresh($opts = array())
 
 function gsa_tfr_snapshot()
 {
+    $http = gsa_http_serve_cache(gsa_tfr_cache_file(), 600, 'FAA, tfr.faa.gov', 'https://tfr.faa.gov/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = gsa_tfr_cache_read();
     $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
     if ($age > 1200) {
@@ -3765,7 +3839,7 @@ function gsa_fd_build($base = 'https://nasstatus.faa.gov/api/')
 function gsa_fd_refresh($opts = array())
 {
     global $dataDir;
-    $maxAge = (int) ($opts['maxAge'] ?? 270);
+    $maxAge = (int) ($opts['maxAge'] ?? 300);
     $cached = gsa_fd_cache_read();
     if (empty($opts['force']) && $cached && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $maxAge) {
         return array('ok' => true, 'skipped' => true);
@@ -3788,12 +3862,12 @@ function gsa_fd_refresh($opts = array())
         if ($built === null) {
             if ($cached) {
                 $cached['lastError'] = 'The FAA NAS Status feed did not answer at ' . gmdate('H:i\Z');
-                gsa_atomic_write(gsa_fd_cache_file(), json_encode($cached));
+                gsa_snapshot_put(gsa_fd_cache_file(), $cached, gsa_source_from_file(gsa_fd_cache_file()));
             }
             return array('ok' => false, 'error' => 'FAA NAS Status feed did not answer');
         }
         $built['fetchedAt'] = time();
-        gsa_atomic_write(gsa_fd_cache_file(), json_encode($built));
+        gsa_snapshot_put(gsa_fd_cache_file(), $built, gsa_source_from_file(gsa_fd_cache_file()));
         return array('ok' => true, 'airports' => $built['counts']['airports'], 'delayed' => $built['counts']['withDelays'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
     } finally {
         flock($lock, LOCK_UN);
@@ -3803,6 +3877,10 @@ function gsa_fd_refresh($opts = array())
 
 function gsa_fd_snapshot()
 {
+    $http = gsa_http_serve_cache(gsa_fd_cache_file(), 600, 'FAA National Airspace System Status (nasstatus.faa.gov)', 'https://nasstatus.faa.gov/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = gsa_fd_cache_read();
     $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
     if ($age > 600) {
@@ -4210,12 +4288,12 @@ function gsa_aq_refresh($opts = array())
         if ($built === null) {
             if ($cached) {
                 $cached['lastError'] = 'EPA AirNow did not answer at ' . gmdate('H:i\Z');
-                gsa_atomic_write(gsa_aq_cache_file(), json_encode($cached));
+                gsa_snapshot_put(gsa_aq_cache_file(), $cached, gsa_source_from_file(gsa_aq_cache_file()));
             }
             return array('ok' => false, 'error' => 'EPA AirNow did not answer');
         }
         $built['fetchedAt'] = time();
-        gsa_atomic_write(gsa_aq_cache_file(), json_encode($built));
+        gsa_snapshot_put(gsa_aq_cache_file(), $built, gsa_source_from_file(gsa_aq_cache_file()));
         return array('ok' => true, 'monitors' => $built['counts']['monitors'], 'plumes' => $built['counts']['plumes'], 'ms' => (int) round((microtime(true) - $t0) * 1000));
     } finally {
         flock($lock, LOCK_UN);
@@ -4225,6 +4303,10 @@ function gsa_aq_refresh($opts = array())
 
 function gsa_aq_snapshot()
 {
+    $http = gsa_http_serve_cache(gsa_aq_cache_file(), 600, 'EPA AirNow & NOAA HMS Smoke', 'https://www.airnow.gov/');
+    if ($http !== null) {
+        return $http;
+    }
     $cached = gsa_aq_cache_read();
     $age = $cached ? time() - (int) ($cached['fetchedAt'] ?? 0) : PHP_INT_MAX;
     if ($age > 1800) {
@@ -4242,3 +4324,5 @@ function gsa_aq_snapshot()
     $cached['ageSeconds'] = $age;
     return $cached;
 }
+
+require __DIR__ . '/poll-cache.php';
