@@ -454,6 +454,36 @@
       rows[r].classList.toggle("on", allOn);
       rows[r].setAttribute("aria-pressed", allOn ? "true" : "false");
     }
+    syncCategoryIcons();
+  }
+
+  // Red icon tile when any layer in that category is on; otherwise the default slate tile.
+  function categoryHasOn(cat) {
+    return Boolean(cat.querySelector(
+      "[data-welcome-layer][aria-pressed='true'], [data-welcome-xl][aria-pressed='true'], " +
+      "[data-welcome-sdr][aria-pressed='true'], [data-welcome-cf][aria-pressed='true'], " +
+      "[data-welcome-layer].on, [data-welcome-xl].on, [data-welcome-sdr].on, [data-welcome-cf].on"
+    ));
+  }
+  function syncCategoryIcons() {
+    if (!box) return;
+    var cats = box.querySelectorAll(".welcome-cat");
+    var i, r;
+    for (i = 0; i < cats.length; i += 1) {
+      var head = cats[i].querySelector(".welcome-row.is-category");
+      if (head) head.classList.toggle("is-active", categoryHasOn(cats[i]));
+    }
+    var rows = box.querySelectorAll(".welcome-row[data-welcome-preset]");
+    for (r = 0; r < rows.length; r += 1) {
+      var preset = PRESETS.filter(function (p) { return p.id === rows[r].dataset.welcomePreset; })[0];
+      var keys = preset ? presetLayers(preset) : [];
+      var any = false;
+      var k;
+      for (k = 0; k < keys.length; k += 1) {
+        if (layerOn(keys[k])) any = true;
+      }
+      if (keys.length) rows[r].classList.toggle("is-active", any);
+    }
   }
 
   function chooseLayer(presetId, key) {
@@ -704,6 +734,7 @@
     },
     stopSpin: stopSpin,
     syncSwitches: syncSwitches,
+    syncCategoryIcons: syncCategoryIcons,
     applyFilter: applyFilter,
     releaseCamera: releaseCamera,
     presets: function () { return PRESETS.map(function (p) { return { id: p.id, title: p.title, group: p.group || "", layers: presetLayers(p) }; }); },

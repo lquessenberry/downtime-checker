@@ -1,12 +1,8 @@
-/* COMMUNITY FEED category (GS-59): sits under SDR & MESH. Dark slate, violet
-   accent already used for contributor pins, no green. Uniform full-width boxes. */
+/* COMMUNITY FEED category: sits under SDR & MESH. Uniform full-width boxes.
+   Category icon uses the same default slate tile as every other category;
+   it turns red with the shared .is-active rule in cesium.css. Layer switches
+   use the same slate on-state as the other picker layers (no violet). */
 .welcome-cats.welcome-community { grid-template-columns: 1fr; }
-.welcome-community-cat .welcome-row.is-category .welcome-icon {
-  color: #e2e8f0;
-  border-color: rgba(192, 132, 252, 0.55);
-  background: rgba(192, 132, 252, 0.1);
-}
-.welcome-community-cat .welcome-row.is-category .welcome-text em { color: #cbd5e1; }
 .welcome-drop button[data-welcome-cf] {
   width: 100%;
   max-width: 100%;
@@ -15,14 +11,14 @@
   min-width: 0;
 }
 .welcome-drop button[data-welcome-cf].on {
-  border-color: #c084fc;
-  background: #1e1630;
+  border-color: #9fd4e2;
+  background: #163044;
 }
 .welcome-drop button[data-welcome-cf].on .switch,
-.rail [data-cf-toggle].on .switch { background: #3b3354; }
+.rail [data-cf-toggle].on .switch { background: #3a4a5c; }
 .welcome-drop button[data-welcome-cf].on .switch::after,
-.rail [data-cf-toggle].on .switch::after { left: 16px; background: #e9d5ff; }
-.rail [data-cf-toggle].on { border-color: #c084fc; }
+.rail [data-cf-toggle].on .switch::after { left: 16px; background: #cfe3ee; }
+.rail [data-cf-toggle].on { border-color: #9fd4e2; }
 .gsc-note { color: #cbd5e1; }
 @media (max-width: 800px) {
   .welcome-drop button[data-welcome-cf] { min-height: 42px; font-size: 12.5px; }
