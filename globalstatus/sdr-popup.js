@@ -9,12 +9,15 @@
  *   other band layers keep their pins and show PAUSED until the radio is tuned back.
  * Nothing runs until the user clicks Connect SDR: no USB calls, no Web Worker, no AudioContext,
  * no location prompt.
+ * Connect Mesh (mesh-device.js, loaded on the first click) reads a real Meshtastic or MeshCore
+ * radio over USB or Bluetooth. While one is connected it is the only source for LOCAL MESH
+ * NODES; SDR over-the-air mesh decodes are skipped and the SDR keeps every other band.
  * Pin cards use the shared #selected card and are plain text only (no links).
  * Original code for Global Status App.
  */
 (function (root) {
   "use strict";
-  const V = "20261127sdr5";
+  const V = "20261128mesh2";
   const D = () => root.GsaSdrDriver;
   const L = () => root.GsaSdrLayers;
 
@@ -73,9 +76,10 @@
     portapackSerial: false, step: 12500, fftRow: null, wfFloor: -95, stats: { workers: 0, usbCalls: 0, audioCtx: 0 },
     lastCardId: "", support: null, sim: false, queue: Promise.resolve(),
     share: { on: false, armed: false, timer: 0, busy: false, sent: 0, lastAt: 0, lastCount: 0, note: "", wait: 0 },
+    mesh: { dev: null, sess: null, connecting: false, choosing: false, message: "", msgKind: "", info: {}, lora: null, channels: [], messages: [], nodes: new Map(), myId: "", sim: null, ready: false, otaSkipped: 0, filter: "" },
   };
 
-  const SHARE_OFF_NOTE = "Off. Turn on to share the aircraft, ships, mesh nodes, APRS stations, weather balloons, ACARS positions and HD Radio towers your radio decodes live with everyone on the site (COMMUNITY FEED and the matching regular layers). Pagers, tire sensors, Bluetooth, meters, radio GPS units and audio are never shared. Your receiver location is blurred to about 25 km.";
+  const SHARE_OFF_NOTE = "Off. Turn on to share the aircraft, ships, mesh nodes, APRS stations, weather balloons, ACARS positions and HD Radio towers your radio decodes live with everyone on the site (COMMUNITY FEED and the matching regular layers). Pagers, tire sensors, Bluetooth, meters, radio GPS units, mesh messages and audio are never shared. Your receiver location is blurred to about 25 km.";
   const URLISH = /(https?:\/\/|www\.)\S*|tel:\S*|mailto:\S*/gi;
   function plain(v) { return String(v == null ? "" : v).replace(/<[^>]*>/g, " ").replace(URLISH, "").replace(/\s+/g, " ").trim(); }
   function esc(v) { return plain(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -119,17 +123,24 @@
   // ------------------------------------------------------------------ markup (picker + sidebar)
   function barHtml(where) {
     return `<div class="gsr-bar" data-sdr-ui data-sdr-bar="${where}">` +
-      `<div class="gsr-bar-head"><span class="gsr-dot" data-sdr-dot aria-hidden="true"></span><strong data-sdr-status>NO RADIO CONNECTED</strong></div>` +
+      `<div class="gsr-bar-head"><span class="gsr-dot" data-sdr-dot aria-hidden="true"></span><strong data-sdr-status>NO SDR CONNECTED</strong></div>` +
       `<p class="gsr-bar-sum" data-sdr-summary>Plug a HackRF, PortaPack or RTL-SDR into this device, then connect.</p>` +
+      `<div class="gsr-bar-head"><span class="gsr-dot" data-mesh-dot aria-hidden="true"></span><strong data-mesh-status>NO MESH RADIO CONNECTED</strong></div>` +
+      `<p class="gsr-bar-sum" data-mesh-summary>Plug in or pair a Meshtastic or MeshCore radio (USB or Bluetooth), then connect.</p>` +
+      `<p class="gsr-bar-sum gsr-mesh-source" data-mesh-source>Mesh source: none yet</p>` +
       `<div class="gsr-bar-actions">` +
       `<button type="button" class="gsr-btn gsr-primary" data-sdr-act="connect">CONNECT SDR</button>` +
+      `<button type="button" class="gsr-btn gsr-primary" data-sdr-act="mesh-connect">CONNECT MESH</button>` +
+      `<div class="gsr-wide gsr-mesh-choose" data-mesh-choose hidden><button type="button" class="gsr-btn" data-sdr-act="mesh-usb">USB CABLE</button><button type="button" class="gsr-btn" data-sdr-act="mesh-ble">BLUETOOTH</button></div>` +
       `<button type="button" class="gsr-btn" data-sdr-act="bias" aria-pressed="false">BIAS-T OFF</button>` +
+      `<button type="button" class="gsr-btn" data-sdr-act="mesh-tab">MESH RADIO</button>` +
       `<button type="button" class="gsr-btn gsr-wide" data-sdr-act="workbench">OPEN SDR WORKBENCH</button>` +
       `<button type="button" class="gsr-btn gsr-wide gsr-share" data-sdr-act="share" aria-pressed="false">SHARE LIVE FEED: OFF</button>` +
       `</div>` +
       `<p class="gsr-bar-note gsr-share-note" data-sdr-sharenote>${esc(SHARE_OFF_NOTE)}</p>` +
       `<p class="gsr-bar-warn" data-sdr-biasnote>Bias-T stays off. It sends DC power up the antenna cable (3.3 V HackRF / 4.5 V RTL-SDR Blog); only use it with a powered LNA or active antenna.</p>` +
       `<p class="gsr-bar-msg" data-sdr-msg hidden></p>` +
+      `<p class="gsr-bar-msg" data-mesh-msg hidden></p>` +
       `</div>`;
   }
   function pickerHtml() {
@@ -160,6 +171,7 @@
     const l = BYKEY[key];
     if (!l) return false;
     if (key === "sat") return Boolean(st.layers.sat);
+    if (key === "mesh" && st.mesh.dev) return true; // the mesh radio is the mesh source
     if (!st.dev || !l.tune) return false;
     return (l.bands || [bandOf(l.tune)]).includes(bandOf(st.tuned));
   }
@@ -167,6 +179,7 @@
     if (!st.layers[key]) return "—";
     if (key === "range") return receiver() ? "ON" : "TAP MAP";
     if (key === "sat") return st.satInfo ? String(visibleTargets("sat").filter((t) => t.visible).length || visibleTargets("sat").length) : "LOADING";
+    if (key === "mesh" && st.mesh.dev) return String(visibleTargets("mesh").length);
     if (!st.dev) return "NO RADIO";
     if (!isLive(key)) return "PAUSED";
     return String(visibleTargets(key).length);
@@ -175,7 +188,7 @@
     const sup = support();
     const live = Boolean(st.dev);
     for (const dot of document.querySelectorAll("[data-sdr-dot]")) { dot.classList.toggle("is-live", live); dot.classList.toggle("is-busy", st.connecting); }
-    setText("[data-sdr-status]", st.connecting ? "CONNECTING…" : live ? (st.dev.name || "RADIO").toUpperCase() : sup.ok ? "NO RADIO CONNECTED" : "USB RADIOS NOT AVAILABLE HERE");
+    setText("[data-sdr-status]", st.connecting ? "CONNECTING…" : live ? (st.dev.name || "RADIO").toUpperCase() : sup.ok ? "NO SDR CONNECTED" : "USB SDRS NOT AVAILABLE HERE");
     let sum;
     if (!sup.ok) sum = sup.reason;
     else if (live) sum = `${mhz(st.tuned)} MHz · ${(st.rate / 1e6).toFixed(2)} MS/s · ${st.dev.gainText || "gain " + st.gain + "%"}${st.dev.biasT ? " · BIAS-T ON" : ""}`;
@@ -216,11 +229,12 @@
       setText(`[data-sdr-count="${l.key}"]`, countText(l.key));
     }
     setText("[data-sdr-bandnote]", bandNote());
+    renderMeshBar();
     if (root.gsSyncLayerGroups) root.gsSyncLayerGroups();
     renderWorkbenchHead();
   }
   function bandNote() {
-    const on = LAYERS.filter((l) => l.tune && st.layers[l.key]);
+    const on = LAYERS.filter((l) => l.tune && st.layers[l.key] && !(l.key === "mesh" && st.mesh.dev));
     if (!st.dev) return on.length ? "Connect a radio and the layer you switched on last is tuned first." : "One radio hears one band at a time. The layer you switch on last is tuned; the others keep their pins and show PAUSED.";
     const live = on.filter((l) => isLive(l.key)).map((l) => l.name);
     const paused = on.filter((l) => !isLive(l.key)).map((l) => l.name);
@@ -339,7 +353,7 @@
     renderTuner();
   }
   function focusLayer() {
-    for (let i = st.order.length - 1; i >= 0; i -= 1) { const l = BYKEY[st.order[i]]; if (l && l.tune && st.layers[l.key]) return l; }
+    for (let i = st.order.length - 1; i >= 0; i -= 1) { const l = BYKEY[st.order[i]]; if (l && l.tune && st.layers[l.key] && !(l.key === "mesh" && st.mesh.dev)) return l; }
     return null;
   }
 
@@ -360,11 +374,11 @@
     }
     L().show(key, on);
     if (key === "sat") { if (on) startSats(); else stopSats(); hideCardFor(key); render(); return; }
-    if (on) { redraw(key); if (st.dev) tune(l.tune, { mode: l.mode, fromLayer: true }); }
+    if (on) { redraw(key); if (key === "mesh") meshFeedAll(); if (st.dev && !(key === "mesh" && st.mesh.dev)) tune(l.tune, { mode: l.mode, fromLayer: true }); }
     else {
       L().clear(key); st.targets[key].clear();
       const next = focusLayer();
-      if (st.dev && (l.bands || [bandOf(l.tune)]).includes(bandOf(st.tuned))) tune(next ? next.tune : st.tunerHz, { mode: next ? next.mode : undefined, fromLayer: Boolean(next) });
+      if (st.dev && !(key === "mesh" && st.mesh.dev) && (l.bands || [bandOf(l.tune)]).includes(bandOf(st.tuned))) tune(next ? next.tune : st.tunerHz, { mode: next ? next.mode : undefined, fromLayer: Boolean(next) });
     }
     hideCardFor(key);
     drawRange();
@@ -581,11 +595,12 @@
   // ---- Phase 2 handlers
   function onMesh(m) {
     if (!m || !m.id || !accepts("mesh")) return;
+    if (st.mesh.dev) { st.mesh.otaSkipped += 1; return; } // the connected mesh radio is authoritative
     const t = touch("mesh", m.id, { nodeId: m.id });
     for (const k of ["proto", "longName", "shortName", "hw", "portName", "snr", "rssi", "hops", "sf", "bw", "preset", "encrypted", "nodeType", "channel", "cfoHz", "alt"]) if (m[k] != null && m[k] !== "") t[k] = m[k];
     if (m.to) t.to = m.to;
     if (Number.isFinite(m.lat) && (m.lat || m.lon)) { t.lat = m.lat; t.lon = m.lon; pushTrack(t, 40); }
-    t.icon = "mesh";
+    t.icon = "mesh"; t.src = "sdr";
     t.name = t.longName || t.shortName || m.id;
     t.label = t.shortName || t.longName || m.id;
     scheduleDraw("mesh");
@@ -763,6 +778,7 @@
     if (kind === "ais") return src + rows([["MMSI", t.mmsi], ["Name", t.shipName], ["Call sign", t.callsign], ["Class", t.cls], ["Ship type", t.shiptype != null ? shipType(t.shiptype) : ""], ["Speed", Number.isFinite(t.sog) ? t.sog.toFixed(1) + " kn" : ""], ["Course", Number.isFinite(t.cog) ? Math.round(t.cog) + "°" : ""], ["Heading", Number.isFinite(t.heading) ? t.heading + "°" : ""], ["Destination", t.dest], ["Channel", t.channel ? "AIS " + t.channel : ""], ["Range", rangeText(t)], ["Messages", t.packets], ["Last heard", ago(t.seen)]]);
     if (kind === "aprs") return src + rows([["Call sign", t.call], ["Station", APRS_SYMBOLS[t.symbol] || (t.symbol ? "Symbol " + t.symbol : "")], ["Comment", t.comment || t.status], ["Format", t.format], ["Speed", Number.isFinite(t.speedKn) ? t.speedKn + " kn" : ""], ["Path", t.digis], ["Range", rangeText(t)], ["Packets", t.packets], ["Last heard", ago(t.seen)]]);
     if (kind === "sonde") return src + rows([["Serial", t.serial], ["Type", t.type || "RS41"], ["Temperature", Number.isFinite(t.tempC) ? t.tempC.toFixed(1) + " °C" : t.ptu === "calibrating" ? "calibrating…" : ""], ["Humidity", Number.isFinite(t.rh) ? t.rh + " %" : ""], ["Altitude", Number.isFinite(t.alt) ? Math.round(t.alt).toLocaleString() + " m" : ""], ["Climb", Number.isFinite(t.vU) ? t.vU.toFixed(1) + " m/s" : ""], ["Wind", Number.isFinite(t.vE) ? Math.hypot(t.vE, t.vN).toFixed(1) + " m/s" : ""], ["Satellites", t.sats], ["Frame", t.frame], ["Predicted burst", t.burst ? t.burst.lat.toFixed(3) + ", " + t.burst.lon.toFixed(3) : ""], ["Predicted landing", t.landing ? t.landing.lat.toFixed(3) + ", " + t.landing.lon.toFixed(3) + (t.landMin ? " in about " + t.landMin + " min" : "") : ""], ["Range", rangeText(t)], ["Last heard", ago(t.seen)]]) + `<p class="gsr-src">Landing is a simple estimate from the last measured climb rate and wind.</p>`;
+    if (kind === "mesh" && t.src === "device") return meshCardHtml(item, t);
     if (kind === "mesh") return src + rows([["Node", t.nodeId], ["Long name", t.longName], ["Short name", t.shortName], ["Protocol", t.proto], ["Packet", t.portName], ["Hardware", t.hw || t.nodeType], ["Hops", t.hops], ["SNR", Number.isFinite(t.snr) ? t.snr + " dB" : ""], ["Signal", Number.isFinite(t.rssi) ? t.rssi + " dBFS" : ""], ["LoRa", t.sf ? "SF" + t.sf + " · " + t.bw / 1e3 + " kHz" + (t.preset ? " · " + t.preset : "") : ""], ["Encrypted", t.encrypted === true ? "yes (private channel)" : t.encrypted === false ? "no (default key)" : ""], ["Altitude", Number.isFinite(t.alt) && t.alt ? t.alt + " m" : ""], ["Range", rangeText(t)], ["Packets", t.packets], ["Last heard", ago(t.seen)]]);
     if (kind === "uat" && t.uatKind === "tower") return src + rows([["Type", "FIS-B ground station"], ["Position", t.lat.toFixed(3) + ", " + t.lon.toFixed(3)], ["Time slot", t.slot], ["Products heard", t.products], ["Range", rangeText(t)], ["Last heard", ago(t.seen)]]);
     if (kind === "uat" && t.uatKind === "metar") return src + rows([["Airport", t.icao + " · " + (t.airport || "")], ["City", t.city], ["Report time", t.wxTime], ["Weather (METAR)", t.metar], ["Source", "FIS-B uplink over 978 MHz"], ["Last heard", ago(t.seen)]]);
@@ -826,7 +842,7 @@
   }
 
   // ------------------------------------------------------------------ workbench
-  const TABS = [["tuner", "TUNER & WATERFALL"], ["spectrum", "SPECTRUM & SEARCH"], ["pagers", "PAGERS"], ["devices", "DEVICES"], ["ble", "BLUETOOTH"], ["voice", "VOICE & HAM"], ["trains", "TRAINS · CELL · TV"], ["capture", "CAPTURE"], ["log", "LOG"]];
+  const TABS = [["tuner", "TUNER & WATERFALL"], ["mesh", "MESH RADIO"], ["spectrum", "SPECTRUM & SEARCH"], ["pagers", "PAGERS"], ["devices", "DEVICES"], ["ble", "BLUETOOTH"], ["voice", "VOICE & HAM"], ["trains", "TRAINS · CELL · TV"], ["capture", "CAPTURE"], ["log", "LOG"]];
   function buildWorkbench() {
     if (st.wb) return st.wb;
     const host = document.querySelector(".stage") || document.body;
@@ -853,6 +869,7 @@
       `<label><span>GAIN <b data-gsr-gv></b></span><input type="range" min="0" max="100" step="1" data-gsr-gain></label></div>` +
       `<div class="gsr-row"><button type="button" class="gsr-btn" data-gsr="mute" aria-pressed="true">AUDIO MUTED</button><button type="button" class="gsr-btn" data-gsr="scan" aria-pressed="false">SCAN</button><span class="gsr-meter"><i data-gsr-meter></i></span><span class="gsr-level" data-gsr-level>—</span></div>` +
       `<p class="gsr-hint" data-gsr-bandhint></p></div>` +
+      `<div class="gsr-pane" data-gsr-pane="mesh" hidden></div>` +
       `<div class="gsr-pane" data-gsr-pane="spectrum" hidden></div>` +
       `<div class="gsr-pane" data-gsr-pane="pagers" hidden></div>` +
       `<div class="gsr-pane" data-gsr-pane="devices" hidden></div>` +
@@ -891,6 +908,7 @@
     if (!st.wb || !st.wbOpen) return;
     renderWorkbenchHead();
     if (st.tab === "tuner") renderTuner();
+    else if (st.tab === "mesh") renderMeshTab();
     else if (st.tab === "spectrum") renderSpectrumTab();
     else if (st.tab === "pagers") renderPagers();
     else if (st.tab === "devices") renderDevices();
@@ -905,7 +923,7 @@
   function renderWorkbenchHead() {
     if (!st.wb) return;
     const h = st.wb.querySelector("[data-gsr-head]");
-    const text = st.dev ? `${st.dev.name} · ${mhz(st.tuned)} MHz ${st.mode}` : "No radio connected";
+    const text = (st.dev ? `${st.dev.name} · ${mhz(st.tuned)} MHz ${st.mode}` : "No SDR connected") + (st.mesh.dev ? ` · Mesh: ${st.mesh.dev.name}` : "");
     if (h.textContent !== text) h.textContent = text;
   }
   function renderTuner() {
@@ -1309,25 +1327,33 @@
   const SHARE_KINDS = ["adsb", "uat", "ais", "mesh", "aprs", "sonde", "acars", "hd"];
   function shareNote() {
     const sh = st.share;
-    if (sh.armed) return "Tap CONFIRM to share the aircraft, ships, mesh nodes, APRS stations, weather balloons, ACARS positions and HD Radio towers your radio decodes with everyone on Global Status. Nothing else is sent.";
+    if (sh.armed) return "Tap CONFIRM to share the aircraft, ships, mesh nodes, APRS stations, weather balloons, ACARS positions and HD Radio towers your radio decodes with everyone on Global Status. Mesh messages are never sent. Nothing else is sent.";
     if (!sh.on) return SHARE_OFF_NOTE;
     if (sh.note) return sh.note;
-    if (!st.dev) return "Sharing is on. Connect a radio; nothing is sent until it decodes something.";
-    if (st.dev.sim && !/^(localhost|127\.0\.0\.1)$/.test(root.location.hostname)) return "Sharing is on, but a simulated radio is never shared.";
+    if (!st.dev && !st.mesh.dev) return "Sharing is on. Connect an SDR or mesh radio; nothing is sent until it hears something.";
+    if (anySim() && !/^(localhost|127\.0\.0\.1)$/.test(root.location.hostname)) return "Sharing is on, but a simulated radio is never shared.";
     if (!sh.lastAt) return "Sharing is on. Waiting for live aircraft, ships, mesh nodes, APRS, balloons, ACARS or HD Radio.";
     const secs = Math.max(0, Math.round((Date.now() - sh.lastAt) / 1000));
     return `SHARING · ${sh.lastCount} target${sh.lastCount === 1 ? "" : "s"} sent ${secs} s ago · ${sh.sent} total. Shown to everyone for 2-5 min, labeled COMMUNITY SDR.`;
   }
+  const MESH_SHARE_FRESH = 15 * 60e3;
+  function meshOwnPos() { const o = st.mesh.dev && st.mesh.nodes.get(st.mesh.myId); return o && Number.isFinite(o.lat) ? { lat: o.lat, lon: o.lon } : null; }
+  function shareRx() { return receiver() || meshOwnPos(); }
+  const anySim = () => Boolean((st.dev && st.dev.sim) || (st.mesh.dev && st.mesh.sim));
   function shareItems() {
-    const rx = receiver();
+    const rx = shareRx();
+    const meshOwn = meshOwnPos();
     const now = Date.now();
     const out = [];
     for (const k of SHARE_KINDS) {
       if (!isLive(k)) continue;
       for (const t of visibleTargets(k)) {
-        if (now - t.seen > 60000 || !Number.isFinite(t.lat) || !Number.isFinite(t.lon)) continue;
+        if (!Number.isFinite(t.lat) || !Number.isFinite(t.lon)) continue;
+        if (t.src === "device") { if (t.own || t.viaMqtt || !t.heardAt || now - t.heardAt > MESH_SHARE_FRESH) continue; } // heard over the air by the mesh radio recently
+        else if (now - t.seen > 60000) continue;
         const air = k === "adsb" || k === "uat";
         if (!air && rx && L().distanceKm(rx, t) < SHARE_NEAR_RX_KM) continue;
+        if (!air && meshOwn && L().distanceKm(meshOwn, t) < SHARE_NEAR_RX_KM) continue;
         if (k === "uat" && t.uatKind !== "aircraft") continue;
         if (k === "aprs" && t.icon === "ft8") continue; // grid squares, not positions
         if (k === "ais" && (t.cls === "AtoN" || t.cls === "Base station")) continue;
@@ -1349,11 +1375,11 @@
   }
   async function shareTick() {
     const sh = st.share;
-    if (!sh.on || sh.busy || !st.dev || Date.now() < sh.wait) return;
-    if (st.dev.sim && !/^(localhost|127\.0\.0\.1)$/.test(root.location.hostname)) { render(); return; }
+    if (!sh.on || sh.busy || !(st.dev || st.mesh.dev) || Date.now() < sh.wait) return;
+    if (anySim() && !/^(localhost|127\.0\.0\.1)$/.test(root.location.hostname)) { render(); return; }
     const items = shareItems();
     if (!items.length) { render(); return; }
-    const rx = receiver();
+    const rx = shareRx();
     const body = { v: 1, items };
     if (rx) body.rx = { lat: Math.round(rx.lat / SHARE_RX_GRID) * SHARE_RX_GRID, lon: Math.round(rx.lon / SHARE_RX_GRID) * SHARE_RX_GRID };
     sh.busy = true;
@@ -1379,6 +1405,233 @@
     render();
   }
 
+  // ------------------------------------------------------------------ CONNECT MESH (real Meshtastic / MeshCore radio)
+  // mesh-device.js loads on the first Connect Mesh click. Read-only: the radio only receives the
+  // want_config handshake and a heartbeat (Meshtastic) or read commands (MeshCore).
+  // While a mesh radio is connected it is the only source for LOCAL MESH NODES; SDR over-the-air
+  // mesh decodes are skipped and the SDR keeps tuning the other bands.
+  const MESH_NODE_TTL = 48 * 3600e3;
+  const scriptCache = {};
+  function loadScript(src) {
+    if (scriptCache[src]) return scriptCache[src];
+    scriptCache[src] = new Promise((resolve, reject) => {
+      const el = document.createElement("script");
+      el.src = src; el.async = true;
+      el.onload = () => resolve();
+      el.onerror = () => { delete scriptCache[src]; reject(new Error("Couldn't load " + src.split("?")[0])); };
+      document.head.appendChild(el);
+    });
+    return scriptCache[src];
+  }
+  function meshSupport() {
+    if (st.mesh.support) return st.mesh.support;
+    const nav = root.navigator || {}, secure = root.isSecureContext !== false;
+    const serial = Boolean(nav.serial) && secure, ble = Boolean(nav.bluetooth) && secure;
+    let reason = "";
+    if (!serial && !ble) {
+      const ua = String(nav.userAgent || "");
+      if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && nav.maxTouchPoints > 1)) reason = "iPhone and iPad browsers can't connect to USB or Bluetooth mesh radios. Use Chrome or Edge on a computer, or Chrome on Android.";
+      else if (/Firefox\//.test(ua)) reason = "Firefox can't connect to USB or Bluetooth mesh radios. Open Global Status in Chrome, Edge or Opera.";
+      else if (/Safari\//.test(ua) && !/Chrome|Chromium|Edg\//.test(ua)) reason = "Safari can't connect to USB or Bluetooth mesh radios. Open Global Status in Chrome, Edge or Opera.";
+      else reason = secure ? "This browser can't connect to USB or Bluetooth mesh radios. Use Chrome, Edge or Opera on a computer, or Chrome on Android." : "Mesh radios need a secure page.";
+    }
+    return (st.mesh.support = { ok: serial || ble, serial, ble, reason });
+  }
+  function meshMsg(text, kind) { st.mesh.message = text || ""; st.mesh.msgKind = kind || ""; render(); }
+  function meshSourceText() {
+    if (st.mesh.dev) return `Mesh source: Mesh radio (${st.mesh.dev.proto})` + (st.dev ? ". The SDR keeps every other band." : "");
+    if (st.mesh.connecting) return "Mesh source: connecting to your mesh radio…";
+    if (st.dev) return "Mesh source: SDR (over the air). Connect a mesh radio for its full node list and messages.";
+    return "Mesh source: none yet. Connect a mesh radio, or an SDR for over-the-air mesh.";
+  }
+  function renderMeshBar() {
+    const sup = meshSupport(), m = st.mesh, live = Boolean(m.dev);
+    for (const dot of document.querySelectorAll("[data-mesh-dot]")) { dot.classList.toggle("is-live", live); dot.classList.toggle("is-busy", m.connecting); }
+    setText("[data-mesh-status]", m.connecting ? "CONNECTING MESH RADIO…" : live ? `${m.dev.proto} · ${m.dev.name}`.toUpperCase() : sup.ok ? "NO MESH RADIO CONNECTED" : "MESH RADIOS NOT AVAILABLE HERE");
+    let sum;
+    if (!sup.ok) sum = sup.reason;
+    else if (live) { const onMap = visibleTargets("mesh").filter((t) => t.src === "device").length; sum = `${onMap} node${onMap === 1 ? "" : "s"} on the map · ${m.nodes.size} in the radio · ${m.messages.length} message${m.messages.length === 1 ? "" : "s"} · ${m.dev.transport === "ble" ? "Bluetooth" : m.dev.transport === "serial" ? "USB" : "Simulated"}`; }
+    else sum = "Plug in or pair a Meshtastic or MeshCore radio (USB or Bluetooth), then connect.";
+    setText("[data-mesh-summary]", sum);
+    setText("[data-mesh-source]", meshSourceText());
+    for (const b of document.querySelectorAll('[data-sdr-act="mesh-connect"]')) {
+      b.disabled = !sup.ok || m.connecting;
+      b.textContent = live ? "DISCONNECT MESH" : m.choosing ? "CANCEL" : "CONNECT MESH";
+      b.classList.toggle("gsr-primary", !live);
+    }
+    for (const c of document.querySelectorAll("[data-mesh-choose]")) c.hidden = !m.choosing || live;
+    for (const b of document.querySelectorAll('[data-sdr-act="mesh-usb"]')) b.disabled = !sup.serial || m.connecting;
+    for (const b of document.querySelectorAll('[data-sdr-act="mesh-ble"]')) b.disabled = !sup.ble || m.connecting;
+    for (const n of document.querySelectorAll("[data-mesh-msg]")) { n.hidden = !m.message; n.textContent = m.message; n.classList.toggle("is-error", m.msgKind === "error"); }
+    badge("mesh", m.dev ? m.messages.length : 0);
+  }
+  function meshConnectClick() {
+    const m = st.mesh;
+    if (m.connecting) return;
+    if (m.dev) { meshDisconnect(); return; }
+    const sup = meshSupport();
+    if (!sup.ok) { meshMsg(sup.reason, "error"); return; }
+    if (sup.serial && sup.ble) { m.choosing = !m.choosing; m.message = ""; render(); if (m.choosing) loadScript("/mesh-device.js?v=" + V).catch(() => {}); return; }
+    meshConnect(sup.serial ? "serial" : "ble");
+  }
+  async function meshConnect(kind, simOpts) {
+    const m = st.mesh;
+    if (m.connecting || m.dev) return;
+    m.choosing = false; m.connecting = true;
+    m.nodes = new Map(); m.messages = []; m.channels = []; m.info = {}; m.lora = null; m.myId = ""; m.ready = false; m.otaSkipped = 0;
+    meshMsg(kind === "ble" ? "Pick your radio in the Bluetooth list. Meshtastic default PIN is 123456 if it asks." : kind === "serial" ? "Pick your radio's USB port in the list." : "");
+    try {
+      await loadScript("/mesh-device.js?v=" + V);
+      const sess = await root.GsaMeshDevice.connect(kind, { event: onMeshEvent, log: addLog, closed: onMeshClosed }, simOpts);
+      m.sess = sess;
+      m.sim = simOpts ? simOpts.sim || true : null;
+      m.dev = { name: plain(sess.name).slice(0, 40) || "Mesh radio", proto: sess.proto === "meshcore" ? "MeshCore" : "Meshtastic", transport: sess.transport };
+      m.message = "";
+      meshBecameSource();
+    } catch (e) {
+      const t = root.GsaMeshDevice ? root.GsaMeshDevice.friendlyError(e) : "Couldn't load the mesh radio code. Check the connection and try again.";
+      m.message = /No radio was picked/.test(t) ? "" : t; m.msgKind = "error";
+    }
+    m.connecting = false;
+    render();
+  }
+  function meshDisconnect() { if (st.mesh.sess) st.mesh.sess.close(""); }
+  function meshBecameSource() {
+    // the mesh radio replaces SDR over-the-air mesh pins
+    for (const [id, t] of st.targets.mesh) if (t.src !== "device") { st.targets.mesh.delete(id); if (L()) L().removeItem("mesh", id); }
+    if (!st.layers.mesh) setLayer("mesh", true); else meshFeedAll();
+    if (st.dev && bandOf(st.tuned) === "mesh") { const next = focusLayer(); if (next) tune(next.tune, { mode: next.mode, fromLayer: true }); }
+    addLog(`Mesh radio connected: ${st.mesh.dev.name} (${st.mesh.dev.proto}). It is now the mesh source${st.dev ? "; the SDR keeps the other bands" : ""}.`);
+    render();
+  }
+  function onMeshClosed(reason) {
+    const m = st.mesh;
+    if (!m.dev && !m.connecting) return;
+    const had = Boolean(m.dev);
+    m.dev = null; m.sess = null; m.sim = null;
+    for (const [id, t] of st.targets.mesh) if (t.src === "device") { st.targets.mesh.delete(id); if (L()) L().removeItem("mesh", id); }
+    hideCardFor("mesh");
+    if (had) {
+      addLog("Mesh radio disconnected" + (reason ? ": " + reason : ""));
+      m.message = reason ? "Mesh radio disconnected. " + plain(reason) : ""; m.msgKind = reason ? "error" : "";
+      const f = focusLayer();
+      if (st.dev && f && f.key === "mesh") tune(f.tune, { mode: f.mode, fromLayer: true }); // SDR takes mesh back over the air
+    }
+    if (st.wbOpen && st.tab === "mesh") renderMeshTab();
+    render();
+  }
+  function meshNode(id, patch) {
+    if (!id) return null;
+    let n = st.mesh.nodes.get(id);
+    if (!n) { n = { id }; st.mesh.nodes.set(id, n); if (st.mesh.nodes.size > 1500) st.mesh.nodes.delete(st.mesh.nodes.keys().next().value); }
+    for (const k of Object.keys(patch)) { const v = patch[k]; if (v !== undefined && v !== null && v !== "" && !(typeof v === "number" && !Number.isFinite(v))) n[k] = typeof v === "string" ? plain(v).slice(0, 60) : v; }
+    if (id === st.mesh.myId) n.own = true;
+    meshPush(n);
+    return n;
+  }
+  function meshPush(n) {
+    if (!st.mesh.dev || !accepts("mesh") || !Number.isFinite(n.lat)) return;
+    const age = n.heardAt ? Date.now() - n.heardAt : 0;
+    if (age > MESH_NODE_TTL) return;
+    const t = touch("mesh", n.id, { nodeId: n.id });
+    for (const k of ["longName", "shortName", "hw", "role", "proto", "nodeKind", "alt", "snr", "rssi", "hops", "battery", "voltage", "chUtil", "airUtilTx", "uptime", "tempC", "rh", "pressure", "heardAt", "viaMqtt", "own", "precisionBits", "sats", "lastPort"]) if (n[k] !== undefined) t[k] = n[k];
+    t.src = "device"; t.icon = "mesh"; t.nodeId = n.id;
+    t.ttl = Math.max(5000, MESH_NODE_TTL - age);
+    t.lat = n.lat; t.lon = n.lon; pushTrack(t, 40);
+    t.name = n.longName || n.shortName || n.id;
+    t.label = (n.own ? "★ " : "") + (n.shortName || n.longName || n.id);
+    scheduleDraw("mesh");
+  }
+  function meshFeedAll() { if (st.mesh.dev) for (const n of st.mesh.nodes.values()) meshPush(n); }
+  const secsToMs = (s) => (s && s > 1.5e9 ? Math.min(Date.now(), s * 1000) : undefined);
+  function meshMessage(msg) {
+    const m = st.mesh;
+    const text = plain(msg.text || "").slice(0, 400);
+    if (!text) return;
+    m.messages.unshift(Object.assign({ at: Date.now(), t: nowTime() }, msg, { text }));
+    if (m.messages.length > 300) m.messages.length = 300;
+    if (st.wbOpen && st.tab === "mesh") renderMeshTab();
+    render();
+  }
+  const chName = (i) => { const c = st.mesh.channels.find((x) => x.index === i); return c ? c.name : i ? "Channel " + i : "Primary"; };
+  const nodeName = (id) => { const n = st.mesh.nodes.get(id); return n ? n.longName || n.shortName || id : id; };
+  function onMeshEvent(e) {
+    const m = st.mesh, now = Date.now();
+    switch (e.type) {
+      case "myInfo": m.myId = e.myId; m.info.nodeId = e.myId; m.info.nodedbCount = e.nodedbCount; meshNode(e.myId, { own: true, proto: "Meshtastic" }); break;
+      case "metadata": Object.assign(m.info, { firmware: e.firmware, hw: e.hw, role: e.role }); break;
+      case "lora": m.lora = e; break;
+      case "channel": if (e.role !== "Disabled") { m.channels = m.channels.filter((c) => c.index !== e.index); m.channels.push({ index: e.index, name: plain(e.name) || (e.index === 0 ? "Primary (default)" : "Channel " + e.index), role: e.role, encrypted: e.encrypted }); m.channels.sort((a, b) => a.index - b.index); } break;
+      case "node": {
+        const u = e.user || {}, p = e.position || {}, d = e.metrics || {};
+        meshNode(e.id, { longName: u.longName, shortName: u.shortName, hw: u.hw, role: u.role, proto: "Meshtastic", lat: p.lat, lon: p.lon, alt: p.alt, precisionBits: p.precisionBits, snr: e.snr, hops: e.hops, battery: d.battery, voltage: d.voltage, chUtil: d.chUtil, airUtilTx: d.airUtilTx, uptime: d.uptime, viaMqtt: e.viaMqtt || undefined, heardAt: e.id === m.myId ? now : secsToMs(e.lastHeard) });
+        break;
+      }
+      case "packet": {
+        if (!e.fromId || e.from === 0) break;
+        const patch = { heardAt: now, snr: e.snr, rssi: e.rssi, hops: e.hops, lastPort: e.portName || (e.encrypted ? "Encrypted" : ""), proto: "Meshtastic" };
+        if (e.viaMqtt) patch.viaMqtt = true;
+        if (e.position && Number.isFinite(e.position.lat)) Object.assign(patch, { lat: e.position.lat, lon: e.position.lon, alt: e.position.alt, sats: e.position.sats, precisionBits: e.position.precisionBits });
+        if (e.user) Object.assign(patch, { longName: e.user.longName, shortName: e.user.shortName, hw: e.user.hw, role: e.user.role });
+        if (e.telemetry && e.telemetry.device) { const d = e.telemetry.device; Object.assign(patch, { battery: d.battery, voltage: d.voltage, chUtil: d.chUtil, airUtilTx: d.airUtilTx, uptime: d.uptime }); }
+        if (e.telemetry && e.telemetry.env) { const v = e.telemetry.env; Object.assign(patch, { tempC: v.tempC, rh: v.rh, pressure: v.pressure }); }
+        meshNode(e.fromId, patch);
+        if (e.port === 1 && e.text) meshMessage({ ch: e.broadcast ? chName(e.channel) : "Direct", dm: !e.broadcast, fromId: e.fromId, from: nodeName(e.fromId), snr: e.snr, hops: e.hops, text: e.text });
+        break;
+      }
+      case "configComplete": m.ready = true; addLog(`Mesh radio: ${m.nodes.size} nodes, ${m.channels.length} channels loaded`); break;
+      case "rebooted": addLog("Mesh radio restarted"); break;
+      case "mcSelf": m.myId = e.id; Object.assign(m.info, { nodeId: e.id, name: e.name, kind: e.kind, freq: e.freqMHz ? e.freqMHz.toFixed(3) + " MHz" : "", lora: e.sf ? `SF${e.sf} · ${e.bwKHz} kHz · CR 4/${e.cr}` : "" }); meshNode(e.id, { own: true, longName: e.name, nodeKind: e.kind, proto: "MeshCore", lat: e.lat, lon: e.lon, heardAt: now }); break;
+      case "mcDeviceInfo": Object.assign(m.info, { hw: e.model, firmware: e.version || (e.fwVer ? "v" + e.fwVer : "") }); break;
+      case "mcContact": meshNode(e.id, { longName: e.name, nodeKind: e.kind, role: e.kind, proto: "MeshCore", lat: e.lat, lon: e.lon, hops: e.hops, heardAt: secsToMs(e.lastAdvert) || (e.push ? now : undefined) }); break;
+      case "mcChannel": m.channels = m.channels.filter((c) => c.index !== e.index); if (e.name) { m.channels.push({ index: e.index, name: plain(e.name), role: e.index === 0 ? "Primary" : "Secondary" }); m.channels.sort((a, b) => a.index - b.index); } break;
+      case "mcText": {
+        let from = "", fromId = "", text = e.text || "";
+        if (e.dm) { fromId = e.fromId; from = nodeName(fromId); }
+        else { const mm = /^([^:]{1,32}):\s*([\s\S]*)$/.exec(text); if (mm) { from = mm[1]; text = mm[2]; } }
+        if (fromId) meshNode(fromId, { heardAt: now, snr: e.snr });
+        meshMessage({ ch: e.dm ? "Direct" : chName(e.channel), dm: e.dm, fromId, from: from || "Unknown", snr: e.snr, hops: e.hops, text });
+        break;
+      }
+      default: break;
+    }
+    if (m.dev) { if (st.wbOpen && st.tab === "mesh" && e.type !== "packet") renderMeshTab(); }
+  }
+  function agoLong(ms) { if (!ms) return ""; const s = Math.max(0, Math.round((Date.now() - ms) / 1000)); if (s < 60) return s + " s ago"; if (s < 3600) return Math.round(s / 60) + " min ago"; if (s < 86400) return Math.round(s / 3600) + " h ago"; return Math.round(s / 86400) + " days ago"; }
+  function meshCardHtml(item, t) {
+    const d = st.mesh.dev;
+    const src = `<span data-sdr-card="${esc(item.id)}" hidden></span><p class="gsr-src">${t.own ? "Your own mesh radio" : "From your mesh radio"}${d ? " · " + esc(d.name) + " · " + esc(d.proto) : ""}</p>`;
+    return src + rows([["Node", t.nodeId], ["Long name", t.longName], ["Short name", t.shortName], ["Protocol", t.proto], ["Type", t.nodeKind && t.nodeKind !== t.role ? t.nodeKind : ""], ["Role", t.role], ["Hardware", t.hw], ["Battery", Number.isFinite(t.battery) ? (t.battery > 100 ? "external power" : t.battery + " %") : ""], ["Voltage", Number.isFinite(t.voltage) && t.voltage ? t.voltage.toFixed(2) + " V" : ""], ["Channel use", Number.isFinite(t.chUtil) ? t.chUtil.toFixed(1) + " %" : ""], ["Airtime (TX)", Number.isFinite(t.airUtilTx) ? t.airUtilTx.toFixed(1) + " %" : ""], ["Temperature", Number.isFinite(t.tempC) ? t.tempC.toFixed(1) + " °C" : ""], ["Humidity", Number.isFinite(t.rh) ? Math.round(t.rh) + " %" : ""], ["Pressure", Number.isFinite(t.pressure) ? t.pressure.toFixed(1) + " hPa" : ""], ["Altitude", Number.isFinite(t.alt) && t.alt ? t.alt + " m" : ""], ["Position", Number.isFinite(t.precisionBits) && t.precisionBits > 0 && t.precisionBits < 32 ? "approximate (shared at reduced precision)" : ""], ["Hops away", t.hops], ["SNR", Number.isFinite(t.snr) && !t.own ? t.snr + " dB" : ""], ["Signal", Number.isFinite(t.rssi) && t.rssi && !t.own ? t.rssi + " dBm" : ""], ["Last packet", t.lastPort], ["Heard via", t.viaMqtt ? "internet (MQTT), not over the air" : ""], ["Range", rangeText(t)], ["Last heard", t.own ? "now (connected)" : agoLong(t.heardAt)]]);
+  }
+  function renderMeshTab() {
+    const pane = st.wb && st.wb.querySelector('[data-gsr-pane="mesh"]');
+    if (!pane || st.tab !== "mesh") return;
+    const m = st.mesh, d = m.dev, sup = meshSupport();
+    const btn = `<button type="button" class="gsr-btn ${d ? "" : "gsr-primary"}" data-sdr-act="mesh-connect" ${!sup.ok || m.connecting ? "disabled" : ""}>${d ? "DISCONNECT MESH" : m.connecting ? "CONNECTING…" : "CONNECT MESH"}</button>`;
+    let html = `<div class="gsr-row">${btn}</div><p class="gsr-hint gsr-mesh-src">${esc(meshSourceText())}</p>`;
+    if (!sup.ok) html += `<p class="gsr-empty">${esc(sup.reason)}</p>`;
+    if (m.message) html += `<p class="gsr-hint">${esc(m.message)}</p>`;
+    if (!d) {
+      html += `<p class="gsr-empty">${st.dev ? "Mesh nodes are coming from your SDR over the air (LOCAL MESH NODES). Connect a Meshtastic or MeshCore radio to read its node list, channels and messages; it then becomes the mesh source." : "Connect a Meshtastic or MeshCore radio by USB cable or Bluetooth to see its nodes on the map, plus its channels and messages here."}</p>`;
+      html += `<p class="gsr-hint">Works in Chrome, Edge and Opera on a computer (USB or Bluetooth) and Chrome on Android (Bluetooth). Safari, Firefox and iPhone / iPad browsers can't connect to radios.</p>`;
+      pane.innerHTML = html;
+      return;
+    }
+    const lora = m.lora ? [["Region", m.lora.region], ["Preset", m.lora.preset], ["Hop limit", m.lora.hopLimit]] : [["Frequency", m.info.freq], ["LoRa", m.info.lora]];
+    html += `<h4 class="gsr-h">RADIO</h4>` + rows([["Radio", d.name], ["Protocol", d.proto], ["Connection", d.transport === "ble" ? "Bluetooth" : d.transport === "serial" ? "USB cable" : "Simulated"], ["Node", m.info.nodeId], ["Name", m.info.name || (m.nodes.get(m.myId) || {}).longName], ["Hardware", m.info.hw], ["Firmware", m.info.firmware], ["Role", m.info.role || m.info.kind]].concat(lora, [["Nodes in radio", m.nodes.size], ["SDR mesh decodes skipped", st.dev ? m.otaSkipped : ""]]));
+    const ch = m.channels.map((c) => `<tr><td>${esc(c.index)}</td><td>${esc(c.name)}</td><td>${esc(c.role || "")}</td></tr>`).join("");
+    html += `<h4 class="gsr-h">CHANNELS</h4>` + (ch ? `<div class="gsr-list">${tableHtml(["#", "NAME", "ROLE"], ch)}</div>` : `<p class="gsr-empty">Reading channels…</p>`);
+    const msgs = m.messages.slice(0, 100).map((x) => `<tr><td>${esc(x.t)}</td><td>${esc(x.ch)}</td><td>${esc(x.from || x.fromId || "")}</td><td class="gsr-msg">${esc(x.text)}</td></tr>`).join("");
+    html += `<h4 class="gsr-h">MESSAGES <em>${m.messages.length}</em></h4>` + (msgs ? `<div class="gsr-list">${tableHtml(["TIME", "CHANNEL", "FROM", "MESSAGE"], msgs)}</div>` : `<p class="gsr-empty">No messages since connecting. New channel and direct messages your radio receives appear here.</p>`);
+    const list = Array.from(m.nodes.values()).sort((a, b) => (b.own ? 1 : 0) - (a.own ? 1 : 0) || (b.heardAt || 0) - (a.heardAt || 0)).slice(0, 150);
+    const nb = list.map((n) => `<tr><td>${esc((n.own ? "★ " : "") + (n.longName || n.shortName || n.id))}</td><td>${esc(n.id)}</td><td>${esc(n.hw || n.nodeKind || "")}</td><td>${esc(Number.isFinite(n.battery) ? (n.battery > 100 ? "ext" : n.battery + "%") : "")}</td><td>${esc(Number.isFinite(n.lat) ? "yes" : "no")}</td><td>${esc(n.hops != null ? n.hops : "")}</td><td>${esc(n.own ? "now" : agoLong(n.heardAt))}</td></tr>`).join("");
+    html += `<h4 class="gsr-h">NODES <em>${m.nodes.size}</em></h4><div class="gsr-list">${tableHtml(["NAME", "ID", "HARDWARE", "BATTERY", "ON MAP", "HOPS", "HEARD"], nb)}</div>`;
+    html += `<p class="gsr-hint">Read only: Global Status never sends messages, changes settings or restarts your radio. Messages stay on this device and are never shared. With SHARE LIVE FEED on, only node positions heard over the air in the last 15 minutes are shared (never your own node or anything within 2 km of it).</p>`;
+    const top = pane.scrollTop;
+    pane.innerHTML = html;
+    pane.scrollTop = top;
+  }
+
   function onDocClick(e) {
     const t = e.target;
     if (!t || !t.closest) return;
@@ -1390,6 +1643,10 @@
       if (a === "connect") connectClick();
       else if (a === "bias") biasClick();
       else if (a === "share") shareClick();
+      else if (a === "mesh-connect") meshConnectClick();
+      else if (a === "mesh-usb") meshConnect("serial");
+      else if (a === "mesh-ble") meshConnect("ble");
+      else if (a === "mesh-tab") openWorkbench("mesh");
       else if (a === "workbench") { if (st.wbOpen) closeWorkbench(); else openWorkbench(); }
       return;
     }
@@ -1408,7 +1665,7 @@
     document.addEventListener("click", onDocClick);
     // The welcome picker is built lazily: refresh the SDR rows when its category opens (no USB calls).
     document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest('[data-welcome-toggle="sdr"]')) setTimeout(render, 0); });
-    setInterval(() => { if (!st.dev) return; for (const k of MAPKEYS) if (k !== "sat" && st.layers[k] && st.targets[k].size) scheduleDraw(k); }, 5000);
+    setInterval(() => { if (!st.dev && !st.mesh.dev) return; for (const k of MAPKEYS) if (k !== "sat" && st.layers[k] && st.targets[k].size) scheduleDraw(k); }, 5000);
     render();
   }
 
@@ -1422,6 +1679,17 @@
     root.__gsSdrTest = {
       connectSim: async (profile) => { if (st.dev) await disconnect(true); await useDevice(new (D().SimDevice)(profile || "hackrf")); return st.dev.name; },
       disconnect: () => disconnect(),
+      connectMeshSim: async (proto, lat, lon) => {
+        await loadScript("/mesh-device.js?v=" + V); await loadScript("/mesh-sim.js?v=" + V);
+        const rx = receiver();
+        const sim = root.GsaMeshSim[proto === "meshcore" ? "meshcore" : "meshtastic"]({ lat: Number.isFinite(lat) ? lat : rx ? rx.lat : 29.76, lon: Number.isFinite(lon) ? lon : rx ? rx.lon : -95.37 });
+        root.__gsMeshSimState = sim;
+        await meshConnect("sim", { stream: sim.stream, transport: "sim", name: proto === "meshcore" ? "Simulated MeshCore radio" : "Simulated Meshtastic radio", sim });
+        return st.mesh.dev ? st.mesh.dev.proto : st.mesh.message;
+      },
+      disconnectMesh: () => meshDisconnect(),
+      mesh: () => ({ dev: st.mesh.dev, myId: st.mesh.myId, nodes: st.mesh.nodes.size, onMap: visibleTargets("mesh").filter((t) => t.src === "device").length, sdrMeshOnMap: visibleTargets("mesh").filter((t) => t.src === "sdr").length, messages: st.mesh.messages.map((x) => ({ ch: x.ch, from: x.from, text: x.text })), channels: st.mesh.channels, info: st.mesh.info, lora: st.mesh.lora, otaSkipped: st.mesh.otaSkipped, source: meshSourceText(), meshLive: isLive("mesh"), tuned: st.tuned, simSent: root.__gsMeshSimState ? root.__gsMeshSimState.sent : null }),
+      injectSdrMesh: (m) => onMesh(m),
       setReceiver: (lat, lon, name) => setReceiver({ lat, lon, name: name || "Receiver pin" }),
       tune: (mhzValue, mode) => tune(Math.round(mhzValue * 1e6), { mode }),
       setLayer, openWorkbench, closeWorkbench, showTab, setMuted,
