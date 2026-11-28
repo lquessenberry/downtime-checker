@@ -287,7 +287,7 @@ function dismissBootSplash() {
   if (reduce) remove();
   else {
     splash.addEventListener("transitionend", remove, { once: true });
-    window.setTimeout(remove, 1000);
+    window.setTimeout(remove, 1300);
   }
 }
 
