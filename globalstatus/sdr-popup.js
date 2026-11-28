@@ -19,7 +19,7 @@
  */
 (function (root) {
   "use strict";
-  const V = "20261128p";
+  const V = "20261128q";
   const D = () => root.GsaSdrDriver;
   const L = () => root.GsaSdrLayers;
 
@@ -79,6 +79,7 @@
     lastCardId: "", support: null, sim: false, queue: Promise.resolve(),
     share: { on: false, armed: false, timer: 0, busy: false, sent: 0, lastAt: 0, lastCount: 0, note: "", wait: 0 },
     mesh: { dev: null, sess: null, connecting: false, choosing: false, message: "", msgKind: "", info: {}, lora: null, channels: [], messages: [], nodes: new Map(), myId: "", sim: null, ready: false, otaSkipped: 0, filter: "", chat: { to: "ch:0", text: "", sending: false } },
+    myDevices: { on: false, saved: null },
   };
 
   const SHARE_OFF_NOTE = "Off. Turn on to share the aircraft, ships, mesh nodes, APRS stations, weather balloons, ACARS positions and HD Radio towers your radio decodes live with everyone on the site (COMMUNITY FEED and the matching regular layers). Pagers, tire sensors, Bluetooth, meters, radio GPS units, mesh messages and audio are never shared. Your receiver location is blurred to about 25 km.";
@@ -150,7 +151,7 @@
       `<button type="button" class="welcome-xl gsr-layer" data-welcome-sdr="${l.key}" aria-pressed="false" title="${esc(l.desc)}">` +
       `<span class="welcome-layer-name">${esc(l.name)}</span><em class="welcome-xl-count" data-sdr-count="${l.key}">—</em>` +
       `<span class="switch" aria-hidden="true"></span></button>`).join("");
-    return barHtml("picker") + rows +
+    return barHtml("picker") + myDevHtml("picker") + rows +
       `<p class="gsr-note" data-sdr-ui data-sdr-bandnote>One radio hears one band at a time. The layer you switch on last is tuned; the others keep their pins and show PAUSED.</p>` +
       `<p class="gsr-note gsr-compare" data-sdr-ui>Keep LIVE AIR TRAFFIC, GLOBAL MARITIME TRAFFIC and GLOBAL MESH NODES on as well to compare what the internet reports with what your own antenna hears.</p>`;
   }
@@ -159,7 +160,7 @@
       `<button type="button" class="layer gsr-rail-layer" data-sdr-toggle="${l.key}" aria-pressed="false" title="${esc(l.desc)}">` +
       `<span class="layer-name"><span class="swatch" style="background:${l.sw}"></span> ${esc(l.name)}</span>` +
       `<span class="layer-meta"><em data-sdr-count="${l.key}">—</em><span class="switch" aria-hidden="true"></span></span></button>`).join("");
-    return barHtml("rail") + rows + `<p class="sw-note gsr-note" data-sdr-ui data-sdr-bandnote></p>`;
+    return barHtml("rail") + myDevHtml("rail") + rows + `<p class="sw-note gsr-note" data-sdr-ui data-sdr-bandnote></p>`;
   }
   function buildRail() {
     const g = document.getElementById("group-sdr");
@@ -231,6 +232,7 @@
       setText(`[data-sdr-count="${l.key}"]`, countText(l.key));
     }
     setText("[data-sdr-bandnote]", bandNote());
+    renderMyDevices();
     renderMeshBar();
     if (root.gsSyncLayerGroups) root.gsSyncLayerGroups();
     if (root.GsaWelcome && root.GsaWelcome.syncCategoryIcons) root.GsaWelcome.syncCategoryIcons();
@@ -1777,6 +1779,106 @@
     }
   }
 
+
+  function myDevHtml(where) {
+    const title = "Show only what your own plugged-in SDR or mesh radio picks up";
+    if (where === "picker") {
+      return `<button type="button" class="welcome-xl gsr-layer" data-sdr-ui data-sdr-act="mydev" aria-pressed="false" title="${title}">` +
+        `<span class="welcome-layer-name">MY DEVICES ONLY</span><em class="welcome-xl-count" data-sdr-mydev-count>—</em>` +
+        `<span class="switch" aria-hidden="true"></span></button>` +
+        `<p class="gsr-note" data-sdr-ui data-sdr-mydev-sub>Show only what your own plugged-in SDR or mesh radio picks up.</p>` +
+        `<p class="gsr-note" data-sdr-ui data-sdr-mydev-note hidden></p>`;
+    }
+    return `<button type="button" class="layer gsr-rail-layer" data-sdr-ui data-sdr-act="mydev" aria-pressed="false" title="${title}">` +
+      `<span class="layer-name"><span class="swatch" style="background:#94a3b8"></span> MY DEVICES ONLY</span>` +
+      `<span class="layer-meta"><em data-sdr-mydev-count>—</em><span class="switch" aria-hidden="true"></span></span></button>` +
+      `<p class="sw-note gsr-note" data-sdr-ui data-sdr-mydev-note hidden></p>`;
+  }
+  function myDevicesCount() {
+    if (!st.myDevices.on) return 0;
+    let n = 0;
+    for (const k of MAPKEYS) if (st.layers[k]) n += visibleTargets(k).length;
+    return n;
+  }
+  function myDevicesNote() {
+    if (!st.myDevices.on) return "";
+    if (!st.dev && !st.mesh.dev) return "MY DEVICES ONLY is on. Internet, community and other layers are hidden. Connect an SDR or a mesh radio to see only what your own device picks up.";
+    const localOn = MAPKEYS.some((k) => st.layers[k]);
+    if (!localOn) return "MY DEVICES ONLY is on. Switch on a local layer such as LOCAL MESH NODES or LOCAL ADS-B AIRCRAFT to see pins from your radio.";
+    if (!myDevicesCount()) return "MY DEVICES ONLY is on. Your radio is connected. Waiting for pins on the local layers you have switched on.";
+    return "MY DEVICES ONLY is on. The globe is showing only what your own SDR or mesh radio picks up.";
+  }
+  function uniqueOn(sel, attr) {
+    const out = [];
+    for (const b of document.querySelectorAll(sel)) {
+      const k = b.getAttribute(attr);
+      if (k && b.getAttribute("aria-pressed") === "true" && out.indexOf(k) < 0) out.push(k);
+    }
+    return out;
+  }
+  function myDevicesClick() {
+    if (st.myDevices.on) {
+      const saved = st.myDevices.saved || { layers: [], xl: [], cf: [], scan: false };
+      st.myDevices.on = false;
+      st.myDevices.saved = null;
+      document.body.classList.remove("gs-mydev-on");
+      const map = root.GsaMap;
+      if (map && map.setScanVisible) map.setScanVisible(saved.scan);
+      if (map && map.setLayer) for (const k of saved.layers) map.setLayer(k, true, { fly: false, force: true });
+      if (root.GsaExtraLayers) for (const k of saved.xl) root.GsaExtraLayers.setActive(k, true);
+      if (root.GsaCommunity) for (const k of saved.cf) root.GsaCommunity.setLayer(k, true);
+      if (root.GsaWelcome && root.GsaWelcome.syncSwitches) root.GsaWelcome.syncSwitches();
+      if (root.GsaWelcome && root.GsaWelcome.syncCategoryIcons) root.GsaWelcome.syncCategoryIcons();
+      addLog("MY DEVICES ONLY off: other layers restored");
+      render();
+      return;
+    }
+    const map = root.GsaMap;
+    const saved = {
+      layers: map && map.onKeys ? map.onKeys().slice() : uniqueOn("[data-layer-toggle][aria-pressed='true']", "data-layer-toggle"),
+      xl: [],
+      cf: [],
+      scan: Boolean(map && map.scanVisible && map.scanVisible()),
+    };
+    for (const b of document.querySelectorAll("[data-welcome-xl][aria-pressed='true'], [data-xl-toggle][aria-pressed='true']")) {
+      const k = b.getAttribute("data-welcome-xl") || b.getAttribute("data-xl-toggle");
+      if (k && saved.xl.indexOf(k) < 0) saved.xl.push(k);
+    }
+    for (const b of document.querySelectorAll("[data-welcome-cf][aria-pressed='true'], [data-cf-toggle][aria-pressed='true']")) {
+      const k = b.getAttribute("data-welcome-cf") || b.getAttribute("data-cf-toggle");
+      if (k && saved.cf.indexOf(k) < 0) saved.cf.push(k);
+    }
+    st.myDevices.saved = saved;
+    st.myDevices.on = true;
+    document.body.classList.add("gs-mydev-on");
+    if (map && map.closeGridIfOpen) map.closeGridIfOpen();
+    if (saved.scan && map && map.setScanVisible) map.setScanVisible(false);
+    if (map && map.setLayer) for (const k of saved.layers) map.setLayer(k, false, { fly: false, force: true });
+    if (root.GsaExtraLayers) for (const k of saved.xl) root.GsaExtraLayers.setActive(k, false);
+    if (root.GsaCommunity) for (const k of saved.cf) root.GsaCommunity.setLayer(k, false);
+    if (root.GsaWelcome && root.GsaWelcome.syncSwitches) root.GsaWelcome.syncSwitches();
+    if (root.GsaWelcome && root.GsaWelcome.syncCategoryIcons) root.GsaWelcome.syncCategoryIcons();
+    addLog("MY DEVICES ONLY on: hiding internet, community and other layers");
+    render();
+  }
+  function renderMyDevices() {
+    const on = st.myDevices.on;
+    for (const b of document.querySelectorAll('[data-sdr-act="mydev"]')) {
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.classList.toggle("on", on);
+    }
+    let count = "—";
+    if (on) count = (st.dev || st.mesh.dev) ? String(myDevicesCount()) : "NO RADIO";
+    setText("[data-sdr-mydev-count]", count);
+    const note = myDevicesNote();
+    for (const n of document.querySelectorAll("[data-sdr-mydev-note]")) { n.hidden = !note; if (n.textContent !== note) n.textContent = note; }
+  }
+  function isForeignLayerClick(el) {
+    if (!el || !el.closest) return false;
+    if (el.closest("[data-sdr-ui], [data-welcome-sdr], [data-sdr-toggle], [data-sdr-act], #sdr-workbench")) return false;
+    return Boolean(el.closest("[data-layer-toggle], [data-welcome-layer], [data-welcome-xl], [data-xl-toggle], [data-welcome-cf], [data-cf-toggle], [data-welcome-grid], [data-welcome-preset]"));
+  }
+
   function onDocClick(e) {
     const t = e.target;
     if (!t || !t.closest) return;
@@ -1793,6 +1895,7 @@
       else if (a === "mesh-ble") meshConnect("ble");
       else if (a === "mesh-tab") openWorkbench("mesh");
       else if (a === "mesh-send") meshSend();
+      else if (a === "mydev") myDevicesClick();
       else if (a === "workbench") { if (st.wbOpen) closeWorkbench(); else openWorkbench(); }
       return;
     }
@@ -1808,6 +1911,14 @@
     viewerFn = typeof v === "function" ? v : () => v;
     if (L()) L().init({ viewer: viewerFn });
     buildRail();
+    document.addEventListener("click", (e) => {
+      if (!st.myDevices.on || !isForeignLayerClick(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      st.message = "MY DEVICES ONLY is on. Turn it off to show internet, community and other layers again.";
+      st.msgKind = "";
+      render();
+    }, true);
     document.addEventListener("click", onDocClick);
     // The welcome picker is built lazily: refresh the SDR rows when its category opens (no USB calls).
     document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest('[data-welcome-toggle="sdr"]')) setTimeout(render, 0); });
@@ -1851,6 +1962,8 @@
       frame: (points, o) => L() && L().frame(points, o),
       share: () => ({ on: st.share.on, sent: st.share.sent, lastCount: st.share.lastCount, note: shareNote(), items: shareItems() }),
       shareNow: () => shareTick(),
+      myDevices: () => ({ on: st.myDevices.on, saved: st.myDevices.saved && { layers: st.myDevices.saved.layers.slice(), xl: st.myDevices.saved.xl.slice(), cf: st.myDevices.saved.cf.slice(), scan: st.myDevices.saved.scan }, note: myDevicesNote(), count: myDevicesCount() }),
+      setMyDevices: (on) => { if (Boolean(on) !== st.myDevices.on) myDevicesClick(); return st.myDevices.on; },
     };
     root.__gsSdrInjectTestFrame = (frame) => {
       ensureWorker();
@@ -1859,5 +1972,5 @@
     };
   }
 
-  root.GsaSdr = { init, pick, popupHtml, clearAll, pickerHtml, railHtml, render, isOn: (k) => Boolean(st.layers[k]), openWorkbench, closeWorkbench, bandOf };
+  root.GsaSdr = { init, pick, popupHtml, clearAll, pickerHtml, railHtml, render, isOn: (k) => Boolean(st.layers[k]), openWorkbench, closeWorkbench, bandOf, get myDevicesOnly() { return Boolean(st.myDevices.on); } };
 })(window);
