@@ -52,3 +52,4 @@ screenshots/
 
 # Community live SDR feed runtime store (GS-58). Lives only on the server.
 globalstatus/data/community-*
+globalstatus/data/livecams-*

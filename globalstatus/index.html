@@ -71,6 +71,7 @@
   <link rel="stylesheet" href="/extra-layers.css?v=20261127e" />
   <link rel="stylesheet" href="/sdr-popup.css?v=20261127mydev1" />
   <link rel="stylesheet" href="/community-layers.css?v=20261127icon3" />
+  <link rel="stylesheet" href="/live-cams.css?v=20261128lc1" />
   <script>
     window.CESIUM_BASE_URL = "/vendor/cesium/";
     try {
@@ -326,6 +327,10 @@
         <p class="sw-note" data-tfr-note="tfr" hidden></p>
         <button type="button" class="layer" data-layer-toggle="delays" aria-pressed="false"><span class="layer-name"><span class="swatch delays"></span> FLIGHT DELAYS</span><span class="layer-meta"><em data-count="delays">—</em><span class="switch" aria-hidden="true"></span></span></button>
         <p class="sw-note" data-delays-note="delays" hidden></p>
+      </details>
+      <!-- LIVE CAMS (live-cams.js fills this): public road, city, border and volcano cameras. -->
+      <details class="layer-group" id="group-livecams" data-layer-group="livecams">
+        <summary class="layer-group-head"><span>LIVE CAMS</span><em class="layer-group-count"></em></summary>
       </details>
       <details class="layer-group" id="group-space" data-layer-group="space">
         <summary class="layer-group-head"><span>SPACE</span><em class="layer-group-count"></em></summary>
@@ -818,7 +823,7 @@
   <script src="/paranormal.js?v=20261126t"></script>
   <script src="/geocoder.js?v=20261127a"></script>
   <script src="/nearby.js?v=20261126l"></script>
-  <script src="/welcome.js?v=20261127classic1"></script>
+  <script src="/welcome.js?v=20261128lc1"></script>
   <script src="/extra-layers-registry.js?v=20261127a"></script>
   <script src="/extra-layers.js?v=20261127a"></script>
   <script src="/custom-packs-loader.js?v=20261127a"></script>
@@ -828,6 +833,7 @@
   <script src="/sdr-layers.js?v=20261127sdr2"></script>
   <script src="/sdr-popup.js?v=20261127meshwb1"></script>
   <script src="/community-layers.js?v=20261127icon2"></script>
-  <script src="/cesium.js?v=20261127classic1"></script>
+  <script src="/live-cams.js?v=20261128lc1"></script>
+  <script src="/cesium.js?v=20261128lc1"></script>
 </body>
 </html>
